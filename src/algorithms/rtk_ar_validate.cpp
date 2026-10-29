@@ -793,6 +793,83 @@ void RTKProcessor::applyHoldAmbiguity() {
 // ============================================================
 // Hold fix: use held DD integers when LAMBDA fails
 // ============================================================
+double RTKProcessor::holdPhaseFit(const std::map<SatelliteId, SatelliteData>& sat_data,
+                                  const std::vector<DDPair>& dd_pairs,
+                                  const Vector3d& rover_pos) const {
+    // DD phase residual at rover_pos, integer-free through cos(2*pi*r/lambda),
+    // and its gradient (e_ref - e_sat) to move it linearly within the search box.
+    std::vector<double> residual_cycles;
+    std::vector<Vector3d> gradient_cycles;
+    for (const auto& pair : dd_pairs) {
+        const auto ref_it = sat_data.find(pair.ref_sat);
+        const auto sat_it = sat_data.find(pair.sat);
+        if (ref_it == sat_data.end() || sat_it == sat_data.end()) continue;
+        const auto& ref_sd = ref_it->second;
+        const auto& sd = sat_it->second;
+        const bool use_l1 = pair.freq == 0;
+        if ((use_l1 && (!ref_sd.has_l1 || !sd.has_l1)) ||
+            (!use_l1 && (!ref_sd.has_l2 || !sd.has_l2))) {
+            continue;
+        }
+        const double ref_wavelength = use_l1 ? ref_sd.l1_wavelength : ref_sd.l2_wavelength;
+        const double sat_wavelength = use_l1 ? sd.l1_wavelength : sd.l2_wavelength;
+        // A DD integer is a whole number of cycles only for one wavelength (not FDMA).
+        if (ref_wavelength <= 0.0 || std::abs(ref_wavelength - sat_wavelength) > 1e-9) continue;
+
+        const double ref_phase = use_l1 ? ref_sd.rover_l1_phase - ref_sd.base_l1_phase
+                                        : ref_sd.rover_l2_phase - ref_sd.base_l2_phase;
+        const double sat_phase = use_l1 ? sd.rover_l1_phase - sd.base_l1_phase
+                                        : sd.rover_l2_phase - sd.base_l2_phase;
+        const double rr_ref =
+            geodist_range(ref_sd.sat_pos, rover_pos) + tropModel(rover_pos, ref_sd.elevation);
+        const double br_ref = geodist_range(ref_sd.sat_pos_base, base_position_) +
+                              tropModel(base_position_, ref_sd.base_elevation);
+        const double rr = geodist_range(sd.sat_pos, rover_pos) + tropModel(rover_pos, sd.elevation);
+        const double br = geodist_range(sd.sat_pos_base, base_position_) +
+                          tropModel(base_position_, sd.base_elevation);
+        double phase_iono_term = 0.0;
+        if (usesEstimatedIono(rtk_config_)) {
+            const double f = use_l1 ? ref_sd.l1_frequency_hz : ref_sd.l2_frequency_hz;
+            phase_iono_term =
+                -ionoFrequencyScale(pair.freq, ref_sd.l1_frequency_hz, f) *
+                    filter_state_.state(II(pair.ref_sat)) +
+                ionoFrequencyScale(pair.freq, sd.l1_frequency_hz, f) *
+                    filter_state_.state(II(pair.sat));
+        }
+        const double residual = (ref_phase - sat_phase) * ref_wavelength -
+                                ((rr_ref - br_ref) - (rr - br)) - phase_iono_term;
+        if (!std::isfinite(residual)) continue;
+        const Vector3d e_ref = (ref_sd.sat_pos - rover_pos).normalized();
+        const Vector3d e_sat = (sd.sat_pos - rover_pos).normalized();
+        residual_cycles.push_back(residual / ref_wavelength);
+        gradient_cycles.push_back((e_ref - e_sat) / ref_wavelength);
+    }
+    // With few pairs the +-0.10 m search can fit almost any phases; the fit is
+    // then unknown, as in the phase audit (scripts/analysis/truth_dd/phase_audit.py).
+    constexpr size_t kMinPairs = 10;
+    if (residual_cycles.size() < kMinPairs) return std::numeric_limits<double>::quiet_NaN();
+
+    constexpr double kHalfWidthM = 0.10;
+    constexpr double kStepM = 0.02;
+    const int steps = static_cast<int>(std::lround(2.0 * kHalfWidthM / kStepM));
+    double best = -std::numeric_limits<double>::infinity();
+    for (int ix = 0; ix <= steps; ++ix) {
+        for (int iy = 0; iy <= steps; ++iy) {
+            for (int iz = 0; iz <= steps; ++iz) {
+                const Vector3d offset(-kHalfWidthM + ix * kStepM, -kHalfWidthM + iy * kStepM,
+                                      -kHalfWidthM + iz * kStepM);
+                double sum = 0.0;
+                for (size_t i = 0; i < residual_cycles.size(); ++i) {
+                    sum += std::cos(2.0 * M_PI *
+                                    (residual_cycles[i] + gradient_cycles[i].dot(offset)));
+                }
+                best = std::max(best, sum / static_cast<double>(residual_cycles.size()));
+            }
+        }
+    }
+    return best;
+}
+
 bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_data,
                                const GNSSTime& time, int n_sats, PositionSolution& solution) {
     debug_telemetry_.hold_fix_attempted = true;
@@ -910,8 +987,15 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
     const double max_update_nis = rtk_config_.hold_fix_max_update_nis_per_observation;
     const double update_nis =
         current_update_diagnostics_.normalized_innovation_squared_per_observation;
+    const double max_phase_fit = rtk_config_.hold_fix_update_nis_max_phase_fit;
+    const auto hold_fits_phases = [&]() {
+        if (!std::isfinite(max_phase_fit) || max_phase_fit <= 0.0) return false;
+        debug_telemetry_.hold_fix_phase_fit = holdPhaseFit(sat_data, dd_pairs, test_pos);
+        return std::isfinite(debug_telemetry_.hold_fix_phase_fit) &&
+               debug_telemetry_.hold_fix_phase_fit >= max_phase_fit;
+    };
     if (std::isfinite(max_update_nis) && max_update_nis > 0.0 &&
-        std::isfinite(update_nis) && update_nis > max_update_nis) {
+        std::isfinite(update_nis) && update_nis > max_update_nis && !hold_fits_phases()) {
         const int run = holdEligibleFixCount();
         reject_hold("hold_fix_update_nis");
         if (rtk_config_.hold_fix_update_nis_keeps_hold_run) {

@@ -87,6 +87,7 @@ struct RTKProcessorTestAccess {
     GNSSPP_RTK_TEST_METHOD(rememberSolution)
     GNSSPP_RTK_TEST_METHOD(varerr)
     GNSSPP_RTK_TEST_METHOD(tryHoldFix)
+    GNSSPP_RTK_TEST_METHOD(holdPhaseFit)
     GNSSPP_RTK_TEST_METHOD(applyHoldAmbiguity)
     GNSSPP_RTK_TEST_METHOD(resolveAmbiguities)
     GNSSPP_RTK_TEST_METHOD(tryWlNlFallback)
@@ -1798,6 +1799,130 @@ TEST_F(RTKHoldFixDefaultTest, NisRejectedHoldKeepsTheHoldPathOpenOnlyWhenAsked) 
     }
 }
 
+// Hold scene with ten held GPS L1 pairs (G02..G05 of the scene plus G11..G16) and
+// satellite positions and carrier phases. The phases are consistent with a rover
+// at phase_rover_offset from the hold position (base + the float baseline).
+static void addPhaseGeometry(RTKProcessor& processor, const Vector3d& base,
+                             const Vector3d& phase_rover_offset) {
+    constexpr double kL1WavelengthM = 0.1902936728;
+    auto gps = [](int prn) { return SatelliteId(GNSSSystem::GPS, static_cast<uint8_t>(prn)); };
+    auto& fs = Peer::filter_state_(processor);
+    auto& sat_data = Peer::current_sat_data_(processor);
+    auto& pairs = Peer::last_dd_pairs_(processor);
+    auto& subset = Peer::last_best_subset_(processor);
+    auto& held = Peer::last_dd_fixed_(processor);
+    const int ref_idx = Peer::ambiguityIndex(gps(1), 0);
+    for (int prn = 11; prn <= 16; ++prn) {
+        const SatelliteId sat = gps(prn);
+        auto& sd = sat_data[sat];
+        sd.satellite = sat;
+        sd.has_l1 = true;
+        sd.l1_wavelength = kL1WavelengthM;
+        const int idx = Peer::ambiguityIndex(sat, 0);
+        fs.n1_indices[sat] = idx;
+        fs.state(idx) = fs.state(ref_idx) - prn;  // DD float on the integer prn
+        fs.covariance(idx, idx) = 0.04;
+        Peer::lock_count_l1_(processor)[sat] = 10;
+        pairs.push_back(Peer::DDPair{gps(1), ref_idx, idx, sat, 0});
+        subset.push_back(static_cast<int>(pairs.size()) - 1);
+        held.conservativeResize(held.size() + 1);
+        held(held.size() - 1) = prn;
+    }
+
+    // Satellites 20,000 km from the base, spread in azimuth and elevation.
+    const Vector3d up = base.normalized();
+    const Vector3d east = Vector3d(-base.y(), base.x(), 0.0).normalized();
+    const Vector3d north = up.cross(east);
+    const Vector3d rover = base + fs.state.head<3>() + phase_rover_offset;
+    int k = 0;
+    for (auto& [sat, sd] : sat_data) {
+        // G01 stays the highest satellite, the DD reference of the held pairs.
+        const double az = 0.61 * k, el = sat == gps(1) ? 1.4 : 0.35 + 0.09 * (k % 9);
+        ++k;
+        const Vector3d direction =
+            std::cos(el) * (std::sin(az) * east + std::cos(az) * north) + std::sin(el) * up;
+        sd.sat_pos = base + 2.0e7 * direction;
+        sd.sat_pos_base = sd.sat_pos;
+        sd.elevation = el;
+        sd.base_elevation = el;
+        const double ambiguity = std::round(fs.state(Peer::ambiguityIndex(sat, 0)));
+        sd.rover_l1_phase = (sd.sat_pos - rover).norm() / kL1WavelengthM + ambiguity;
+        sd.base_l1_phase = (sd.sat_pos - base).norm() / kL1WavelengthM;
+    }
+}
+
+TEST_F(RTKHoldFixDefaultTest, HoldPhaseFitIsHighOnlyNearAPositionThatFitsThePhases) {
+    dropSatellites(processor_, {6, 7, 8, 9});
+    addPhaseGeometry(processor_, basePosition(), Vector3d::Zero());
+    const auto& pairs = Peer::last_dd_pairs_(processor_);
+    std::vector<Peer::DDPair> candidates;
+    for (int index : Peer::last_best_subset_(processor_)) {
+        if (Peer::current_sat_data_(processor_).count(pairs[index].sat)) candidates.push_back(pairs[index]);
+    }
+    ASSERT_EQ(candidates.size(), 10u);
+    const Vector3d hold = basePosition() + Vector3d(1.0, 2.0, 3.0);
+    const auto& sat_data = Peer::current_sat_data_(processor_);
+
+    EXPECT_GT(Peer::holdPhaseFit(processor_, sat_data, candidates, hold), 0.99);
+    // Within the +-0.10 m search (0.02 m grid) a few centimetres do not matter.
+    EXPECT_GT(Peer::holdPhaseFit(processor_, sat_data, candidates, hold + Vector3d(0.04, -0.06, 0.02)), 0.99);
+    // The 0.65 m hold of UrbanNav Shinjuku TOW 281650.1 does not fit.
+    EXPECT_LT(Peer::holdPhaseFit(processor_, sat_data, candidates, hold + Vector3d(0.45, 0.30, -0.35)), 0.5);
+    // Below ten usable pairs the fit is unknown.
+    candidates.pop_back();
+    EXPECT_TRUE(std::isnan(Peer::holdPhaseFit(processor_, sat_data, candidates, hold)));
+}
+
+TEST_F(RTKHoldFixDefaultTest, NisLimitSparesOnlyAHoldWhosePositionFitsThePhases) {
+    // nagoya/run3 TOW 553961.2 under --preset urban: the float update NIS per observation
+    // is 1559, yet the hold is correct. NIS alone rejects it; with
+    // hold_fix_update_nis_max_phase_fit the rejection also needs a hold position that
+    // misfits the carrier phases.
+    struct Case {
+        const char* name;
+        Vector3d phase_rover_offset;
+        double nis;
+        bool accepted;
+    };
+    for (const Case& c : {Case{"phases fit", Vector3d::Zero(), 52.5, true},
+                          Case{"stale hold", Vector3d(0.45, 0.30, -0.35), 52.5, false},
+                          Case{"consistent update", Vector3d(0.45, 0.30, -0.35), 2.0, true}}) {
+        SCOPED_TRACE(c.name);
+        RTKProcessor processor;
+        buildScene(processor, false);
+        dropSatellites(processor, {6, 7, 8, 9});
+        addPhaseGeometry(processor, basePosition(), c.phase_rover_offset);
+        auto config = processor.getRTKConfig();
+        config.hold_fix_max_update_nis_per_observation = 10.0;
+        config.hold_fix_update_nis_max_phase_fit = 0.5;
+        processor.setRTKConfig(config);
+        Peer::current_update_diagnostics_(processor).normalized_innovation_squared_per_observation = c.nis;
+        PositionSolution solution;
+        EXPECT_EQ(Peer::tryHoldFix(processor, Peer::current_sat_data_(processor), time_, 11, solution),
+                  c.accepted);
+        const auto& telemetry = processor.getLastDebugTelemetry();
+        EXPECT_EQ(telemetry.hold_fix_matched_pairs, 10);
+        EXPECT_EQ(telemetry.hold_fix_reject_reason, c.accepted ? "" : "hold_fix_update_nis");
+        // The fit is evaluated only for an update above the NIS limit.
+        EXPECT_EQ(std::isnan(telemetry.hold_fix_phase_fit), c.nis <= 10.0);
+        if (c.accepted) {
+            EXPECT_TRUE(solution.position_ecef.isApprox(basePosition() + Vector3d(1.0, 2.0, 3.0), 1e-9));
+        }
+    }
+
+    // Four held pairs are too few for a fit: the NIS limit rejects as without the option.
+    dropSatellites(processor_, {6, 7, 8, 9});
+    auto config = processor_.getRTKConfig();
+    config.hold_fix_max_update_nis_per_observation = 10.0;
+    config.hold_fix_update_nis_max_phase_fit = 0.5;
+    processor_.setRTKConfig(config);
+    Peer::current_update_diagnostics_(processor_).normalized_innovation_squared_per_observation = 52.5;
+    PositionSolution solution;
+    EXPECT_FALSE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 5, solution));
+    EXPECT_EQ(processor_.getLastDebugTelemetry().hold_fix_reject_reason, "hold_fix_update_nis");
+    EXPECT_TRUE(std::isnan(processor_.getLastDebugTelemetry().hold_fix_phase_fit));
+}
+
 TEST_F(RTKHoldFixDefaultTest, KeptHoldRunEndsAtAnyOtherHoldRejection) {
     dropSatellites(processor_, {6, 7, 8, 9});
     auto config = processor_.getRTKConfig();
@@ -2528,6 +2653,7 @@ TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixUnchangedSetOnlyDefaultOffAndC
 TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixUpdateNisLimitDefaultsOff) {
     EXPECT_EQ(RTKProcessor::RTKConfig{}.hold_fix_max_update_nis_per_observation, 0.0);
     EXPECT_FALSE(RTKProcessor::RTKConfig{}.hold_fix_update_nis_keeps_hold_run);
+    EXPECT_EQ(RTKProcessor::RTKConfig{}.hold_fix_update_nis_max_phase_fit, 0.0);
 }
 
 TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixMinMatchedPairsDefaultsToTheLegacyFloorAndIsConfigurable) {

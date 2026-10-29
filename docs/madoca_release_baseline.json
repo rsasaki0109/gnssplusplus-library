@@ -30,13 +30,13 @@
       "base_status_counts": {
         "6": 2878
       },
-      "boundary_max_delta_3d_m": 3.4893895548867557,
+      "boundary_max_delta_3d_m": 0.6494075896185958,
       "candidate_only_epochs": 0,
       "candidate_status_counts": {
         "5": 2855
       },
-      "delta_max_3d_m": 3.4893895548867557,
-      "delta_rms_3d_m": 0.8051494758745736,
+      "delta_max_3d_m": 2.4484027664977206,
+      "delta_rms_3d_m": 0.1184671449484416,
       "matched_epochs": 2855,
       "missed_fixes": 0,
       "native_row_counts": {
@@ -111,28 +111,29 @@
         "1": 2868,
         "6": 10
       },
-      "boundary_max_delta_3d_m": 0.25449669666628116,
+      "boundary_max_delta_3d_m": 0.04075222561080526,
       "candidate_only_epochs": 0,
       "candidate_status_counts": {
-        "5": 589,
-        "6": 2266
+        "5": 11,
+        "6": 2844
       },
-      "delta_max_3d_m": 0.4679434691068333,
-      "delta_rms_3d_m": 0.0988556114378096,
+      "delta_max_3d_m": 0.2906968409142755,
+      "delta_rms_3d_m": 0.02755847972392529,
       "matched_epochs": 2855,
-      "missed_fixes": 579,
+      "missed_fixes": 2,
       "native_row_counts": {
         "madoca_l6d_constraint_epochs": 1,
         "madoca_l6d_constraint_position_gate_epochs": 2854,
         "madoca_l6d_constraint_rows": 10
       },
-      "native_runtime_s": 142.66633428399837,
+      "native_runtime_s": 220.30020088000128,
       "status_pair_counts": {
-        "1->5": 579,
-        "1->6": 2266,
-        "6->5": 10
+        "1->5": 2,
+        "1->6": 2843,
+        "6->5": 9,
+        "6->6": 1
       },
-      "wrong_fixes": 0
+      "wrong_fixes": 1
     },
     "alic.pppar-ion.6h": {
       "base_only_epochs": 5,
@@ -200,25 +201,25 @@
         "1": 2859,
         "6": 19
       },
-      "boundary_max_delta_3d_m": 0.25462907181110384,
+      "boundary_max_delta_3d_m": 0.06102581264397135,
       "candidate_only_epochs": 0,
       "candidate_status_counts": {
-        "5": 562,
-        "6": 2293
+        "5": 9,
+        "6": 2846
       },
-      "delta_max_3d_m": 0.5414620290120746,
-      "delta_rms_3d_m": 0.10158191517621844,
+      "delta_max_3d_m": 0.4897535009347701,
+      "delta_rms_3d_m": 0.036084485178330704,
       "matched_epochs": 2855,
-      "missed_fixes": 554,
+      "missed_fixes": 1,
       "native_row_counts": {
         "madoca_l6d_constraint_epochs": 0,
         "madoca_l6d_constraint_position_gate_epochs": 0,
         "madoca_l6d_constraint_rows": 0
       },
-      "native_runtime_s": 139.58109996999974,
+      "native_runtime_s": 185.39756164200116,
       "status_pair_counts": {
-        "1->5": 554,
-        "1->6": 2282,
+        "1->5": 1,
+        "1->6": 2835,
         "6->5": 8,
         "6->6": 11
       },
@@ -280,18 +281,18 @@
       "wrong_fixes": 0
     },
     "mizu.ppp.24h": {
-      "base_only_epochs": 281,
+      "base_only_epochs": 23,
       "base_status_counts": {
         "6": 2878
       },
-      "boundary_max_delta_3d_m": 4.284246515935533,
+      "boundary_max_delta_3d_m": 1.3951238903048153,
       "candidate_only_epochs": 0,
       "candidate_status_counts": {
-        "5": 2597
+        "5": 2855
       },
-      "delta_max_3d_m": 4.284246515935533,
-      "delta_rms_3d_m": 1.3352679575116697,
-      "matched_epochs": 2597,
+      "delta_max_3d_m": 4.127704555592162,
+      "delta_rms_3d_m": 0.14572540743882648,
+      "matched_epochs": 2855,
       "missed_fixes": 0,
       "native_row_counts": {
         "madoca_l6d_constraint_epochs": 0,
@@ -300,7 +301,7 @@
       },
       "native_runtime_s": 172.97892152600002,
       "status_pair_counts": {
-        "6->5": 2597
+        "6->5": 2855
       },
       "wrong_fixes": 0
     },
@@ -364,25 +365,25 @@
         "1": 2857,
         "6": 21
       },
-      "boundary_max_delta_3d_m": 0.29478379262475907,
+      "boundary_max_delta_3d_m": 0.045386062890617494,
       "candidate_only_epochs": 0,
       "candidate_status_counts": {
-        "5": 939,
-        "6": 1916
+        "5": 27,
+        "6": 2828
       },
-      "delta_max_3d_m": 0.4826277238332499,
-      "delta_rms_3d_m": 0.10718095823174646,
+      "delta_max_3d_m": 0.3684628355008366,
+      "delta_rms_3d_m": 0.029730155091195337,
       "matched_epochs": 2855,
-      "missed_fixes": 918,
+      "missed_fixes": 6,
       "native_row_counts": {
         "madoca_l6d_constraint_epochs": 1,
         "madoca_l6d_constraint_position_gate_epochs": 2854,
         "madoca_l6d_constraint_rows": 9
       },
-      "native_runtime_s": 148.60230188199967,
+      "native_runtime_s": 184.25227748199904,
       "status_pair_counts": {
-        "1->5": 918,
-        "1->6": 1916,
+        "1->5": 6,
+        "1->6": 2828,
         "6->5": 21
       },
       "wrong_fixes": 0
@@ -450,25 +451,24 @@
         "1": 2868,
         "6": 10
       },
-      "boundary_max_delta_3d_m": 0.2940535550794953,
+      "boundary_max_delta_3d_m": 0.2583661291877305,
       "candidate_only_epochs": 0,
       "candidate_status_counts": {
-        "5": 931,
-        "6": 1924
+        "5": 10,
+        "6": 2845
       },
-      "delta_max_3d_m": 0.47406375508602866,
-      "delta_rms_3d_m": 0.09848191265734747,
+      "delta_max_3d_m": 0.2583661291877305,
+      "delta_rms_3d_m": 0.026208308645356684,
       "matched_epochs": 2855,
-      "missed_fixes": 921,
+      "missed_fixes": 0,
       "native_row_counts": {
         "madoca_l6d_constraint_epochs": 0,
         "madoca_l6d_constraint_position_gate_epochs": 0,
         "madoca_l6d_constraint_rows": 0
       },
-      "native_runtime_s": 152.86657481400016,
+      "native_runtime_s": 166.45150207000006,
       "status_pair_counts": {
-        "1->5": 921,
-        "1->6": 1924,
+        "1->6": 2845,
         "6->5": 10
       },
       "wrong_fixes": 0

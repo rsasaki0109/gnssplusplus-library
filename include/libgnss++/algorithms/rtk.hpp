@@ -405,6 +405,16 @@ public:
         /// (default): the rejected epoch is FLOAT and resets the run as before.
         bool hold_fix_update_nis_keeps_hold_run = false;
 
+        /// Apply hold_fix_max_update_nis_per_observation only to a hold whose
+        /// position also misfits the epoch's carrier phases: the integer-free DD
+        /// phase fit (mean cos of the DD phase residual over the hold pairs, its
+        /// maximum within +-0.10 m of the hold position) is below this value, or
+        /// unknown because fewer than 10 pairs are usable. A NIS spike from bad
+        /// measurements leaves a correct hold phase-consistent; a hold that
+        /// overwrote a stale float does not fit. 0 (default) keeps the NIS-only
+        /// rejection bit-for-bit.
+        double hold_fix_update_nis_max_phase_fit = 0.0;
+
         /// Minimum number of non-reference satellites in the fixed DD set of an
         /// ambiguity-resolution FIX (full set, subset or WL/NL fallback). Each such
         /// satellite adds one double-difference direction; fewer than 3 cannot
@@ -1518,6 +1528,9 @@ public:
         double hold_fix_jump_m = std::numeric_limits<double>::quiet_NaN();
         double hold_fix_float_divergence_m = std::numeric_limits<double>::quiet_NaN();
         std::string hold_fix_reject_reason;
+        // DD phase fit of the hold position; evaluated only for
+        // hold_fix_update_nis_max_phase_fit.
+        double hold_fix_phase_fit = std::numeric_limits<double>::quiet_NaN();
         bool cp_pr_gate_evaluated = false;
         bool cp_pr_gate_rejected = false;
         bool cp_pr_gate_escalated = false;
@@ -2591,6 +2604,11 @@ private:
      */
     bool tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_data,
                     const GNSSTime& time, int n_sats, PositionSolution& solution);
+    /// Integer-free DD carrier-phase fit of a rover position over the given
+    /// pairs (see hold_fix_update_nis_max_phase_fit); NaN below 10 usable pairs.
+    double holdPhaseFit(const std::map<SatelliteId, SatelliteData>& sat_data,
+                        const std::vector<DDPair>& dd_pairs,
+                        const Vector3d& rover_pos) const;
     HoldStateSnapshot captureHoldState() const;
     void restoreHoldState(const HoldStateSnapshot& snapshot);
 

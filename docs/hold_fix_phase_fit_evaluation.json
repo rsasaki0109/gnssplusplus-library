@@ -1,0 +1,742 @@
+{
+ "title": "Phase-fit condition for the hold-fix NIS limit on --preset urban",
+ "doc": "docs/rtk_hold_fix_phase_fit.md",
+ "reference_use": "The reference trajectory and the truth-DD export are used only for scoring, for the analysis-only phase audit and for the motivation analysis; nothing here is a solver input.",
+ "frozen_rule": "Frozen 2026-10-28 before the replay. Branch claude/confident-clarke-k37g2b on develop 3cb7230 (#671).\nChange: opt-in RTKConfig::hold_fix_update_nis_max_phase_fit (CLI --hold-fix-update-nis-max-phase-fit, default 0 = off).\nWith hold_fix_max_update_nis_per_observation set, the hold_fix_update_nis rejection applies only when the\ninteger-free DD carrier-phase fit of the hold position (mean over the hold pairs of cos(2*pi*r/lambda), its\nmaximum on a +-0.10 m / 0.02 m grid around the hold position) is below the value, or unknown (< 10 usable pairs).\nRecipes: U = --preset urban; UH = U --hold-fix-max-update-nis-per-obs 10;\nUHP = UH --hold-fix-update-nis-max-phase-fit 0.5.\nThresholds are not tuned here: 10 is the NIS value of #663, 0.5 / 10 pairs / +-0.10 m are AF_INCONSISTENT,\nMIN_DD and NEIGHBOURHOOD of scripts/analysis/truth_dd/phase_audit.py.\nDisclosure: the AND of NIS and phase misfit was chosen after seeing, on these same ten runs under U, the per-hold\ndistributions of NIS and of AFn at the solver position (truth-DD export, elevation >= 15 deg, no LLI).\nGates (as #663): A (more FIX and no more wrong FIX than RTKLIB, audited labels), W (wrong FIX >0.5 m not\nincreased vs U on any run), L (U-correct FIX lost <= 1% on every run), M (missing epochs and Hp95 not increased).\nPrediction from the direct effect on U holds: genuine wrong hold fixes 183 -> about 80; U-correct holds rejected\n<= 0.4% of a run's correct FIX before knock-on effects; nagoya/run3 loss < 1% (UH: 9.90%).\nFlag off: U POS byte-identical to the develop binary on all ten runs.\n",
+ "frozen_rule_sha256": "d3387e3e8e03c157ec15cf15f61dfcaa9af59beb72da4d700e65cc3ed0ec2dce",
+ "frozen_rule_variant": "Frozen 2026-10-28 after the UHP replay (frozen_rule_uhp.txt, sha256 d3387e3e...) and before this replay.\nBinary as UHP (bin_uhp/gnss_solve sha256 56b7f8c8...). UHP2 = UHP + --hold-fix-update-nis-keeps-hold-run (#663 option, unchanged).\nReason, seen on the UHP replay: on nagoya/run3 the 98 lost U-correct epochs follow one correct rejection (553961.2,\nU hold 0.87 m off, phase fit 0.37) that made the epoch FLOAT and closed the hold path; U's later holds were correct.\nGates unchanged (A, W, L <= 1%, M). Prediction: nagoya/run3 loss falls below UHP's 9.32%; the Tokyo PPC losses,\nmostly later AR failures (lambda_not_fixed, position_jump), change little; audited wrong FIX stay within +10 of UHP.\n",
+ "frozen_rule_variant_sha256": "bbbb16cc19177dac8163b1e5d35b9e7086a862e7ccb81549cace301f0c491c83",
+ "binary": {
+  "source": "claude/confident-clarke-k37g2b 54127df (develop 3cb7230 + the option)",
+  "gnss_solve_sha256": "56b7f8c80ca1c9c9113171a76b60fe82c92cc56b0b156969730c20d37d66c23c",
+  "byte_identity": "--preset urban POS byte-identical to the develop 3cb7230 binary on all ten runs (flag off)"
+ },
+ "recipes": {
+  "U": "--preset urban",
+  "UH": "U --hold-fix-max-update-nis-per-obs 10",
+  "UHP": "UH --hold-fix-update-nis-max-phase-fit 0.5",
+  "UHP2": "UHP --hold-fix-update-nis-keeps-hold-run"
+ },
+ "native_argv": "as docs/hold_fix_nis_evaluation.json (docs/rtk_cdmh_ppc_evaluation.md argv); --debug-epoch-log for every run",
+ "scoring": {
+  "trimble_ppc": "scripts/analysis/evaluate_urbannav_fix_continuity.score() exact 1 ms",
+  "ublox": "reference interpolated linearly to each solution epoch (neighbours within 0.2 s); missing = 0.2 s reference grid minus matched epochs",
+  "audited_wrong>0.5": "FIX >0.5 m 3D minus those the phase audit labels reference_inconsistent",
+  "phase_confirmed_wrong": "phase audit label wrong_fix_confirmed",
+  "u_correct_lost": "U FIX epochs within 0.5 m that are not FIX within 0.5 m under the recipe",
+  "rtklib_for_gate_A": "FIX / wrong >0.5 m from docs/rtk_hold_fix_nis.md"
+ },
+ "motivation": {
+  "source": "U accepted FIX on the ten runs; AFn at the solver position from the truth-DD export (elevation >= 15 deg, no LLI), the phase-audit ambiguity function maximised within +-0.10 m",
+  "hold_fix": 2849,
+  "hold_correct": 2651,
+  "hold_genuine_wrong": 183,
+  "afn_lt_0.5": {
+   "correct_holds": 213,
+   "genuine_wrong_holds_with_10_dd": "129 of 156",
+   "correct_holds_error_p50_m": 0.313,
+   "correct_holds_error_p5_p95_m": [
+    0.195,
+    0.473
+   ]
+  },
+  "direct_effect_on_U_holds": {
+   "NIS>10": {
+    "wrong_removed": 107,
+    "correct_removed_lt_0.1m": 8,
+    "correct_removed_0.1_0.5m": 230,
+    "worst_run_loss_pct": "nagoya/run3 11.99"
+   },
+   "NIS>10 and (AFn<0.5 or n_dd<10)": {
+    "wrong_removed": 103,
+    "correct_removed_lt_0.1m": 0,
+    "correct_removed_0.1_0.5m": 47,
+    "worst_run_loss_pct": "tokyo/run2 0.39"
+   },
+   "AFn<0.5": {
+    "wrong_removed": 129,
+    "correct_removed_lt_0.1m": 4,
+    "correct_removed_0.1_0.5m": 209,
+    "worst_run_loss_pct": "tokyo/run2 1.86"
+   }
+  }
+ },
+ "results": {
+  "trimble-Odaiba": {
+   "U": {
+    "fix": 7467,
+    "missing": 1426,
+    "wrong>0.5/2/3": [
+     9,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 9,
+    "phase_confirmed_wrong": 1,
+    "hP95": 4.8599
+   },
+   "UH": {
+    "fix": 7440,
+    "missing": 1426,
+    "wrong>0.5/2/3": [
+     7,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 7,
+    "phase_confirmed_wrong": 0,
+    "hP95": 4.8599,
+    "u_correct_lost": 25,
+    "u_correct_lost_pct": 0.34
+   },
+   "UHP": {
+    "fix": 7440,
+    "missing": 1426,
+    "wrong>0.5/2/3": [
+     7,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 7,
+    "phase_confirmed_wrong": 0,
+    "hP95": 4.8599,
+    "u_correct_lost": 25,
+    "u_correct_lost_pct": 0.34
+   },
+   "UHP2": {
+    "fix": 7440,
+    "missing": 1426,
+    "wrong>0.5/2/3": [
+     7,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 7,
+    "phase_confirmed_wrong": 0,
+    "hP95": 4.8599,
+    "u_correct_lost": 25,
+    "u_correct_lost_pct": 0.34
+   }
+  },
+  "trimble-Shinjuku": {
+   "U": {
+    "fix": 11491,
+    "missing": 3336,
+    "wrong>0.5/2/3": [
+     242,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 119,
+    "phase_confirmed_wrong": 69,
+    "hP95": 8.3383
+   },
+   "UH": {
+    "fix": 11440,
+    "missing": 3363,
+    "wrong>0.5/2/3": [
+     173,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 50,
+    "phase_confirmed_wrong": 3,
+    "hP95": 8.6704,
+    "u_correct_lost": 102,
+    "u_correct_lost_pct": 0.91
+   },
+   "UHP": {
+    "fix": 11520,
+    "missing": 3332,
+    "wrong>0.5/2/3": [
+     176,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 53,
+    "phase_confirmed_wrong": 3,
+    "hP95": 8.3381,
+    "u_correct_lost": 20,
+    "u_correct_lost_pct": 0.18
+   },
+   "UHP2": {
+    "fix": 11442,
+    "missing": 3337,
+    "wrong>0.5/2/3": [
+     210,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 87,
+    "phase_confirmed_wrong": 25,
+    "hP95": 8.3384,
+    "u_correct_lost": 26,
+    "u_correct_lost_pct": 0.23
+   }
+  },
+  "ublox-Odaiba": {
+   "U": {
+    "fix": 3130,
+    "missing": 975,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 0,
+    "phase_confirmed_wrong": 0,
+    "hP95": 7.2142
+   },
+   "UH": {
+    "fix": 3130,
+    "missing": 975,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 0,
+    "phase_confirmed_wrong": 0,
+    "hP95": 7.2142,
+    "u_correct_lost": 0,
+    "u_correct_lost_pct": 0.0
+   },
+   "UHP": {
+    "fix": 3130,
+    "missing": 975,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 0,
+    "phase_confirmed_wrong": 0,
+    "hP95": 7.2142,
+    "u_correct_lost": 0,
+    "u_correct_lost_pct": 0.0
+   },
+   "UHP2": {
+    "fix": 3130,
+    "missing": 975,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 0,
+    "phase_confirmed_wrong": 0,
+    "hP95": 7.2142,
+    "u_correct_lost": 0,
+    "u_correct_lost_pct": 0.0
+   }
+  },
+  "ublox-Shinjuku": {
+   "U": {
+    "fix": 3582,
+    "missing": 2399,
+    "wrong>0.5/2/3": [
+     10,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 3,
+    "phase_confirmed_wrong": 0,
+    "hP95": 5.726
+   },
+   "UH": {
+    "fix": 3621,
+    "missing": 2400,
+    "wrong>0.5/2/3": [
+     9,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 2,
+    "phase_confirmed_wrong": 0,
+    "hP95": 5.7266,
+    "u_correct_lost": 1,
+    "u_correct_lost_pct": 0.03
+   },
+   "UHP": {
+    "fix": 3582,
+    "missing": 2399,
+    "wrong>0.5/2/3": [
+     10,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 3,
+    "phase_confirmed_wrong": 0,
+    "hP95": 5.726,
+    "u_correct_lost": 0,
+    "u_correct_lost_pct": 0.0
+   },
+   "UHP2": {
+    "fix": 3582,
+    "missing": 2399,
+    "wrong>0.5/2/3": [
+     10,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 3,
+    "phase_confirmed_wrong": 0,
+    "hP95": 5.726,
+    "u_correct_lost": 0,
+    "u_correct_lost_pct": 0.0
+   }
+  },
+  "tokyo/run1": {
+   "U": {
+    "fix": 4328,
+    "missing": 1232,
+    "wrong>0.5/2/3": [
+     24,
+     1,
+     1
+    ],
+    "audited_wrong>0.5": 24,
+    "phase_confirmed_wrong": 9,
+    "hP95": 5.5665
+   },
+   "UH": {
+    "fix": 4329,
+    "missing": 1213,
+    "wrong>0.5/2/3": [
+     20,
+     1,
+     1
+    ],
+    "audited_wrong>0.5": 20,
+    "phase_confirmed_wrong": 7,
+    "hP95": 5.5628,
+    "u_correct_lost": 148,
+    "u_correct_lost_pct": 3.44
+   },
+   "UHP": {
+    "fix": 4319,
+    "missing": 1213,
+    "wrong>0.5/2/3": [
+     22,
+     1,
+     1
+    ],
+    "audited_wrong>0.5": 22,
+    "phase_confirmed_wrong": 7,
+    "hP95": 5.5628,
+    "u_correct_lost": 90,
+    "u_correct_lost_pct": 2.09
+   },
+   "UHP2": {
+    "fix": 4319,
+    "missing": 1213,
+    "wrong>0.5/2/3": [
+     22,
+     1,
+     1
+    ],
+    "audited_wrong>0.5": 22,
+    "phase_confirmed_wrong": 7,
+    "hP95": 5.5628,
+    "u_correct_lost": 90,
+    "u_correct_lost_pct": 2.09
+   }
+  },
+  "tokyo/run2": {
+   "U": {
+    "fix": 6669,
+    "missing": 638,
+    "wrong>0.5/2/3": [
+     5,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 5,
+    "phase_confirmed_wrong": 2,
+    "hP95": 2.0536
+   },
+   "UH": {
+    "fix": 6517,
+    "missing": 633,
+    "wrong>0.5/2/3": [
+     5,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 5,
+    "phase_confirmed_wrong": 2,
+    "hP95": 2.05,
+    "u_correct_lost": 230,
+    "u_correct_lost_pct": 3.45
+   },
+   "UHP": {
+    "fix": 6550,
+    "missing": 638,
+    "wrong>0.5/2/3": [
+     5,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 5,
+    "phase_confirmed_wrong": 2,
+    "hP95": 2.0536,
+    "u_correct_lost": 147,
+    "u_correct_lost_pct": 2.21
+   },
+   "UHP2": {
+    "fix": 6550,
+    "missing": 638,
+    "wrong>0.5/2/3": [
+     5,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 5,
+    "phase_confirmed_wrong": 2,
+    "hP95": 2.0536,
+    "u_correct_lost": 147,
+    "u_correct_lost_pct": 2.21
+   }
+  },
+  "tokyo/run3": {
+   "U": {
+    "fix": 10910,
+    "missing": 1510,
+    "wrong>0.5/2/3": [
+     35,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 35,
+    "phase_confirmed_wrong": 28,
+    "hP95": 3.0969
+   },
+   "UH": {
+    "fix": 10770,
+    "missing": 1283,
+    "wrong>0.5/2/3": [
+     18,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 18,
+    "phase_confirmed_wrong": 15,
+    "hP95": 4.1164,
+    "u_correct_lost": 174,
+    "u_correct_lost_pct": 1.6
+   },
+   "UHP": {
+    "fix": 10811,
+    "missing": 1282,
+    "wrong>0.5/2/3": [
+     18,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 18,
+    "phase_confirmed_wrong": 15,
+    "hP95": 4.1164,
+    "u_correct_lost": 133,
+    "u_correct_lost_pct": 1.22
+   },
+   "UHP2": {
+    "fix": 10831,
+    "missing": 1510,
+    "wrong>0.5/2/3": [
+     18,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 18,
+    "phase_confirmed_wrong": 15,
+    "hP95": 3.0969,
+    "u_correct_lost": 113,
+    "u_correct_lost_pct": 1.04
+   }
+  },
+  "nagoya/run1": {
+   "U": {
+    "fix": 5280,
+    "missing": 865,
+    "wrong>0.5/2/3": [
+     19,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 19,
+    "phase_confirmed_wrong": 7,
+    "hP95": 0.6574
+   },
+   "UH": {
+    "fix": 5145,
+    "missing": 847,
+    "wrong>0.5/2/3": [
+     15,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 15,
+    "phase_confirmed_wrong": 7,
+    "hP95": 0.6973,
+    "u_correct_lost": 133,
+    "u_correct_lost_pct": 2.53
+   },
+   "UHP": {
+    "fix": 5253,
+    "missing": 865,
+    "wrong>0.5/2/3": [
+     19,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 19,
+    "phase_confirmed_wrong": 7,
+    "hP95": 0.6574,
+    "u_correct_lost": 29,
+    "u_correct_lost_pct": 0.55
+   },
+   "UHP2": {
+    "fix": 5279,
+    "missing": 865,
+    "wrong>0.5/2/3": [
+     19,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 19,
+    "phase_confirmed_wrong": 7,
+    "hP95": 0.6574,
+    "u_correct_lost": 3,
+    "u_correct_lost_pct": 0.06
+   }
+  },
+  "nagoya/run2": {
+   "U": {
+    "fix": 4404,
+    "missing": 1791,
+    "wrong>0.5/2/3": [
+     26,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 17,
+    "phase_confirmed_wrong": 1,
+    "hP95": 11.4526
+   },
+   "UH": {
+    "fix": 4395,
+    "missing": 1790,
+    "wrong>0.5/2/3": [
+     23,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 14,
+    "phase_confirmed_wrong": 0,
+    "hP95": 11.4525,
+    "u_correct_lost": 6,
+    "u_correct_lost_pct": 0.14
+   },
+   "UHP": {
+    "fix": 4395,
+    "missing": 1790,
+    "wrong>0.5/2/3": [
+     23,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 14,
+    "phase_confirmed_wrong": 0,
+    "hP95": 11.4525,
+    "u_correct_lost": 6,
+    "u_correct_lost_pct": 0.14
+   },
+   "UHP2": {
+    "fix": 4395,
+    "missing": 1790,
+    "wrong>0.5/2/3": [
+     23,
+     0,
+     0
+    ],
+    "audited_wrong>0.5": 14,
+    "phase_confirmed_wrong": 0,
+    "hP95": 11.4525,
+    "u_correct_lost": 6,
+    "u_correct_lost_pct": 0.14
+   }
+  },
+  "nagoya/run3": {
+   "U": {
+    "fix": 1069,
+    "missing": 1489,
+    "wrong>0.5/2/3": [
+     18,
+     2,
+     0
+    ],
+    "audited_wrong>0.5": 18,
+    "phase_confirmed_wrong": 16,
+    "hP95": 8.5838
+   },
+   "UH": {
+    "fix": 951,
+    "missing": 1485,
+    "wrong>0.5/2/3": [
+     4,
+     2,
+     0
+    ],
+    "audited_wrong>0.5": 4,
+    "phase_confirmed_wrong": 2,
+    "hP95": 8.5838,
+    "u_correct_lost": 104,
+    "u_correct_lost_pct": 9.9
+   },
+   "UHP": {
+    "fix": 957,
+    "missing": 1487,
+    "wrong>0.5/2/3": [
+     4,
+     2,
+     0
+    ],
+    "audited_wrong>0.5": 4,
+    "phase_confirmed_wrong": 2,
+    "hP95": 8.5834,
+    "u_correct_lost": 98,
+    "u_correct_lost_pct": 9.32
+   },
+   "UHP2": {
+    "fix": 957,
+    "missing": 1487,
+    "wrong>0.5/2/3": [
+     4,
+     2,
+     0
+    ],
+    "audited_wrong>0.5": 4,
+    "phase_confirmed_wrong": 2,
+    "hP95": 8.5834,
+    "u_correct_lost": 98,
+    "u_correct_lost_pct": 9.32
+   }
+  }
+ },
+ "totals": {
+  "U": {
+   "fix": 58330,
+   "audited_wrong": 249,
+   "phase_confirmed": 133,
+   "raw_wrong>0.5": 388
+  },
+  "UH": {
+   "fix": 57738,
+   "audited_wrong": 135,
+   "phase_confirmed": 36,
+   "raw_wrong>0.5": 274,
+   "u_correct_lost": 923
+  },
+  "UHP": {
+   "fix": 57957,
+   "audited_wrong": 145,
+   "phase_confirmed": 36,
+   "raw_wrong>0.5": 284,
+   "u_correct_lost": 548
+  },
+  "UHP2": {
+   "fix": 57925,
+   "audited_wrong": 179,
+   "phase_confirmed": 58,
+   "raw_wrong>0.5": 318,
+   "u_correct_lost": 508
+  }
+ },
+ "gates": {
+  "UH": {
+   "A_failing_runs_audited": [],
+   "A_failing_runs_raw": [
+    "trimble-Shinjuku"
+   ],
+   "W_failing_runs": [],
+   "L_failing_runs": [
+    "tokyo/run1 3.44%",
+    "tokyo/run2 3.45%",
+    "tokyo/run3 1.60%",
+    "nagoya/run1 2.53%",
+    "nagoya/run3 9.90%"
+   ],
+   "M_failing_runs": [
+    "trimble-Shinjuku: missing 3336->3363, hP95 8.3383->8.6704",
+    "ublox-Shinjuku: missing 2399->2400, hP95 5.7260->5.7266",
+    "tokyo/run3: missing 1510->1283, hP95 3.0969->4.1164",
+    "nagoya/run1: missing 865->847, hP95 0.6574->0.6973"
+   ]
+  },
+  "UHP": {
+   "A_failing_runs_audited": [],
+   "A_failing_runs_raw": [
+    "trimble-Shinjuku"
+   ],
+   "W_failing_runs": [],
+   "L_failing_runs": [
+    "tokyo/run1 2.09%",
+    "tokyo/run2 2.21%",
+    "tokyo/run3 1.22%",
+    "nagoya/run3 9.32%"
+   ],
+   "M_failing_runs": [
+    "tokyo/run3: missing 1510->1282, hP95 3.0969->4.1164"
+   ]
+  },
+  "UHP2": {
+   "A_failing_runs_audited": [],
+   "A_failing_runs_raw": [
+    "trimble-Shinjuku"
+   ],
+   "W_failing_runs": [],
+   "L_failing_runs": [
+    "tokyo/run1 2.09%",
+    "tokyo/run2 2.21%",
+    "tokyo/run3 1.04%",
+    "nagoya/run3 9.32%"
+   ],
+   "M_failing_runs": [
+    "trimble-Shinjuku: missing 3336->3337, hP95 8.3383->8.3384"
+   ]
+  }
+ },
+ "predictions": {
+  "UHP": {
+   "genuine wrong hold fixes 183 -> about 80": "not scored per origin; audited wrong FIX 249 -> 145 and phase-confirmed 133 -> 36 overall",
+   "U-correct holds rejected <= 0.4% of a run before knock-on effects": "direct effect only; the replay loses up to 2.21% on Tokyo PPC (mostly later AR fixes within 0.1 m)",
+   "nagoya/run3 loss < 1%": "failed: 9.32%"
+  },
+  "UHP2": {
+   "nagoya/run3 loss below 9.32%": "failed: 9.32%",
+   "Tokyo PPC losses change little": "held (tokyo/run3 1.22 -> 1.04%)",
+   "audited wrong within +10 of UHP": "failed: 145 -> 179 (Shinjuku 53 -> 87)"
+  }
+ },
+ "loss_mechanism": {
+  "tokyo": "most lost U-correct epochs are U AR fixes within 0.1 m (run1 72 of 90, run2 133 of 147, run3 87 of 133) that follow a hold rejection by hundreds of epochs: lambda_not_fixed or position_jump on a float that was not held",
+  "nagoya/run3": "under U the hold at TOW 553961.2 (float update NIS per observation 1651) is 0.87 m off (AFn 0.35 at the hold, 0.91 at the reference); U holds stay 0.9-1.0 m off until 553963.8 and come back to about 0.2 m at 553964.0. UHP rejects the 553961.2 hold (in-solver phase fit 0.37); the hold path closes and the 98 later U holds (6 within 0.1 m, 65 within 0.1-0.2 m) are lost.",
+  "tokyo/run3_hP95": "UH and UHP publish 228 more epochs (missing 1510 -> 1282), FLOAT/SPP after a FIX streak that the kinematic post-filter dropped under U; hP95 3.10 -> 4.12 m"
+ },
+ "correction_to_docs_rtk_hold_fix_nis": "docs/rtk_hold_fix_nis.md described the nagoya/run3 hold at TOW 553961.2 as correct; under U it is 0.87 m off and U holds stay 0.9-1.0 m off for 2.8 s.",
+ "decision": "A and W pass (A with audited labels; raw labels fail on Trimble Shinjuku 176 > 128, as UH). L fails on tokyo/run1-3 and nagoya/run3, M on tokyo/run3 hP95. The option stays opt-in and --preset urban is unchanged. UHP2 is not recommended (wrong FIX return on Shinjuku).",
+ "inputs_sha256": {
+  "truth_dd": {
+   "trimble-Odaiba": "72e36504b7457ef62b7d3f230bca95aa0beb2aca0b2758eba496f61b49b7d109",
+   "trimble-Shinjuku": "ef9326f3a7644a214d6f7584edde769c46067a51c45614769dfad0280009c77c",
+   "ublox-Odaiba": "52af03ab9acb3218427ec2bb19d950a9c14ec885c9baa6669acc0512f75b3c24",
+   "ublox-Shinjuku": "0a13607d5818933aa17c0da00e3ff5f25ff807463ee79053bd8dc8ee35bc08c7",
+   "tokyo/run1": "2494670c9f471f9fe02a7ede8038335ee31a15e52ae02dd93da2694141757825",
+   "tokyo/run2": "46b7cfa5f3c5b459cc26018ba4ac60dfb68973c8751fc1c45b98458252f4c204",
+   "tokyo/run3": "b3e81cc344aba990f3345a49e6a8a923b079c94aa49332e770c4ac70eb04fa22",
+   "nagoya/run1": "a4c3cd30853feb3eb51deb80629556b966bd7db632c30fbb266638c6720291c4",
+   "nagoya/run2": "eae6616bd2586679c766e08fd5a08f47f4be854a4f3283d9848bccdfe3220dcb",
+   "nagoya/run3": "333ad94335ddb73284ae7c75da73a2149ec2502a043a510a2101ad2b8379d62c"
+  }
+ }
+}
