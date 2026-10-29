@@ -358,7 +358,12 @@ Opt-in `GNSS_PPP_CLAS_GALILEO=1` adds Galileo E1/E5a rows (CLAS Galileo
 biases are matched on the same frequency band). Over the six runs FIX rises
 to 35.87% and FIX within 0.3 m from 17.26% to 24.53% of epochs, but 76 FIX
 epochs land above 3 m, so the default stays GPS+QZSS; see the
-[Galileo note](docs/ppc_clas_galileo_opt_in.md).
+[Galileo note](docs/ppc_clas_galileo_opt_in.md). Adding
+`GNSS_PPP_CLAS_FIRST_FIX_AR_ALPHA=1` makes a fix that starts a FIX segment
+pass MRTKLIB's 1% F-test instead of 10%. This removes every FIX above 3 m
+and raises FIX within 0.3 m from 17.26% to 19.28% of epochs, at a six-run
+FIX rate of 25.70%.
+tokyo/run2 drops below its MRTKLIB v0.4.2 target, so this stays opt-in too.
 
 The production defaults are held floor 4 and maximum reduced-publication
 streak 5. Set `GNSS_PPP_CLAS_AR_HELD_MIN_DD_ROWS=6` and
