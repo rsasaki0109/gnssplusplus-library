@@ -155,13 +155,62 @@ The changes between v0.5.1, which the native port follows, and v0.7.7 are the
 next leads:
 
 - **v0.6.5 OSR fixes.** E5a/L5 corrections, the same-frequency code fallback
-  and per-epoch OSR clearing. Native still leaves Galileo out of the CLAS
-  filter, as v0.5.1 does on this data.
+  and per-epoch OSR clearing. The Galileo part is now an opt-in; see the
+  [Galileo note](ppc_clas_galileo_opt_in.md).
 - **v0.6.10 enhanced seed.** C/N0 weighting and TDCP jump rejection
-  (`cn0+tdcp`). MRTKLIB reports +1.0 pp mean FIX on PPC.
+  (`cn0+tdcp`). MRTKLIB reports +1.0 pp mean FIX on PPC. Measured here and
+  not adopted; see [Enhanced seed (not adopted)](#enhanced-seed-not-adopted).
 - **v0.7.4 claslib sync.** Correction-stream timing, BackupCSSR/BackupGrid,
   the ionosphere Gauss-Markov decay, and the claslib slot layout with Galileo
   rows.
+
+## Enhanced seed (not adopted)
+
+MRTKLIB v0.6.10 added an enhanced seed profile, and since v0.6.13 it is the
+default (`[positioning.clas] enhanced_spp_seed = "cn0+tdcp"`). It changes
+only MRTKLIB's private CLAS seed copy:
+
+- **C/N0 weighting.** `varerr()` adds `(0.5 m)^2 * 10^((50 - C/N0) / 10)`
+  for signals weaker than 50 dB-Hz.
+- **TDCP velocity.** The seed velocity uses the time-differenced carrier
+  phase of slip-free satellites (0.03 m/s), with Doppler as the fallback.
+- **TDCP jump rejection.** The seed epoch is rejected when its position
+  differs by more than 5 m from the previous solution plus velocity times
+  dt. The previous solution is the filter output.
+
+**MRTKLIB with and without the profile.** MRTKLIB v0.7.9 on the six runs,
+scored as above, with only `enhanced_spp_seed` changed:
+
+| MRTKLIB v0.7.9 | Enhanced seed | FIX | FIX within 0.3 m (of epochs) | FIX > 1 m | FIX > 3 m |
+| --- | --- | ---: | ---: | ---: | ---: |
+| GPS+QZSS | off | 29.85% | 18.59% | 1318 | 619 |
+| GPS+QZSS | `cn0+tdcp` (default) | 29.92% | 19.17% | 1462 | 839 |
+| GPS+Galileo+QZSS | off | 40.55% | 27.43% | 1824 | 952 |
+| GPS+Galileo+QZSS | `cn0+tdcp` (default) | 43.13% | 28.15% | 2464 | 1245 |
+
+- **Accurate FIX.** The profile adds 0.6–0.7 pp of epochs.
+- **Wrong FIX.** It also adds FIX above 3 m: 220 with GPS+QZSS, 293 with
+  Galileo. Per run with GPS+QZSS:
+  - tokyo/run3 goes from 319 to 612, nagoya/run1 from 22 to 96.
+  - tokyo/run1 (246 to 104) and nagoya/run3 (17 to 12) improve.
+
+**The C/N0 term alone on native.** The weight was added to the native CLAS
+seed variance. As an approximation it used the lower of the two code C/N0
+values of the IFLC pair, where MRTKLIB uses L1.
+
+| Native | FIX | FIX within 0.3 m (of epochs) | FIX > 1 m | FIX > 3 m |
+| --- | ---: | ---: | ---: | ---: |
+| default | 27.23% | 17.26% | 179 | 0 |
+| default + C/N0 weight | 27.04% | 17.56% | 692 | 3 |
+| `GNSS_PPP_CLAS_GALILEO=1` | 35.87% | 24.53% | 389 | 76 |
+| `GNSS_PPP_CLAS_GALILEO=1` + C/N0 weight | 39.05% | 26.37% | 549 | 132 |
+
+On the default, nagoya/run1 alone has 532 FIX above 1 m. The pattern matches
+MRTKLIB's: a seed that moves differently changes where the filter resets and
+fixes, and fix-and-hold keeps the extra wrong integers. MRTKLIB's own design
+note reports the same coupling for its robust seed option. The TDCP parts were
+not ported, since the profile as a whole already raises the wrong-fix count in
+MRTKLIB.
 
 ## Reproduce
 
