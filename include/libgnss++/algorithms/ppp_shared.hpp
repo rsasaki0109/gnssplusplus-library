@@ -316,6 +316,9 @@ struct PPPConfig {
     int clas_ar_minimum_dd_rows = 6;
     int clas_ar_held_minimum_dd_rows = 4;
     int clas_ar_held_maximum_publication_streak = 5;
+    // MRTKLIB F-test significance level (pos2-aralpha, percent) of the
+    // kinematic direct state-DD ratio test. clas.toml uses 10%.
+    double clas_ar_alpha_pct = 10.0;
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;

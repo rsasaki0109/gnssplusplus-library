@@ -17,14 +17,65 @@
 
 namespace libgnss::ppp_ar {
 
-constexpr std::array<double, 60> kClaslibRatioThresholdsAlpha10 = {
-    39.86,9.00,5.39,4.11,3.45,3.05,2.78,2.59,2.44,2.32,
-    2.23,2.15,2.08,2.02,1.97,1.93,1.89,1.85,1.82,1.79,
-    1.77,1.74,1.72,1.70,1.68,1.67,1.65,1.63,1.62,1.61,
-    1.59,1.58,1.57,1.56,1.55,1.54,1.53,1.52,1.51,1.51,
-    1.50,1.49,1.48,1.48,1.47,1.46,1.46,1.45,1.45,1.44,
-    1.44,1.43,1.43,1.42,1.42,1.41,1.41,1.40,1.40,1.40
-};
+// MRTKLIB F inverse distribution table qf[alpha][nb - 1]
+// (mrtk_ppp_rtk.c resamb_LAMBDA, pos2-aralpha): rows are the significance
+// levels 0.1%, 0.5%, 1%, 5%, 10% and 20%.
+constexpr std::array<std::array<double, 60>, 6> kClaslibRatioThresholds = {{
+    // alpha = 0.1%
+    {
+        405284.07,999.00,141.11,53.44,29.75,20.03,15.02,12.05,10.11,8.75,
+        7.76,7.00,6.41,5.93,5.54,5.20,4.92,4.68,4.47,4.29,
+        4.13,3.98,3.85,3.74,3.63,3.53,3.44,3.36,3.29,3.22,
+        3.15,3.09,3.04,2.98,2.93,2.89,2.84,2.80,2.76,2.73,
+        2.69,2.66,2.63,2.60,2.57,2.54,2.51,2.49,2.46,2.44,
+        2.42,2.40,2.38,2.36,2.34,2.32,2.30,2.28,2.27,2.25
+    },
+    // alpha = 0.5%
+    {
+        16210.72,199.00,47.47,23.15,14.94,11.07,8.89,7.50,6.54,5.85,
+        5.32,4.91,4.57,4.30,4.07,3.87,3.71,3.56,3.43,3.32,
+        3.22,3.12,3.04,2.97,2.90,2.84,2.78,2.72,2.67,2.63,
+        2.58,2.54,2.51,2.47,2.44,2.41,2.38,2.35,2.32,2.30,
+        2.27,2.25,2.23,2.21,2.19,2.17,2.15,2.13,2.11,2.10,
+        2.08,2.07,2.05,2.04,2.02,2.01,2.00,1.99,1.97,1.96
+    },
+    // alpha = 1%
+    {
+        4052.18,99.00,29.46,15.98,10.97,8.47,6.99,6.03,5.35,4.85,
+        4.46,4.16,3.91,3.70,3.52,3.37,3.24,3.13,3.03,2.94,
+        2.86,2.78,2.72,2.66,2.60,2.55,2.51,2.46,2.42,2.39,
+        2.35,2.32,2.29,2.26,2.23,2.21,2.18,2.16,2.14,2.11,
+        2.09,2.08,2.06,2.04,2.02,2.01,1.99,1.98,1.96,1.95,
+        1.94,1.92,1.91,1.90,1.89,1.88,1.87,1.86,1.85,1.84
+    },
+    // alpha = 5%
+    {
+        161.45,19.00,9.28,6.39,5.05,4.28,3.79,3.44,3.18,2.98,
+        2.82,2.69,2.58,2.48,2.40,2.33,2.27,2.22,2.17,2.12,
+        2.08,2.05,2.01,1.98,1.96,1.93,1.90,1.88,1.86,1.84,
+        1.82,1.80,1.79,1.77,1.76,1.74,1.73,1.72,1.70,1.69,
+        1.68,1.67,1.66,1.65,1.64,1.63,1.62,1.62,1.61,1.60,
+        1.59,1.58,1.58,1.57,1.56,1.56,1.55,1.55,1.54,1.53
+    },
+    // alpha = 10%
+    {
+        39.86,9.00,5.39,4.11,3.45,3.05,2.78,2.59,2.44,2.32,
+        2.23,2.15,2.08,2.02,1.97,1.93,1.89,1.85,1.82,1.79,
+        1.77,1.74,1.72,1.70,1.68,1.67,1.65,1.63,1.62,1.61,
+        1.59,1.58,1.57,1.56,1.55,1.54,1.53,1.52,1.51,1.51,
+        1.50,1.49,1.48,1.48,1.47,1.46,1.46,1.45,1.45,1.44,
+        1.44,1.43,1.43,1.42,1.42,1.41,1.41,1.40,1.40,1.40
+    },
+    // alpha = 20%
+    {
+        9.47,4.00,2.94,2.48,2.23,2.06,1.94,1.86,1.79,1.73,
+        1.69,1.65,1.61,1.58,1.56,1.54,1.52,1.50,1.48,1.47,
+        1.45,1.44,1.43,1.42,1.41,1.40,1.39,1.38,1.37,1.36,
+        1.36,1.35,1.34,1.34,1.33,1.33,1.32,1.32,1.31,1.31,
+        1.30,1.30,1.30,1.29,1.29,1.28,1.28,1.28,1.27,1.27,
+        1.27,1.26,1.26,1.26,1.26,1.25,1.25,1.25,1.25,1.24
+    }
+}};
 
 SatelliteId clasRealSatellite(const SatelliteId& satellite) {
     if (satellite.prn > 100) {
@@ -49,13 +100,26 @@ std::pair<GNSSSystem, int> ambiguityDdGroup(const SatelliteId& satellite) {
     return {satellite.system, group};
 }
 
-double claslibRatioThresholdForNb(int nb) {
+int claslibArAlphaRow(double alpha_pct) {
+    constexpr std::array<double, 6> kAlphaPct = {0.1, 0.5, 1.0, 5.0, 10.0, 20.0};
+    for (size_t row = 0; row < kAlphaPct.size(); ++row) {
+        if (std::abs(alpha_pct - kAlphaPct[row]) < 1e-9) {
+            return static_cast<int>(row);
+        }
+    }
+    return -1;
+}
+
+double claslibRatioThresholdForNb(int nb, double alpha_pct) {
     if (nb <= 0) {
         return std::numeric_limits<double>::infinity();
     }
+    const int row = claslibArAlphaRow(alpha_pct);
+    const auto& thresholds =
+        kClaslibRatioThresholds[static_cast<size_t>(row >= 0 ? row : 4)];
     const size_t index =
-        static_cast<size_t>(std::min(nb, static_cast<int>(kClaslibRatioThresholdsAlpha10.size())) - 1);
-    return kClaslibRatioThresholdsAlpha10[index];
+        static_cast<size_t>(std::min(nb, static_cast<int>(thresholds.size())) - 1);
+    return thresholds[index];
 }
 
 std::vector<SatelliteId> selectMrtklibParCandidates(
@@ -823,7 +887,8 @@ bool solveStateDdRows(
         // clas.toml alpha = "10%"); opt.thresar plays no role when alpha is
         // configured. Taking max(3.0, table) was stricter than MRTKLIB for
         // every nb >= 7 (table drops to 2.78 at nb=7, 2.15 at nb=12).
-        attempt.state_required_ratio = claslibRatioThresholdForNb(nb);
+        attempt.state_required_ratio =
+            claslibRatioThresholdForNb(nb, config.clas_ar_alpha_pct);
     } else if (config.use_clas_osr_filter) {
         attempt.state_required_ratio =
             std::max(attempt.state_required_ratio, claslibRatioThresholdForNb(nb));

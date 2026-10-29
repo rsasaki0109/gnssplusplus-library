@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <initializer_list>
 #include <sstream>
@@ -314,6 +315,16 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
     overrides.clas_post_reset_quarantine_max_nfix =
         envIntOr("GNSS_PPP_CLAS_POST_RESET_QUARANTINE_MAX_NFIX", 7);
     overrides.clas_galileo = envExactOne("GNSS_PPP_CLAS_GALILEO");
+    {
+        const double first_fix_alpha_pct =
+            envDoubleOr("GNSS_PPP_CLAS_FIRST_FIX_AR_ALPHA", 0.0);
+        // MRTKLIB's F-test table has only these significance levels.
+        for (const double alpha_pct : {0.1, 0.5, 1.0, 5.0, 10.0, 20.0}) {
+            if (std::abs(first_fix_alpha_pct - alpha_pct) < 1e-9) {
+                overrides.clas_first_fix_ar_alpha_pct = alpha_pct;
+            }
+        }
+    }
     overrides.clas_seed_residual_exclusion_m =
         envDoubleOr("GNSS_PPP_CLAS_SEED_RESIDUAL_EXCLUSION_M", 20.0);
     overrides.clas_hold_cont_min_track =

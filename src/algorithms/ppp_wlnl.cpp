@@ -249,6 +249,15 @@ bool PPPProcessor::resolveAmbiguitiesWLNL(const ObservationData& obs, const Navi
         ppp_ar::clasArMinimumDdRowsForEpoch(
             ppp_config_, prior_hold_is_active_and_valid,
             clas_reduced_dd_publication_streak_);
+    // GNSS_PPP_CLAS_FIRST_FIX_AR_ALPHA: a candidate that would start a FIX
+    // segment passes the ratio test at a stricter MRTKLIB significance level.
+    // Right after a full reset the float can sit metres off with a
+    // covariance that already looks converged, and its first fix is then a
+    // wrong integer set accepted at a ratio just above the 10% threshold.
+    if (env_overrides_.clas_first_fix_ar_alpha_pct > 0.0 &&
+        !prior_publication_authorizes_reduced_floor) {
+        ar_config.clas_ar_alpha_pct = env_overrides_.clas_first_fix_ar_alpha_pct;
+    }
     const ppp_ar::WlnlFixAttempt attempt = ppp_ar::resolveWlnlFix(
         ar_config,
         filter_state_,

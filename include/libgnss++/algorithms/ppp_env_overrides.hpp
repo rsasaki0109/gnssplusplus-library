@@ -353,6 +353,12 @@ struct PPPEnvOverrides {
     // while the position is still seed-quality. Default false (the
     // MRTKLIB v0.5.1 GPS+QZSS filter, bit-identical).
     bool clas_galileo = false;
+    // GNSS_PPP_CLAS_FIRST_FIX_AR_ALPHA: MRTKLIB F-test significance level in
+    // percent (0.1, 0.5, 1, 5, 10 or 20) for a kinematic CLAS fix that would
+    // start a FIX segment, i.e. the previous epoch published no FIX. Fixes
+    // that continue a segment keep the clas.toml 10%. 0 (unset, or a level
+    // outside the table) leaves every fix at 10% (bit-identical).
+    double clas_first_fix_ar_alpha_pct = 0.0;
     // GNSS_PPP_CLAS_SEED_RESIDUAL_EXCLUSION_M: pseudorange large-residual
     // exclusion threshold of the CLAS kinematic SPP seed (claslib exclsat(),
     // MRTKLIB v0.7.4 CLAS seed default 20 m, more than 7 rows). <= 0 restores
