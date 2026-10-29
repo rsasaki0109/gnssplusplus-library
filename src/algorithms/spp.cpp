@@ -1405,9 +1405,42 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
     constexpr int kColdStartExtraIterations = 5;
     const int max_iterations =
         spp_config_.max_iterations + (cold_start ? kColdStartExtraIterations : 0);
+    // MRTKLIB estpos() exclsat() state: the previous iteration's residuals
+    // and its rescode() row count, and the satellites excluded so far.
+    std::set<SatelliteId> large_residual_excluded;
+    std::vector<std::pair<SatelliteId, double>> previous_residuals;
+    int previous_rows = 0;
+    const auto drop_large_residual_excluded =
+        [&](std::vector<MeasurementModel>& rows) {
+            if (large_residual_excluded.empty()) return;
+            rows.erase(
+                std::remove_if(rows.begin(), rows.end(),
+                               [&](const MeasurementModel& row) {
+                                   return large_residual_excluded.count(
+                                              row.spp_observation.observation.satellite) > 0;
+                               }),
+                rows.end());
+        };
     for (int iter = 0; iter < max_iterations; ++iter) {
+        const double exclusion_m = spp_config_.large_residual_exclusion_m;
+        if (iter > 0 && exclusion_m > 0.0 && !previous_residuals.empty() &&
+            previous_rows > spp_config_.large_residual_exclusion_min_rows) {
+            const double threshold2 = exclusion_m * exclusion_m;
+            double sum2 = 0.0;
+            for (const auto& [_, residual] : previous_residuals) {
+                sum2 += residual * residual;
+            }
+            if (sum2 / static_cast<double>(previous_residuals.size()) <= threshold2) {
+                for (const auto& [satellite, residual] : previous_residuals) {
+                    if (residual * residual > threshold2) {
+                        large_residual_excluded.insert(satellite);
+                    }
+                }
+            }
+        }
         const bool iteration_masked = cold_start_settled;
         auto measurements = buildMeasurements(position, iteration_masked);
+        drop_large_residual_excluded(measurements);
         if (measurements.size() < 4) {
             solution.status = SolutionStatus::NONE;
             return solution;
@@ -1482,6 +1515,13 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
 
             residuals(i) = measurement.corrected_pseudorange - predicted;
         }
+        previous_residuals.clear();
+        for (int i = 0; i < n; ++i) {
+            previous_residuals.emplace_back(
+                measurements[i].spp_observation.observation.satellite, residuals(i));
+        }
+        // rescode() appends one rank constraint per unused NT=7 time system.
+        previous_rows = n + std::max(0, 7 - static_cast<int>(group_counts.size()));
 
         bool robust_weighting_active = spp_config_.enable_robust_weighting && iter > 0;
         if (robust_weighting_active &&
@@ -1607,6 +1647,7 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
     }
 
     final_measurements = buildMeasurements(position);
+    drop_large_residual_excluded(final_measurements);
     if (final_measurements.size() < 4) {
         solution.status = SolutionStatus::NONE;
         return solution;

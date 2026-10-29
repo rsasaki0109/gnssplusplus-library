@@ -345,6 +345,11 @@ struct PPPEnvOverrides {
     // cold-start burst at nfix=7 from good mature-hold clusters at nfix>=13,
     // validated across 6 PPC runs with zero new >3m errors).
     int clas_post_reset_quarantine_max_nfix = 7;
+    // GNSS_PPP_CLAS_SEED_RESIDUAL_EXCLUSION_M: pseudorange large-residual
+    // exclusion threshold of the CLAS kinematic SPP seed (claslib exclsat(),
+    // MRTKLIB v0.7.4 CLAS seed default 20 m, more than 7 rows). <= 0 restores
+    // the earlier seed without the exclusion.
+    double clas_seed_residual_exclusion_m = 20.0;
     // GNSS_PPP_CLAS_HOLD_CONT_MIN_TRACK: measurement-only override for the
     // CLAS kinematic maxdiff-only hold-continuation carve-out's minimum
     // track-record age gate (kClasHoldContinuationMinTrackRecordFixes at its

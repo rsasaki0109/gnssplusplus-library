@@ -5,10 +5,19 @@ Benchmark source: [GNSS測位エコシステムの統合を目指して - モダ
 ## Current verdict
 
 The full six-run PPC moving-data hard sign-off passes. Across 58,259 scored
-epochs LibGNSS++ produced 14,633 FIX epochs (25.117149%) with 0.359287 m
-aggregate FIX RMS2D, 0.347764 m FIX p68, and zero FIX epochs above 3 m. Every
-run covers 100% of the reference interval and at least 99.95% of observation
+epochs LibGNSS++ produced 15,865 FIX epochs (27.231844%) with 0.360941 m
+aggregate FIX RMS2D, 0.348005 m FIX p68, and zero FIX epochs above 3 m. Every
+run covers 100% of the reference interval and at least 99.94% of observation
 epochs.
+
+The kinematic SPP seed applies claslib's pseudorange large-residual exclusion
+(`exclsat()`: 20 m, more than 7 rows), as MRTKLIB v0.7.4 does for its CLAS seed.
+Most maxdiffp resets on Tokyo 2 had replaced a better filter with a worse seed.
+Against the previous release the exclusion adds 1,297 FIX epochs and loses 65,
+FIX epochs within 0.3 m rise from 9,186 to 10,055, and no run's maximum FIX
+error changes. `GNSS_PPP_CLAS_SEED_RESIDUAL_EXCLUSION_M=0` restores the
+previous seed byte for byte. Details:
+[ppc_clas_seed_residual_exclusion.md](ppc_clas_seed_residual_exclusion.md).
 
 The accepted policy keeps the ordinary CLAS direct state-DD floor at six rows.
 Only an uninterrupted valid ambiguity hold from a preceding full-row FIX may
@@ -18,17 +27,17 @@ they do not replace or apply the held constraints to the float filter, advance
 the internal FIX lifecycle, or seed quarantine. Any non-FIX publication or
 early return clears bridge eligibility.
 
-Against the fixed baseline this adds 176 FIX epochs and loses none. Each of the
-six runs independently meets or exceeds the published MRTKLIB v0.4.2 FIX rate,
-beats its FIX RMS2D, retains at least 99% time and epoch coverage, and has zero
-FIX epochs above 3 m. Tokyo 2 now clears its narrow rate deficit at 21.859186%
-versus 21.7%, with 0.329495 m FIX RMS2D versus 0.514 m. Nagoya 2's prior unsafe
-tail is absent: its maximum FIX error is 0.767249 m.
+Against its fixed baseline the held-DD policy added 176 FIX epochs and lost
+none. Each of the six runs independently meets or exceeds the published
+MRTKLIB v0.4.2 FIX rate, beats its FIX RMS2D, retains at least 99% time and
+epoch coverage, and has zero FIX epochs above 3 m. Tokyo 2 is at 25.357536%
+versus 21.7%, with 0.333159 m FIX RMS2D versus 0.514 m. Nagoya 2's maximum FIX
+error is 0.767249 m.
 
 p68 and TTFF remain soft diagnostics rather than hard gates. p68 passes on
 Tokyo 1 and Nagoya 3 and misses on the other four runs; TTFF passes on five
 runs and misses only on Nagoya 3 (27 s versus 9 s). Aggregate all-solution,
-FLOAT, and SINGLE RMS2D are 36.631008 m, 16.963609 m, and 70.596097 m.
+FLOAT, and SINGLE RMS2D are 36.636635 m, 16.278406 m, and 70.926822 m.
 
 The promoted production defaults are a held minimum of four DD rows and a
 maximum publication streak of five. The previous behavior remains available

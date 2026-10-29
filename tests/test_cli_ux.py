@@ -560,7 +560,7 @@ class CliUxTest(unittest.TestCase):
         clas_row = clas_rows[0]
         for snippet in (
             "Six PPC Tokyo/Nagoya runs",
-            "25.117% aggregate FIX",
+            "27.232% aggregate FIX",
             "zero FIX epochs above 3 m",
             "every run passes the MRTKLIB v0.4.2",
         ):
@@ -579,8 +579,8 @@ class CliUxTest(unittest.TestCase):
             "All RMS2D*",
             "SINGLE RMS2D*",
             "ordinary direct state-DD floor remains six rows",
-            "176 more than the fixed baseline",
-            "FLOAT and SINGLE RMS2D are 16.964 m and 70.596 m",
+            "adds 1,297 FIX epochs and loses 65",
+            "FLOAT and SINGLE RMS2D are 16.278 m and 70.927 m",
             "GNSS_PPP_CLAS_AR_HELD_MIN_DD_ROWS=6",
         ):
             self.assertIn(snippet, normalized_section)

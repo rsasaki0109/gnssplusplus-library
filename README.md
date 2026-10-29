@@ -103,7 +103,7 @@ See the [v0.3.0 release highlights](docs/releases/v0.3.0.md) and
 |---|---|---|
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` b34k | +56.9 pp fix rate, +44.9 pp official score, -11.33 m P95 H delta (six-run average; demo5 publishes mostly FLOAT/SINGLE on more epochs, so Positioning is -9.7 pp) |
 | GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher fix rate on all 3 runs (avg +10.7 pp); <50 cm fraction higher on 2 of 3 runs (avg +7.9 pp, run1 -1.8 pp); fixed-only RMS wins 2 of 3 runs |
-| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 25.117% aggregate FIX, 0.359 m FIX RMS2D, and zero FIX epochs above 3 m across 58,259 scored epochs; every run passes the MRTKLIB v0.4.2 FIX-rate and FIX-RMS2D hard gates |
+| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 27.232% aggregate FIX, 0.361 m FIX RMS2D, and zero FIX epochs above 3 m across 58,259 scored epochs; every run passes the MRTKLIB v0.4.2 FIX-rate and FIX-RMS2D hard gates |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` b34k, both multi-GNSS | `--preset urban` 7467 vs 5839 fixes with fewer wrong fixes (9/0/0 vs 19/4/4 beyond 0.5/2/3 m) and lower Hmed/Hp95/Vp95 (0.046/4.86/10.77 vs 0.190/7.86/15.72 m); default profile 1298 fixes with lower Hp95/Vp95 (4.78/11.54 m); both solvers use the surveyed base position |
 | SPP | PPC SPP adaptive robust + policy gate (Tokyo run1, Nagoya run1-3) | No P95 H regression with <=1 pp positioning drop on the 4 checked runs |
 | Smartphone GNSS/IMU | GSDC 2023-2024 official submission | **Private 0.714 m / Public 0.732 m** (late, no Kaggle feedback), ahead of the 0.883 m final-leaderboard first place and of the 0.782 / 0.796 m taroz post-deadline code |
@@ -317,17 +317,17 @@ MRTKLIB columns are the published v0.4.2 results from the
 The native results below use the bounded held-DD continuation policy: the
 ordinary direct state-DD floor remains six rows, while a valid uninterrupted
 hold may publish at four rows for at most five consecutive reduced-row epochs.
-Each run has 100% interval coverage and at least 99.95% epoch coverage.
+Each run has 100% interval coverage and at least 99.94% epoch coverage.
 
 | Run | libgnss++ FIX | MRTKLIB FIX | FIX RMS2D* | MRTKLIB RMS2D† | All RMS2D* | FLOAT RMS2D* | SINGLE RMS2D* | max FIX* | >3 m FIX* |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo 1 | **10.982%** | 4.900% | **0.351 m** | 0.747 m | 41.861 m | 16.824 m | 80.507 m | 1.961 m | 0 |
-| Tokyo 2 | **21.859%** | 21.700% | **0.329 m** | 0.514 m | 25.880 m | 18.346 m | 45.128 m | 1.333 m | 0 |
-| Tokyo 3 | **38.378%** | 7.400% | **0.191 m** | 0.801 m | 35.276 m | 19.617 m | 88.519 m | 2.986 m | 0 |
-| Nagoya 1 | **36.923%** | 17.000% | **0.451 m** | 1.105 m | 57.163 m | 7.966 m | 119.111 m | 1.043 m | 0 |
-| Nagoya 2 | **23.948%** | 23.400% | **0.554 m** | 1.119 m | 26.803 m | 16.841 m | 42.023 m | 0.767 m | 0 |
-| Nagoya 3 | **9.010%** | 6.300% | **0.304 m** | 0.318 m | 13.595 m | 14.392 m | 14.056 m | 0.587 m | 0 |
-| **Six-run aggregate** | **25.117%** | — | **0.359 m** | — | **36.631 m** | **16.964 m** | **70.596 m** | **2.986 m** | **0** |
+| Tokyo 1 | **11.916%** | 4.900% | **0.345 m** | 0.747 m | 41.674 m | 16.725 m | 80.772 m | 1.961 m | 0 |
+| Tokyo 2 | **25.358%** | 21.700% | **0.333 m** | 0.514 m | 22.587 m | 12.182 m | 42.532 m | 1.333 m | 0 |
+| Tokyo 3 | **38.765%** | 7.400% | **0.193 m** | 0.801 m | 35.471 m | 19.996 m | 89.603 m | 2.986 m | 0 |
+| Nagoya 1 | **44.854%** | 17.000% | **0.447 m** | 1.105 m | 57.770 m | 4.706 m | 123.770 m | 1.043 m | 0 |
+| Nagoya 2 | **24.941%** | 23.400% | **0.547 m** | 1.119 m | 27.959 m | 17.031 m | 43.082 m | 0.767 m | 0 |
+| Nagoya 3 | **10.041%** | 6.300% | **0.304 m** | 0.318 m | 15.775 m | 15.784 m | 17.691 m | 0.580 m | 0 |
+| **Six-run aggregate** | **27.232%** | — | **0.361 m** | — | **36.637 m** | **16.278 m** | **70.927 m** | **2.986 m** | **0** |
 
 \* libgnss++ precision uses the raw PPC reference point (already
 antenna-positioned; no lever-arm transform is applied — an earlier revision
@@ -340,17 +340,31 @@ RMS2D is now lower than MRTKLIB's on all six runs (bolded above).
 
 ![PPC six-run moving CLAS metric comparison](docs/ppc_clas_full_comparison.png)
 
-Across 58,259 scored epochs, native CLAS produced 14,633 FIX epochs: 176 more
-than the fixed baseline, with no lost baseline FIX epochs. Every run meets or
-exceeds the published MRTKLIB v0.4.2 FIX rate, beats its FIX RMS2D, and has
-zero FIX epochs above 3 m. The six-run all-solution RMS2D is 36.631 m; FLOAT
-and SINGLE RMS2D are 16.964 m and 70.596 m respectively. p68 is a soft miss on
-Tokyo 2, Tokyo 3, Nagoya 1, and Nagoya 2; TTFF is a soft miss only on Nagoya 3.
+Across 58,259 scored epochs, native CLAS produced 15,865 FIX epochs. Every run
+meets or exceeds the published MRTKLIB v0.4.2 FIX rate, beats its FIX RMS2D,
+and has zero FIX epochs above 3 m. The six-run all-solution RMS2D is 36.637 m;
+FLOAT and SINGLE RMS2D are 16.278 m and 70.927 m respectively. p68 is a soft
+miss on Tokyo 2, Tokyo 3, Nagoya 1, and Nagoya 2; TTFF is a soft miss only on
+Nagoya 3.
+
+The SPP seed applies claslib's pseudorange large-residual exclusion (20 m,
+more than 7 rows), as MRTKLIB v0.7.4 does for its CLAS seed. Against the previous
+release this adds 1,297 FIX epochs and loses 65, and FIX epochs within 0.3 m
+rise from 9,186 to 10,055; see the
+[seed note](docs/ppc_clas_seed_residual_exclusion.md). Set
+`GNSS_PPP_CLAS_SEED_RESIDUAL_EXCLUSION_M=0` for the previous seed.
 
 The production defaults are held floor 4 and maximum reduced-publication
 streak 5. Set `GNSS_PPP_CLAS_AR_HELD_MIN_DD_ROWS=6` and
 `GNSS_PPP_CLAS_AR_HELD_MAX_PUBLICATION_STREAK=1` to reproduce the previous
 one-epoch/six-row behavior explicitly.
+
+MRTKLIB's own benchmark (`docs/reference/benchmark.md` in MRTKLIB) now records
+v0.7.7 on the same six runs. It fixes more epochs than libgnss++ (for example
+Tokyo 2 48.3%, with 80.5% of its FIX within 30 cm) and carries a heavier
+misfix tail (Tokyo 2 FIX p95 7.8 m). Its v0.4.2 Tokyo 3, Nagoya 1 and Nagoya 3
+values used only the first hourly L6 file (MRTKLIB #316). The comparison is in
+the seed note.
 
 | Complete trajectories | Horizontal error and FIX epochs |
 |---|---|
