@@ -4,7 +4,9 @@
 #include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/signals.hpp>
 
+#include <cmath>
 #include <cstdint>
+#include <map>
 #include <string_view>
 
 namespace libgnss::algorithms::ppp_bias_identity {
@@ -76,6 +78,35 @@ inline int rtklibCodeForObservationType(std::string_view observation_type) {
     for (const auto& entry : kObservationCodeMap) {
         if (observation_type == entry.observation_type) {
             return entry.rtklib_code;
+        }
+    }
+    return madoca_parity::kCodeNone;
+}
+
+// Frequency band digit ('1', '2', '5', '6', '7', '8') of an RTKLIB CODE_*,
+// or 0 when the code is unknown.
+inline char rtklibCodeBand(int rtklib_code) {
+    for (const auto& entry : kObservationCodeMap) {
+        if (entry.rtklib_code == rtklib_code && entry.observation_type.size() >= 2) {
+            return entry.observation_type[1];
+        }
+    }
+    return 0;
+}
+
+// MRTKLIB clas_osr_corrmeas() pass 2 (v0.6.5+): when no CSSR signal matches
+// the observation code exactly, use the first signal on the same frequency
+// band that carries a finite bias (receiver C1C <- CLAS L1X).  Returns that
+// signal's RTKLIB code, or kCodeNone.
+inline int sameBandBiasCode(const std::map<std::uint8_t, double>& biases,
+                            int rtklib_code) {
+    const char band = rtklibCodeBand(rtklib_code);
+    if (band == 0) {
+        return madoca_parity::kCodeNone;
+    }
+    for (const auto& [code, value] : biases) {
+        if (std::isfinite(value) && rtklibCodeBand(code) == band) {
+            return code;
         }
     }
     return madoca_parity::kCodeNone;

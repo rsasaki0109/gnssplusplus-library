@@ -3307,6 +3307,29 @@ TEST(PPPMultifrequencyTest, PreservesMadocalibBeiDouExactBiasIdentity) {
               static_cast<std::uint8_t>(parity::kCodeL2I));
 }
 
+TEST(PPPMultifrequencyTest, FindsClasGalileoBiasOnTheSameFrequencyBand) {
+    namespace identity = algorithms::ppp_bias_identity;
+    namespace parity = algorithms::madoca_parity;
+
+    EXPECT_EQ(identity::rtklibCodeBand(parity::kCodeL1C), '1');
+    EXPECT_EQ(identity::rtklibCodeBand(parity::kCodeL5Q), '5');
+    EXPECT_EQ(identity::rtklibCodeBand(parity::kCodeNone), 0);
+
+    // CLAS Galileo code biases on PPC: E1 B+C (L1X) and E5a I+Q (L5X).
+    std::map<std::uint8_t, double> biases = {
+        {static_cast<std::uint8_t>(parity::kCodeL1X), 0.0},
+        {static_cast<std::uint8_t>(parity::kCodeL5X), -0.16},
+    };
+    EXPECT_EQ(identity::sameBandBiasCode(biases, parity::kCodeL1C), parity::kCodeL1X);
+    EXPECT_EQ(identity::sameBandBiasCode(biases, parity::kCodeL5Q), parity::kCodeL5X);
+    EXPECT_EQ(identity::sameBandBiasCode(biases, parity::kCodeL7Q), parity::kCodeNone);
+
+    // An explicitly invalid cell does not count as a bias.
+    biases[static_cast<std::uint8_t>(parity::kCodeL5X)] =
+        std::numeric_limits<double>::quiet_NaN();
+    EXPECT_EQ(identity::sameBandBiasCode(biases, parity::kCodeL5Q), parity::kCodeNone);
+}
+
 TEST(PPPMultifrequencyTest, UsesMadocalibHeaderFrequencySlotWithoutFallback) {
     namespace identity = algorithms::ppp_bias_identity;
     ObservationData epoch;

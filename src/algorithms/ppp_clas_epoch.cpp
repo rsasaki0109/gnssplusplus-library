@@ -180,6 +180,10 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         std::numeric_limits<double>::quiet_NaN();
     PositionSolution clas_continuity_output;
     bool has_clas_continuity_output = false;
+    // The seed before the maxdiff FDE retry replaced it (GNSS_PPP_CLAS_GALILEO
+    // re-initializes a full reset from it; see prepareEpochState below).
+    PositionSolution clas_pre_fde_seed;
+    bool has_clas_pre_fde_seed = false;
     bool clas_rejected_seed_output_prepared = false;
     bool has_clas_validation_rejected_candidate = false;
     bool clas_seed_validation_failed = false;
@@ -269,6 +273,8 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             const PositionSolution fde_seed =
                 spp_processor_.processEpoch(obs, nav);
             if (fde_seed.isValid()) {
+                clas_pre_fde_seed = seed;
+                has_clas_pre_fde_seed = true;
                 seed = fde_seed;
             }
         }
@@ -636,9 +642,17 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             clas_prepare_last_processed_time = clas_last_accepted_seed_time_;
         }
     }
+    // GNSS_PPP_CLAS_GALILEO: MRTKLIB seeds a reset from pntpos(), which runs
+    // RAIM FDE only when valsol() fails.  The native maxdiff FDE retry can
+    // pick a subset that is metres worse than the full solution; with Galileo
+    // rows a reset from it re-converges onto that offset.  Keep the FDE seed
+    // for the maxdiff bookkeeping, but re-initialize from the full solution.
+    const bool clas_reset_from_pre_fde_seed =
+        env_overrides_.clas_galileo && !filter_initialized_ &&
+        has_clas_pre_fde_seed && clas_pre_fde_seed.isValid() && seed.isValid();
     const auto epoch_preparation = ppp_clas::prepareEpochState(
         obs,
-        seed,
+        clas_reset_from_pre_fde_seed ? clas_pre_fde_seed : seed,
         ssr_products_,
         filter_state_,
         filter_initialized_,

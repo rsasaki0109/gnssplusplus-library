@@ -345,6 +345,14 @@ struct PPPEnvOverrides {
     // cold-start burst at nfix=7 from good mature-hold clusters at nfix>=13,
     // validated across 6 PPC runs with zero new >3m errors).
     int clas_post_reset_quarantine_max_nfix = 7;
+    // GNSS_PPP_CLAS_GALILEO: when exactly "1", the kinematic CLAS parity
+    // path forms Galileo E1/E5a rows. CLAS broadcasts Galileo biases for
+    // L1X/L5X while receivers report C1C/C5Q, so the biases come from the
+    // same-band signal (MRTKLIB v0.6.5+). The profile also re-initializes
+    // a full reset from the pre-FDE seed and drops DD code rows above 20 m
+    // while the position is still seed-quality. Default false (the
+    // MRTKLIB v0.5.1 GPS+QZSS filter, bit-identical).
+    bool clas_galileo = false;
     // GNSS_PPP_CLAS_SEED_RESIDUAL_EXCLUSION_M: pseudorange large-residual
     // exclusion threshold of the CLAS kinematic SPP seed (claslib exclsat(),
     // MRTKLIB v0.7.4 CLAS seed default 20 m, more than 7 rows). <= 0 restores

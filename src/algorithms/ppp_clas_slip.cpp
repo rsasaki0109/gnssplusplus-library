@@ -158,7 +158,8 @@ ClasSlipDetectionStats detectClasCycleSlips(
             // dispersion compensation, so gate the outage lifecycle to the
             // subset that the literal filter actually tracks.
             const bool tracks_l1_filter_state =
-                osr.satellite.system != GNSSSystem::Galileo;
+                osr.satellite.system != GNSSSystem::Galileo ||
+                pppEnvOverrides().clas_galileo;
             const bool tracks_l2_filter_state =
                 tracks_l1_filter_state &&
                 osr.satellite.system != GNSSSystem::QZSS;
