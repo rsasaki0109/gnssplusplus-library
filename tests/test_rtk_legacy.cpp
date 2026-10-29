@@ -10,6 +10,7 @@
 #include <libgnss++/io/rinex.hpp>
 
 #include <libgnss++/algorithms/rtk.hpp>
+#include <libgnss++/core/coordinates.hpp>
 
 #include "synthetic_rtk_scene.hpp"
 
@@ -88,6 +89,7 @@ struct RTKProcessorTestAccess {
     GNSSPP_RTK_TEST_METHOD(varerr)
     GNSSPP_RTK_TEST_METHOD(tryHoldFix)
     GNSSPP_RTK_TEST_METHOD(holdPhaseFit)
+    GNSSPP_RTK_TEST_METHOD(applyRoadHeightPrior)
     GNSSPP_RTK_TEST_METHOD(applyHoldAmbiguity)
     GNSSPP_RTK_TEST_METHOD(resolveAmbiguities)
     GNSSPP_RTK_TEST_METHOD(tryWlNlFallback)
@@ -2648,6 +2650,117 @@ TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixUnchangedSetOnlyDefaultOffAndC
     off.hold_fix_unchanged_set_only = false;
     processor.setRTKConfig(off);
     EXPECT_FALSE(processor.getRTKConfig().hold_fix_unchanged_set_only);
+}
+
+// Road-surface height prior (RTKConfig::road_height_sigma_m) after a kinematic
+// re-seed: SPP-like position, 900 m^2 per axis, 12 m above the road + antenna.
+TEST(RTKRoadHeightPriorTest, PullsOnlyTheHeightOfTheSeedTowardTheRoadSurface) {
+    const double lat = 35.66 * M_PI / 180.0, lon = 139.79 * M_PI / 180.0;
+    const Vector3d base = geodetic2ecef(lat, lon, 40.0);
+    const Vector3d seed = geodetic2ecef(lat, lon, 38.0 + 1.5 + 12.0) +
+                          enu2ecef(Vector3d(100.0, 50.0, 0.0), lat, lon);
+    double seed_lat = 0.0, seed_lon = 0.0, seed_h = 0.0;
+    ecef2geodetic(seed, seed_lat, seed_lon, seed_h);
+    auto map = std::make_shared<road_height::RoadHeightMap>(road_height::buildRoadHeightMap(
+        {Vector3d(seed_lat * 180.0 / M_PI, seed_lon * 180.0 / M_PI, 38.0)}, 1.5));
+
+    auto make = [&](double sigma, bool with_map, RTKProcessor::RTKConfig::PositionMode mode) {
+        auto processor = std::make_unique<RTKProcessor>();
+        RTKProcessor::RTKConfig cfg;
+        cfg.position_mode = mode;
+        cfg.road_height_sigma_m = sigma;
+        cfg.road_height_offset_m = 1.5;
+        processor->setRTKConfig(cfg);
+        processor->setBasePosition(base);
+        if (with_map) processor->setRoadHeightMap(map);
+        auto& fs = Peer::filter_state_(*processor);
+        fs.state = VectorXd::Zero(Peer::kStateCount);
+        fs.covariance = MatrixXd::Identity(Peer::kStateCount, Peer::kStateCount) * 0.01;
+        fs.state.head<3>() = seed - base;
+        fs.covariance.topLeftCorner<3, 3>() = Matrix3d::Identity() * 900.0;
+        return processor;
+    };
+
+    auto on = make(0.2, true, RTKProcessor::RTKConfig::PositionMode::KINEMATIC);
+    Peer::applyRoadHeightPrior(*on);
+    const auto& telemetry = on->getLastDebugTelemetry();
+    ASSERT_TRUE(telemetry.road_height_applied);
+    EXPECT_NEAR(telemetry.road_height_innovation_m, 38.0 + 1.5 - seed_h, 1e-9);
+    const Vector3d rover = base + Peer::filter_state_(*on).state.head<3>();
+    double h_lat = 0.0, h_lon = 0.0, h = 0.0;
+    ecef2geodetic(rover, h_lat, h_lon, h);
+    EXPECT_NEAR(h, 39.5, 1e-3);  // road 38.0 + antenna 1.5; 0.04 vs 900 m^2
+    const Vector3d moved = ecef2enu(rover - seed, seed_lat, seed_lon);
+    EXPECT_NEAR(moved.x(), 0.0, 1e-6);
+    EXPECT_NEAR(moved.y(), 0.0, 1e-6);
+    const Vector3d up = enu2ecef(Vector3d(0.0, 0.0, 1.0), seed_lat, seed_lon);
+    const Matrix3d p_pos = Peer::filter_state_(*on).covariance.topLeftCorner<3, 3>();
+    EXPECT_NEAR(up.dot(p_pos * up), 900.0 * 0.04 / 900.04, 1e-6);
+
+    // Off, without a map, outside the map radius, or in static mode: untouched.
+    std::vector<std::unique_ptr<RTKProcessor>> untouched;
+    untouched.push_back(make(0.0, true, RTKProcessor::RTKConfig::PositionMode::KINEMATIC));
+    untouched.push_back(make(0.2, false, RTKProcessor::RTKConfig::PositionMode::KINEMATIC));
+    untouched.push_back(make(0.2, true, RTKProcessor::RTKConfig::PositionMode::STATIC));
+    untouched.push_back(make(0.2, true, RTKProcessor::RTKConfig::PositionMode::KINEMATIC));
+    Peer::filter_state_(*untouched.back()).state.head<3>() +=
+        enu2ecef(Vector3d(3.0, 0.0, 0.0), lat, lon);  // 3 m from the only map point
+    for (auto& processor : untouched) {
+        const VectorXd before = Peer::filter_state_(*processor).state;
+        Peer::applyRoadHeightPrior(*processor);
+        EXPECT_FALSE(processor->getLastDebugTelemetry().road_height_applied);
+        EXPECT_EQ(Peer::filter_state_(*processor).state, before);
+    }
+}
+
+TEST(RTKRoadHeightPriorTest, PositionBlockOnlyLeavesEveryOtherStateUntouched) {
+    // road_height_publish_only: the published FLOAT takes the position-block update,
+    // the ambiguity states and their correlation to the position do not change.
+    const double lat = 35.66 * M_PI / 180.0, lon = 139.79 * M_PI / 180.0;
+    const Vector3d base = geodetic2ecef(lat, lon, 40.0);
+    const Vector3d seed = geodetic2ecef(lat, lon, 38.0 + 1.5 + 2.0);
+    auto map = std::make_shared<road_height::RoadHeightMap>(
+        road_height::buildRoadHeightMap({Vector3d(35.66, 139.79, 38.0)}, 1.5));
+    auto build = [&]() {
+        auto processor = std::make_unique<RTKProcessor>();
+        RTKProcessor::RTKConfig cfg;
+        cfg.position_mode = RTKProcessor::RTKConfig::PositionMode::KINEMATIC;
+        cfg.road_height_sigma_m = 0.2;
+        cfg.road_height_offset_m = 1.5;
+        processor->setRTKConfig(cfg);
+        processor->setBasePosition(base);
+        processor->setRoadHeightMap(map);
+        auto& fs = Peer::filter_state_(*processor);
+        fs.state = VectorXd::Constant(Peer::kStateCount, 3.0);
+        fs.covariance = MatrixXd::Identity(Peer::kStateCount, Peer::kStateCount);
+        fs.state.head<3>() = seed - base;
+        fs.covariance.topLeftCorner<3, 3>() = Matrix3d::Identity() * 4.0;
+        fs.covariance(0, 5) = fs.covariance(5, 0) = 0.5;  // position-ambiguity correlation
+        return processor;
+    };
+    auto full = build();
+    auto block = build();
+    const VectorXd before = Peer::filter_state_(*block).state;
+    const MatrixXd covariance_before = Peer::filter_state_(*block).covariance;
+    Peer::applyRoadHeightPrior(*full, false);
+    Peer::applyRoadHeightPrior(*block, true);
+    ASSERT_TRUE(block->getLastDebugTelemetry().road_height_applied);
+    const auto& fs = Peer::filter_state_(*block);
+    // Same position block as the full update ...
+    EXPECT_TRUE(fs.state.head<3>().isApprox(Peer::filter_state_(*full).state.head<3>(), 1e-12));
+    const Matrix3d block_covariance = fs.covariance.topLeftCorner<3, 3>();
+    const Matrix3d full_covariance = Peer::filter_state_(*full).covariance.topLeftCorner<3, 3>();
+    EXPECT_TRUE(block_covariance.isApprox(full_covariance, 1e-12));
+    // ... and nothing else moves, unlike the full update.
+    EXPECT_EQ(fs.state.tail(Peer::kStateCount - 3), before.tail(Peer::kStateCount - 3));
+    EXPECT_EQ(fs.covariance.rightCols(Peer::kStateCount - 3),
+              covariance_before.rightCols(Peer::kStateCount - 3));
+    EXPECT_NE(Peer::filter_state_(*full).state(5), before(5));
+}
+
+TEST(RTKLegacyCompatibilityStandaloneTest, RoadHeightPriorDefaultsOff) {
+    EXPECT_EQ(RTKProcessor::RTKConfig{}.road_height_sigma_m, 0.0);
+    EXPECT_FALSE(RTKProcessor::RTKConfig{}.road_height_publish_only);
 }
 
 TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixUpdateNisLimitDefaultsOff) {
