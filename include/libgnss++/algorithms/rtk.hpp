@@ -5,6 +5,7 @@
 #include "../core/navigation.hpp"
 #include "../core/solution.hpp"
 #include "nlos_weights.hpp"
+#include "road_height_map.hpp"
 #include "float_trust_policy.hpp"
 #include "rtk_adaptive_noise.hpp"
 #include "rtk_carrier_prior.hpp"
@@ -211,6 +212,25 @@ public:
         /// rtk_carrier_prior.hpp for the constants. Default off, bit-identical
         /// when off.
         bool enable_canyon_carrier_prior = false;
+
+        /// Road-surface height prior (road_height_map.hpp). Before the float
+        /// update of an epoch with satellite data, one scalar Kalman update
+        /// pulls the re-seeded rover's ellipsoidal height toward the road
+        /// height of the map point nearest to the seed (within
+        /// road_height_radius_m) plus road_height_offset_m (the antenna height
+        /// above the road). Its variance is road_height_sigma_m^2 plus the
+        /// road gradient times the seed's horizontal covariance. Needs a map
+        /// from setRoadHeightMap(); an epoch without a nearby map point is
+        /// unchanged. 0 (default) is off, bit-identical.
+        double road_height_sigma_m = 0.0;
+        double road_height_offset_m = 0.0;
+        double road_height_radius_m = 1.5;
+        /// Apply the road-height update only to the position of the published
+        /// FLOAT solution, after the float update: the filter state and the
+        /// ambiguity resolution stay GNSS-only (docs/rtk_road_height_prior.md
+        /// recommends this mode). false (default): the update enters the
+        /// filter before the float update.
+        bool road_height_publish_only = false;
 
         /// Innovation-based adaptive measurement variance (Motooka 2026,
         /// NAVIGATION navi.776): per-satellite EWMA of v^2 - HPH' - ref_var
@@ -1531,6 +1551,11 @@ public:
         // DD phase fit of the hold position; evaluated only for
         // hold_fix_update_nis_max_phase_fit.
         double hold_fix_phase_fit = std::numeric_limits<double>::quiet_NaN();
+        // RTKConfig::road_height_sigma_m: prior applied this epoch, and its
+        // innovation (map road height + offset - seed height).
+        bool road_height_applied = false;
+        double road_height_innovation_m = std::numeric_limits<double>::quiet_NaN();
+        double road_height_sigma_m = std::numeric_limits<double>::quiet_NaN();
         bool cp_pr_gate_evaluated = false;
         bool cp_pr_gate_rejected = false;
         bool cp_pr_gate_escalated = false;
@@ -1730,6 +1755,12 @@ public:
     /// != OFF.
     void setNlosWeightTable(std::shared_ptr<const nlos_weights::NlosWeightTable> table) {
         nlos_weight_table_ = std::move(table);
+    }
+
+    /// Road-surface map for RTKConfig::road_height_sigma_m. A null/empty map
+    /// (the default) is equivalent to not calling this at all.
+    void setRoadHeightMap(std::shared_ptr<const road_height::RoadHeightMap> map) {
+        road_height_map_ = std::move(map);
     }
 
     /// Phase 1 GNSS/IMU coupling: supply an external (e.g. INS-mechanization-
@@ -2255,6 +2286,7 @@ private:
     // access to rover_obs). Set at the top of processRTKEpoch/processEpoch.
     GNSSTime current_epoch_time_;
     std::shared_ptr<const nlos_weights::NlosWeightTable> nlos_weight_table_;
+    std::shared_ptr<const road_height::RoadHeightMap> road_height_map_;
 
     // Current epoch satellite data (cached for use across functions)
     std::map<SatelliteId, SatelliteData> current_sat_data_;
@@ -2441,6 +2473,14 @@ private:
      * Kinematic position reset: SPP position with large variance (RTKLIB udpos)
      */
     void resetPositionToSPP(const ObservationData& rover_obs, const NavigationData& nav);
+
+    /**
+     * RTKConfig::road_height_sigma_m: scalar update of the rover height toward
+     * the road-surface map (rtk_road_height.cpp). position_block_only updates
+     * only the position states and their 3x3 covariance (the published FLOAT
+     * of road_height_publish_only).
+     */
+    void applyRoadHeightPrior(bool position_block_only = false);
 
     /**
      * RTKConfig::enable_canyon_carrier_prior: capture the previous posterior's

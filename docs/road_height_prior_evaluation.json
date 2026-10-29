@@ -1,0 +1,865 @@
+{
+ "title": "Road-surface height prior for gnss_solve (PLATEAU / GSI DEM)",
+ "doc": "docs/rtk_road_height_prior.md",
+ "reference_use": "The reference trajectory is used only for scoring and the analysis-only phase audit. Maps, antenna offsets and sigmas come from PLATEAU / GSI data and from each run's own U solution.",
+ "frozen_rules": [
+  {
+   "text": "Frozen 2026-10-28 before the replay. Local experiment (not pushed) on 4f4282f + the opt-in road-height prior\n(RTKConfig::road_height_sigma_m; gnss_solve --road-height-map/--road-height-sigma-m/--road-height-offset-m;\nbinary bin_rh/gnss_solve sha256 eefd0964...). Flag off: --preset urban POS byte-identical on tokyo/run1 and Trimble Odaiba.\nRuns: the seven Tokyo runs (PPC tokyo/run1-3, Trimble and u-blox Odaiba and Shinjuku). Nagoya has no PLATEAU road heights.\nMap per run (truth-free): PLATEAU LOD3 tran road surfaces (車道部, 車道交差部) of the Chiyoda, Chuo, Minato, Koto,\nShinagawa, Shinjuku and Shibuya wards plus the MLIT road set, all leaf tiles; sampled on a 1 m grid within 30 m of the\nrun's own U solution (any status); nodes whose surfaces disagree by > 0.5 m dropped.\nOffset and sigma per run from U's FIX epochs on the map: offset = median(FIX height - road height),\nsigma_MAD = 1.4826 * MAD. The reference trajectory is used only for scoring and the phase audit.\nRecipes: U = --preset urban; UR = U + map + offset + sigma max(sigma_MAD, 0.10) (primary); UR30 = U + map + offset +\nsigma 0.30 (sensitivity, roughly the vertical spec of large-scale maps). Radius 1.5 m.\nMetrics per run: PPC official score (3D <= 0.5 m, distance weighted; PPC runs), share of epochs within 0.5 m 3D,\nFIX, audited wrong FIX >0.5 m, U-correct FIX lost, missing epochs, Hp95, Vp95.\nPrediction for UR: the official score rises on all three PPC runs (post-hoc height replacement alone gave +2.4 / +0.9\non run1 / run2); audited wrong FIX do not rise by more than 10% on any run; Vp95 falls on every run.\n",
+   "sha256": "17431c38c31b873d6bd0f6be8a9f4fead62e8f9099632eab465adea0bbb10dcf"
+  },
+  {
+   "text": "Frozen 2026-10-29 after the UR/UR30 replay (frozen_rule_road.txt, sha256 17431c38...) and before this replay.\nBinary bin_rh2/gnss_solve sha256 c56afe5811998ef1... (exp/road-height-prior + prior v2).\nSeen before freezing: on tokyo/run3 the prior was applied in epochs with no satellites (TOW 180561.2, innovation 32 m)\nand the float stayed 0.48 m off where truth sat 0.16 m above road+offset; on Trimble Odaiba the constrained float\nfixed into a 0.27 m horizontal basin that drifted to +0.5 m up.\nPrior v2: applied after a successful float update and before AR, at the float position; variance =\nsigma^2 + (road gradient . horizontal covariance); no prior in epochs without an update. Optional fix check\n(--road-height-fix-max-sigmas k): reject an AR or hold candidate whose height is more than k*sigma off road+offset.\nMaps, offsets and sigmas: unchanged from frozen_rule_road.txt (sigma = max(1.4826 MAD, 0.10)). k = 3 (conventional).\nRecipes: UR2 = U + map + prior v2; UR2F = UR2 + --road-height-fix-max-sigmas 3 (primary).\nPrediction for UR2F vs U: the PPC official score rises on all three PPC runs; audited wrong FIX >0.5 m do not exceed\nU's count by more than max(10%, 2) on any run; Vp95 falls on every run.\n",
+   "sha256": "abdc902f0996335558ecea7a8bb6d5db06741fb1d5d3fb8cdd5e2d1c425afeb4"
+  },
+  {
+   "text": "Frozen 2026-10-29 after the UR2/UR2F replay (frozen_rule_road2.txt, sha256 abdc902f...) and before this replay.\nBinary bin_rh3/gnss_solve sha256 8be327b1215a7665...\nSeen before freezing: UR2 (prior after the float update) fixed tokyo/run3 and Odaiba but raised Shinjuku wrong FIX\n119 -> 219 and u-blox Shinjuku 3 -> 108; the fix check (UR2F) rejected 989 / 1254 U-correct FIX on tokyo/run2 / run3.\nPrior v3: applied before the float update as in UR, but only in epochs that reach the update (satellite data\ncollected, >= 4 satellites), at the re-seeded position, with variance sigma^2 + (road gradient . seed horizontal\ncovariance). No fix check. Maps, offsets and sigmas unchanged.\nRecipe: UR3 = U + map + prior v3.\nPrediction for UR3 vs U: the PPC official score rises on all three PPC runs; audited wrong FIX >0.5 m do not exceed\nU's count by more than max(10%, 2) on any run; Vp95 falls on every run.\nWhatever the result, adoption needs a held-out check on data not used here (planned: PPC Nagoya with a GSI DEM map).\n",
+   "sha256": "b32c49bd30658473e05342a3fce6fcbc49a7ad528518e0188b79d4f199d3ff17"
+  },
+  {
+   "text": "Frozen 2026-10-29 before the replay. Held-out check of the road-height prior on PPC nagoya/run1-3, which were not used\nto design any prior variant (only U's Nagoya outputs existed; no prior run on Nagoya before this).\nMap per run (truth-free): GSI DEM5A (z15 dem5a_png tiles chosen from the run's U solution extent), orthometric height\n+ geoid from a plane fitted to five GSI geoid-calculation points, sampled on a 1 m grid within 30 m of the run's\nU solution (inverse-distance weighting of the 4 nearest DEM pixels). No multilevel removal is possible with a DEM.\nOffset and sigma from U's FIX epochs as on Tokyo: sigma = max(1.4826 MAD, 0.10).\nRecipes: U; UR3 (prior v3, bin_rh3, primary); UR (prior v1, bin_rh, secondary).\nPrediction for UR3 vs U on the three Nagoya runs: the mean PPC official score rises; summed audited wrong FIX >0.5 m\nrise by at most 10%; Vp95 falls on at least two of the three runs.\n",
+   "sha256": "c271ac14bca96555207fa0614bcccd318a4518d2457c285f8e12d2d939e39c8b"
+  },
+  {
+   "text": "Frozen 2026-10-29 after the Nagoya held-out replay (frozen_rule_road_nagoya.txt, sha256 c271ac14...) and before this replay.\nBinary bin_rhp/gnss_solve sha256 aebefd66... (exp/road-height-prior + --road-height-publish-only).\nSeen before freezing: on Nagoya UR3 raised the official score mean 40.2 -> 47.3% but audited wrong FIX 54 -> 199.\nURP = U + map + --road-height-publish-only: after the float update the road-height update (v3 variance) is applied to a\ncopy of the state used only for the published FLOAT; the filter and AR keep the GNSS-only state. The published FLOAT\nalso enters the solution history (rememberSolution), so later gates see it.\nMaps, offsets and sigmas unchanged (Tokyo: PLATEAU; Nagoya: GSI DEM).\nRuns: the seven Tokyo runs and the three Nagoya runs.\nPrediction for URP vs U: summed audited wrong FIX >0.5 m within +5% over the ten runs and no run above U by more than\nmax(10%, 2); FIX within +-1% of U on every run; the mean official score rises over Tokyo and over Nagoya.\n",
+   "sha256": "75c091e07b5cbc587dc2e66124944c8d0e9f95076045fb6255e381fa3d152ebd"
+  }
+ ],
+ "recipes": {
+  "U": "--preset urban (argv of docs/rtk_cdmh_ppc_evaluation.md)",
+  "UR": "v1 (historical, not in the code): prior right after the kinematic re-seed in every epoch, at the seed, variance sigma^2",
+  "UR30": "UR with sigma 0.30 m",
+  "UR2": "v2 (historical): prior after the float update, at the float position, slope-aware variance",
+  "UR2F": "UR2 + fixed-height check at 3 sigma (historical; the option is not in the code)",
+  "UR3": "v3 = the in-filter mode in the code: --road-height-map --road-height-sigma-m --road-height-offset-m",
+  "URP": "publish-only mode in the code: UR3 flags + --road-height-publish-only"
+ },
+ "maps": {
+  "tokyo/run1": {
+   "source": "PLATEAU LOD3 tran",
+   "points": 160066,
+   "offset_m": 1.544,
+   "sigma_mad_m": 0.073,
+   "sigma_used_m": 0.1,
+   "csv_sha256": "fbe9275e931bb12972158adf9446ceb007bdbd362345e290d4649ba86fab9450"
+  },
+  "tokyo/run2": {
+   "source": "PLATEAU LOD3 tran",
+   "points": 99162,
+   "offset_m": 1.493,
+   "sigma_mad_m": 0.124,
+   "sigma_used_m": 0.124,
+   "csv_sha256": "8aa0701fa239a66aee89c48a4c19bcd4468066d87bf8b14185601be2e26bbe59"
+  },
+  "tokyo/run3": {
+   "source": "PLATEAU LOD3 tran",
+   "points": 225780,
+   "offset_m": 1.53,
+   "sigma_mad_m": 0.174,
+   "sigma_used_m": 0.174,
+   "csv_sha256": "1ec3e4f22c1713fb59e71d66b2274d2f1a062268d60c309395b3f42b70410727"
+  },
+  "trimble-Odaiba": {
+   "source": "PLATEAU LOD3 tran",
+   "points": 93948,
+   "offset_m": 1.938,
+   "sigma_mad_m": 0.125,
+   "sigma_used_m": 0.125,
+   "csv_sha256": "1590fad34dae66ef09bd128d014f402d7f7e9bf996deb152ec4dbe54c314d581"
+  },
+  "ublox-Odaiba": {
+   "source": "PLATEAU LOD3 tran",
+   "points": 89144,
+   "offset_m": 1.942,
+   "sigma_mad_m": 0.12,
+   "sigma_used_m": 0.12,
+   "csv_sha256": "6f9f24ec1806a8db02ff9a2f1f18790766a8a906d03a49de35363b815171247e"
+  },
+  "trimble-Shinjuku": {
+   "source": "PLATEAU LOD3 tran",
+   "points": 126225,
+   "offset_m": 1.944,
+   "sigma_mad_m": 0.065,
+   "sigma_used_m": 0.1,
+   "csv_sha256": "34fcc3ce65af9e6ab736b930bce4605b5a1c7a401faa4d369ea37c5cee7155fd"
+  },
+  "ublox-Shinjuku": {
+   "source": "PLATEAU LOD3 tran",
+   "points": 130117,
+   "offset_m": 1.956,
+   "sigma_mad_m": 0.054,
+   "sigma_used_m": 0.1,
+   "csv_sha256": "f5e597cebd4a747a576f9d7ed36131d0ba7843c86534e37f5482f537d6ec2cbe"
+  },
+  "nagoya/run1": {
+   "source": "GSI DEM5A",
+   "points": 256737,
+   "offset_m": 1.553,
+   "sigma_mad_m": 0.085,
+   "sigma_used_m": 0.1,
+   "csv_sha256": "fee627ac2eea06684c67b8adcb21f6c63a314d953ca206d415edcf00bc01ff84"
+  },
+  "nagoya/run2": {
+   "source": "GSI DEM5A",
+   "points": 258447,
+   "offset_m": 1.604,
+   "sigma_mad_m": 0.06,
+   "sigma_used_m": 0.1,
+   "csv_sha256": "250c26b4e74073906bdc9a11ebee62b39c7e1896967d4de5784fa697703c2e17"
+  },
+  "nagoya/run3": {
+   "source": "GSI DEM5A",
+   "points": 190797,
+   "offset_m": 1.672,
+   "sigma_mad_m": 0.068,
+   "sigma_used_m": 0.1,
+   "csv_sha256": "df4ccafb6578d0f4c36ad81bdb1d1ac449ec9882099b67831c27d0857aa1b14a"
+  }
+ },
+ "map_tool": "scripts/experiments/road_height/road_height_maps.py rebuilds all ten maps byte-identically (plateau-map / dem-map)",
+ "scoring": {
+  "official_pct": "apps/commands/benchmarks/gnss_ppc_metrics.py ppc_official_distance_score() (3D <= 0.5 m, distance weighted; tolerance 0.25 s, u-blox 6 ms)",
+  "share_0.5m_pct": "published epochs within 0.5 m 3D",
+  "audited_wrong>0.5": "FIX >0.5 m 3D minus phase-audit reference_inconsistent",
+  "u_correct_lost": "U FIX within 0.5 m that are not FIX within 0.5 m under the recipe",
+  "fix_missing_hP95": "as docs/hold_fix_phase_fit_evaluation.json (evaluate_urbannav_fix_continuity.score(); u-blox interpolated)"
+ },
+ "results": {
+  "tokyo/run1": {
+   "U": {
+    "official_pct": 39.672,
+    "share_0.5m_pct": 46.98,
+    "fix": 4328,
+    "audited_wrong>0.5": 24,
+    "u_correct_lost": 0,
+    "missing": 1232,
+    "hP95": 5.566,
+    "vP95": 10.071
+   },
+   "UR": {
+    "official_pct": 53.111,
+    "share_0.5m_pct": 60.3,
+    "fix": 5539,
+    "audited_wrong>0.5": 27,
+    "u_correct_lost": 126,
+    "missing": 871,
+    "hP95": 3.342,
+    "vP95": 0.7
+   },
+   "UR30": {
+    "official_pct": 52.602,
+    "share_0.5m_pct": 57.23,
+    "fix": 5367,
+    "audited_wrong>0.5": 32,
+    "u_correct_lost": 161,
+    "missing": 896,
+    "hP95": 3.288,
+    "vP95": 1.944
+   },
+   "UR2": {
+    "official_pct": 51.065,
+    "share_0.5m_pct": 57.5,
+    "fix": 5213,
+    "audited_wrong>0.5": 17,
+    "u_correct_lost": 90,
+    "missing": 984,
+    "hP95": 4.015,
+    "vP95": 0.934
+   },
+   "UR2F": {
+    "official_pct": 51.821,
+    "share_0.5m_pct": 57.61,
+    "fix": 5113,
+    "audited_wrong>0.5": 6,
+    "u_correct_lost": 142,
+    "missing": 921,
+    "hP95": 4.166,
+    "vP95": 0.636
+   },
+   "UR3": {
+    "official_pct": 55.278,
+    "share_0.5m_pct": 59.06,
+    "fix": 5538,
+    "audited_wrong>0.5": 40,
+    "u_correct_lost": 110,
+    "missing": 869,
+    "hP95": 2.586,
+    "vP95": 0.915
+   },
+   "URP": {
+    "official_pct": 41.456,
+    "share_0.5m_pct": 48.06,
+    "fix": 4348,
+    "audited_wrong>0.5": 24,
+    "u_correct_lost": 0,
+    "missing": 1101,
+    "hP95": 5.509,
+    "vP95": 6.198
+   }
+  },
+  "tokyo/run2": {
+   "U": {
+    "official_pct": 75.898,
+    "share_0.5m_pct": 84.92,
+    "fix": 6669,
+    "audited_wrong>0.5": 5,
+    "u_correct_lost": 0,
+    "missing": 638,
+    "hP95": 2.054,
+    "vP95": 2.971
+   },
+   "UR": {
+    "official_pct": 80.179,
+    "share_0.5m_pct": 87.27,
+    "fix": 6832,
+    "audited_wrong>0.5": 4,
+    "u_correct_lost": 127,
+    "missing": 543,
+    "hP95": 1.77,
+    "vP95": 0.404
+   },
+   "UR30": {
+    "official_pct": 79.845,
+    "share_0.5m_pct": 86.88,
+    "fix": 6823,
+    "audited_wrong>0.5": 4,
+    "u_correct_lost": 123,
+    "missing": 546,
+    "hP95": 1.822,
+    "vP95": 0.444
+   },
+   "UR2": {
+    "official_pct": 79.357,
+    "share_0.5m_pct": 85.84,
+    "fix": 6733,
+    "audited_wrong>0.5": 5,
+    "u_correct_lost": 31,
+    "missing": 498,
+    "hP95": 1.742,
+    "vP95": 0.398
+   },
+   "UR2F": {
+    "official_pct": 79.447,
+    "share_0.5m_pct": 85.84,
+    "fix": 5788,
+    "audited_wrong>0.5": 3,
+    "u_correct_lost": 989,
+    "missing": 495,
+    "hP95": 1.742,
+    "vP95": 0.396
+   },
+   "UR3": {
+    "official_pct": 79.848,
+    "share_0.5m_pct": 86.87,
+    "fix": 6838,
+    "audited_wrong>0.5": 4,
+    "u_correct_lost": 124,
+    "missing": 546,
+    "hP95": 1.772,
+    "vP95": 0.436
+   },
+   "URP": {
+    "official_pct": 78.465,
+    "share_0.5m_pct": 84.71,
+    "fix": 6691,
+    "audited_wrong>0.5": 5,
+    "u_correct_lost": 2,
+    "missing": 477,
+    "hP95": 1.93,
+    "vP95": 0.687
+   }
+  },
+  "tokyo/run3": {
+   "U": {
+    "official_pct": 75.223,
+    "share_0.5m_pct": 86.46,
+    "fix": 10910,
+    "audited_wrong>0.5": 35,
+    "u_correct_lost": 0,
+    "missing": 1510,
+    "hP95": 3.097,
+    "vP95": 3.22
+   },
+   "UR": {
+    "official_pct": 74.654,
+    "share_0.5m_pct": 83.95,
+    "fix": 10661,
+    "audited_wrong>0.5": 26,
+    "u_correct_lost": 493,
+    "missing": 1342,
+    "hP95": 4.518,
+    "vP95": 3.693
+   },
+   "UR30": {
+    "official_pct": 73.196,
+    "share_0.5m_pct": 83.17,
+    "fix": 10615,
+    "audited_wrong>0.5": 31,
+    "u_correct_lost": 504,
+    "missing": 1338,
+    "hP95": 4.514,
+    "vP95": 3.687
+   },
+   "UR2": {
+    "official_pct": 76.123,
+    "share_0.5m_pct": 87.25,
+    "fix": 11151,
+    "audited_wrong>0.5": 28,
+    "u_correct_lost": 35,
+    "missing": 1334,
+    "hP95": 3.022,
+    "vP95": 1.806
+   },
+   "UR2F": {
+    "official_pct": 71.73,
+    "share_0.5m_pct": 82.48,
+    "fix": 9933,
+    "audited_wrong>0.5": 24,
+    "u_correct_lost": 1254,
+    "missing": 1361,
+    "hP95": 3.03,
+    "vP95": 1.815
+   },
+   "UR3": {
+    "official_pct": 75.467,
+    "share_0.5m_pct": 85.33,
+    "fix": 10751,
+    "audited_wrong>0.5": 25,
+    "u_correct_lost": 367,
+    "missing": 1345,
+    "hP95": 4.514,
+    "vP95": 3.689
+   },
+   "URP": {
+    "official_pct": 75.898,
+    "share_0.5m_pct": 86.28,
+    "fix": 10933,
+    "audited_wrong>0.5": 35,
+    "u_correct_lost": 0,
+    "missing": 1344,
+    "hP95": 3.321,
+    "vP95": 2.084
+   }
+  },
+  "trimble-Odaiba": {
+   "U": {
+    "official_pct": 69.208,
+    "share_0.5m_pct": 70.58,
+    "fix": 7467,
+    "audited_wrong>0.5": 9,
+    "u_correct_lost": 0,
+    "missing": 1426,
+    "hP95": 4.86,
+    "vP95": 10.77
+   },
+   "UR": {
+    "official_pct": 70.384,
+    "share_0.5m_pct": 70.86,
+    "fix": 7455,
+    "audited_wrong>0.5": 17,
+    "u_correct_lost": 407,
+    "missing": 1139,
+    "hP95": 5.514,
+    "vP95": 6.669
+   },
+   "UR30": {
+    "official_pct": 67.827,
+    "share_0.5m_pct": 68.8,
+    "fix": 7379,
+    "audited_wrong>0.5": 25,
+    "u_correct_lost": 434,
+    "missing": 1088,
+    "hP95": 4.15,
+    "vP95": 6.595
+   },
+   "UR2": {
+    "official_pct": 71.537,
+    "share_0.5m_pct": 72.64,
+    "fix": 7555,
+    "audited_wrong>0.5": 7,
+    "u_correct_lost": 7,
+    "missing": 1351,
+    "hP95": 3.263,
+    "vP95": 7.027
+   },
+   "UR2F": {
+    "official_pct": 71.583,
+    "share_0.5m_pct": 71.48,
+    "fix": 7204,
+    "audited_wrong>0.5": 4,
+    "u_correct_lost": 327,
+    "missing": 1183,
+    "hP95": 3.556,
+    "vP95": 6.924
+   },
+   "UR3": {
+    "official_pct": 68.64,
+    "share_0.5m_pct": 69.66,
+    "fix": 7435,
+    "audited_wrong>0.5": 18,
+    "u_correct_lost": 399,
+    "missing": 1099,
+    "hP95": 5.681,
+    "vP95": 6.63
+   },
+   "URP": {
+    "official_pct": 70.951,
+    "share_0.5m_pct": 71.87,
+    "fix": 7470,
+    "audited_wrong>0.5": 9,
+    "u_correct_lost": 0,
+    "missing": 1312,
+    "hP95": 4.257,
+    "vP95": 7.202
+   }
+  },
+  "ublox-Odaiba": {
+   "U": {
+    "official_pct": 31.803,
+    "share_0.5m_pct": 70.04,
+    "fix": 3130,
+    "audited_wrong>0.5": 0,
+    "u_correct_lost": 0,
+    "missing": 975,
+    "hP95": 7.214,
+    "vP95": 30.692
+   },
+   "UR": {
+    "official_pct": 32.892,
+    "share_0.5m_pct": 68.91,
+    "fix": 3219,
+    "audited_wrong>0.5": 0,
+    "u_correct_lost": 0,
+    "missing": 666,
+    "hP95": 6.147,
+    "vP95": 10.993
+   },
+   "UR30": {
+    "official_pct": 32.88,
+    "share_0.5m_pct": 68.75,
+    "fix": 3211,
+    "audited_wrong>0.5": 4,
+    "u_correct_lost": 1,
+    "missing": 676,
+    "hP95": 6.216,
+    "vP95": 10.994
+   },
+   "UR2": {
+    "official_pct": 32.288,
+    "share_0.5m_pct": 70.06,
+    "fix": 3139,
+    "audited_wrong>0.5": 1,
+    "u_correct_lost": 9,
+    "missing": 814,
+    "hP95": 5.223,
+    "vP95": 11.97
+   },
+   "UR2F": {
+    "official_pct": 32.29,
+    "share_0.5m_pct": 70.0,
+    "fix": 2981,
+    "audited_wrong>0.5": 0,
+    "u_correct_lost": 161,
+    "missing": 805,
+    "hP95": 5.23,
+    "vP95": 11.985
+   },
+   "UR3": {
+    "official_pct": 32.806,
+    "share_0.5m_pct": 68.74,
+    "fix": 3218,
+    "audited_wrong>0.5": 1,
+    "u_correct_lost": 0,
+    "missing": 680,
+    "hP95": 6.181,
+    "vP95": 10.994
+   },
+   "URP": {
+    "official_pct": 32.814,
+    "share_0.5m_pct": 70.33,
+    "fix": 3131,
+    "audited_wrong>0.5": 0,
+    "u_correct_lost": 0,
+    "missing": 889,
+    "hP95": 6.729,
+    "vP95": 25.029
+   }
+  },
+  "trimble-Shinjuku": {
+   "U": {
+    "official_pct": 49.819,
+    "share_0.5m_pct": 66.53,
+    "fix": 11491,
+    "audited_wrong>0.5": 119,
+    "u_correct_lost": 0,
+    "missing": 3336,
+    "hP95": 8.338,
+    "vP95": 16.909
+   },
+   "UR": {
+    "official_pct": 59.259,
+    "share_0.5m_pct": 81.4,
+    "fix": 13745,
+    "audited_wrong>0.5": 103,
+    "u_correct_lost": 240,
+    "missing": 3139,
+    "hP95": 4.98,
+    "vP95": 1.368
+   },
+   "UR30": {
+    "official_pct": 59.326,
+    "share_0.5m_pct": 82.2,
+    "fix": 13728,
+    "audited_wrong>0.5": 78,
+    "u_correct_lost": 175,
+    "missing": 3361,
+    "hP95": 7.422,
+    "vP95": 5.585
+   },
+   "UR2": {
+    "official_pct": 57.789,
+    "share_0.5m_pct": 76.48,
+    "fix": 13045,
+    "audited_wrong>0.5": 219,
+    "u_correct_lost": 297,
+    "missing": 2886,
+    "hP95": 1.457,
+    "vP95": 0.669
+   },
+   "UR2F": {
+    "official_pct": 59.54,
+    "share_0.5m_pct": 81.61,
+    "fix": 13077,
+    "audited_wrong>0.5": 69,
+    "u_correct_lost": 585,
+    "missing": 2858,
+    "hP95": 1.692,
+    "vP95": 0.454
+   },
+   "UR3": {
+    "official_pct": 58.055,
+    "share_0.5m_pct": 81.02,
+    "fix": 13597,
+    "audited_wrong>0.5": 75,
+    "u_correct_lost": 177,
+    "missing": 3323,
+    "hP95": 6.631,
+    "vP95": 5.599
+   },
+   "URP": {
+    "official_pct": 54.761,
+    "share_0.5m_pct": 68.01,
+    "fix": 11565,
+    "audited_wrong>0.5": 119,
+    "u_correct_lost": 0,
+    "missing": 2824,
+    "hP95": 6.96,
+    "vP95": 10.81
+   }
+  },
+  "ublox-Shinjuku": {
+   "U": {
+    "official_pct": 15.667,
+    "share_0.5m_pct": 55.57,
+    "fix": 3582,
+    "audited_wrong>0.5": 3,
+    "u_correct_lost": 0,
+    "missing": 2399,
+    "hP95": 5.726,
+    "vP95": 10.919
+   },
+   "UR": {
+    "official_pct": 23.375,
+    "share_0.5m_pct": 72.03,
+    "fix": 4464,
+    "audited_wrong>0.5": 5,
+    "u_correct_lost": 261,
+    "missing": 1906,
+    "hP95": 2.907,
+    "vP95": 0.659
+   },
+   "UR30": {
+    "official_pct": 22.217,
+    "share_0.5m_pct": 69.01,
+    "fix": 4412,
+    "audited_wrong>0.5": 8,
+    "u_correct_lost": 219,
+    "missing": 2071,
+    "hP95": 2.341,
+    "vP95": 1.402
+   },
+   "UR2": {
+    "official_pct": 19.618,
+    "share_0.5m_pct": 56.8,
+    "fix": 3917,
+    "audited_wrong>0.5": 108,
+    "u_correct_lost": 229,
+    "missing": 1896,
+    "hP95": 3.328,
+    "vP95": 1.693
+   },
+   "UR2F": {
+    "official_pct": 18.113,
+    "share_0.5m_pct": 52.05,
+    "fix": 3414,
+    "audited_wrong>0.5": 12,
+    "u_correct_lost": 670,
+    "missing": 1893,
+    "hP95": 3.346,
+    "vP95": 1.707
+   },
+   "UR3": {
+    "official_pct": 22.27,
+    "share_0.5m_pct": 70.45,
+    "fix": 4478,
+    "audited_wrong>0.5": 25,
+    "u_correct_lost": 266,
+    "missing": 1930,
+    "hP95": 2.324,
+    "vP95": 0.89
+   },
+   "URP": {
+    "official_pct": 17.958,
+    "share_0.5m_pct": 56.23,
+    "fix": 3619,
+    "audited_wrong>0.5": 3,
+    "u_correct_lost": 0,
+    "missing": 2010,
+    "hP95": 3.651,
+    "vP95": 3.135
+   }
+  },
+  "nagoya/run1": {
+   "U": {
+    "official_pct": 54.485,
+    "share_0.5m_pct": 89.54,
+    "fix": 5280,
+    "audited_wrong>0.5": 19,
+    "u_correct_lost": 0,
+    "missing": 865,
+    "hP95": 0.657,
+    "vP95": 1.005
+   },
+   "UR": {
+    "official_pct": 60.232,
+    "share_0.5m_pct": 87.79,
+    "fix": 5165,
+    "audited_wrong>0.5": 52,
+    "u_correct_lost": 435,
+    "missing": 655,
+    "hP95": 1.148,
+    "vP95": 0.26
+   },
+   "UR3": {
+    "official_pct": 59.133,
+    "share_0.5m_pct": 86.9,
+    "fix": 5239,
+    "audited_wrong>0.5": 84,
+    "u_correct_lost": 386,
+    "missing": 667,
+    "hP95": 1.106,
+    "vP95": 0.452
+   },
+   "URP": {
+    "official_pct": 58.843,
+    "share_0.5m_pct": 89.1,
+    "fix": 5291,
+    "audited_wrong>0.5": 19,
+    "u_correct_lost": 0,
+    "missing": 596,
+    "hP95": 0.738,
+    "vP95": 0.385
+   }
+  },
+  "nagoya/run2": {
+   "U": {
+    "official_pct": 32.858,
+    "share_0.5m_pct": 63.62,
+    "fix": 4404,
+    "audited_wrong>0.5": 17,
+    "u_correct_lost": 0,
+    "missing": 1791,
+    "hP95": 11.453,
+    "vP95": 24.999
+   },
+   "UR": {
+    "official_pct": 41.016,
+    "share_0.5m_pct": 64.49,
+    "fix": 4757,
+    "audited_wrong>0.5": 4,
+    "u_correct_lost": 28,
+    "missing": 1215,
+    "hP95": 5.036,
+    "vP95": 0.663
+   },
+   "UR3": {
+    "official_pct": 37.346,
+    "share_0.5m_pct": 63.38,
+    "fix": 4779,
+    "audited_wrong>0.5": 18,
+    "u_correct_lost": 26,
+    "missing": 1204,
+    "hP95": 5.083,
+    "vP95": 0.977
+   },
+   "URP": {
+    "official_pct": 37.043,
+    "share_0.5m_pct": 61.67,
+    "fix": 4410,
+    "audited_wrong>0.5": 17,
+    "u_correct_lost": 0,
+    "missing": 1142,
+    "hP95": 9.299,
+    "vP95": 7.592
+   }
+  },
+  "nagoya/run3": {
+   "U": {
+    "official_pct": 33.104,
+    "share_0.5m_pct": 47.06,
+    "fix": 1069,
+    "audited_wrong>0.5": 18,
+    "u_correct_lost": 0,
+    "missing": 1489,
+    "hP95": 8.584,
+    "vP95": 45.974
+   },
+   "UR": {
+    "official_pct": 49.212,
+    "share_0.5m_pct": 53.23,
+    "fix": 1783,
+    "audited_wrong>0.5": 110,
+    "u_correct_lost": 122,
+    "missing": 510,
+    "hP95": 11.97,
+    "vP95": 0.416
+   },
+   "UR3": {
+    "official_pct": 45.46,
+    "share_0.5m_pct": 49.93,
+    "fix": 1733,
+    "audited_wrong>0.5": 97,
+    "u_correct_lost": 141,
+    "missing": 400,
+    "hP95": 12.159,
+    "vP95": 0.601
+   },
+   "URP": {
+    "official_pct": 37.025,
+    "share_0.5m_pct": 41.22,
+    "fix": 1077,
+    "audited_wrong>0.5": 17,
+    "u_correct_lost": 0,
+    "missing": 676,
+    "hP95": 8.105,
+    "vP95": 9.201
+   }
+  }
+ },
+ "totals": {
+  "tokyo_7_runs": {
+   "U": {
+    "official_mean_pct": 51.04,
+    "fix": 47577,
+    "audited_wrong>0.5": 195,
+    "u_correct_lost": 0
+   },
+   "UR": {
+    "official_mean_pct": 56.26,
+    "fix": 51915,
+    "audited_wrong>0.5": 182,
+    "u_correct_lost": 1654
+   },
+   "UR30": {
+    "official_mean_pct": 55.41,
+    "fix": 51535,
+    "audited_wrong>0.5": 182,
+    "u_correct_lost": 1617
+   },
+   "UR2": {
+    "official_mean_pct": 55.4,
+    "fix": 50753,
+    "audited_wrong>0.5": 385,
+    "u_correct_lost": 698
+   },
+   "UR2F": {
+    "official_mean_pct": 54.93,
+    "fix": 47510,
+    "audited_wrong>0.5": 118,
+    "u_correct_lost": 4128
+   },
+   "UR3": {
+    "official_mean_pct": 56.05,
+    "fix": 51855,
+    "audited_wrong>0.5": 188,
+    "u_correct_lost": 1443
+   },
+   "URP": {
+    "official_mean_pct": 53.19,
+    "fix": 47757,
+    "audited_wrong>0.5": 195,
+    "u_correct_lost": 2
+   }
+  },
+  "nagoya_3_runs": {
+   "U": {
+    "official_mean_pct": 40.15,
+    "fix": 10753,
+    "audited_wrong>0.5": 54,
+    "u_correct_lost": 0
+   },
+   "UR": {
+    "official_mean_pct": 50.15,
+    "fix": 11705,
+    "audited_wrong>0.5": 166,
+    "u_correct_lost": 585
+   },
+   "UR3": {
+    "official_mean_pct": 47.31,
+    "fix": 11751,
+    "audited_wrong>0.5": 199,
+    "u_correct_lost": 553
+   },
+   "URP": {
+    "official_mean_pct": 44.3,
+    "fix": 10778,
+    "audited_wrong>0.5": 53,
+    "u_correct_lost": 0
+   }
+  }
+ },
+ "predictions": {
+  "UR": {
+   "official rises on all three Tokyo PPC runs": "failed (tokyo/run3 75.22 -> 74.65)",
+   "audited wrong not +10% on any run": "failed (Odaiba 9 -> 17)",
+   "Vp95 falls on every run": "failed (tokyo/run3)"
+  },
+  "UR2F": {
+   "official rises on the three PPC runs": "failed (tokyo/run3 71.73)",
+   "wrong not above U + max(10%, 2)": "failed (u-blox Shinjuku 3 -> 12)",
+   "Vp95 falls on every run": "failed"
+  },
+  "UR3": {
+   "official rises on the three PPC runs": "held (75.47 on run3)",
+   "wrong not above U + max(10%, 2)": "failed (tokyo/run1 24 -> 40, Odaiba 9 -> 18, u-blox Shinjuku 3 -> 25)",
+   "Vp95 falls on every run": "failed (tokyo/run3 3.22 -> 3.69)"
+  },
+  "UR3_nagoya_heldout": {
+   "mean official rises": "held (40.15 -> 47.31)",
+   "summed audited wrong rise <= 10%": "failed (54 -> 199)",
+   "Vp95 falls on >= 2 runs": "held (all three)"
+  },
+  "URP": {
+   "summed audited wrong within +5% and no run above U + max(10%, 2)": "held (249 -> 248; every run equal or one lower)",
+   "FIX within +-1% on every run": "failed by 0.03 pp on u-blox Shinjuku (+1.03%, more FIX)",
+   "mean official rises over Tokyo and Nagoya": "held (51.04 -> 53.19, 40.15 -> 44.30)"
+  }
+ },
+ "mechanisms": {
+  "v1_no_satellite_epochs": "tokyo/run3 TOW 180561.2: the prior was applied in an epoch with no satellites (innovation 32 m); the float then stayed 0.48 m off where truth sat 0.16 m above road + offset",
+  "v2_after_update": "with the prior after the float update the code outliers are no longer rejected against a height-constrained prediction; Shinjuku wrong FIX 119 -> 219, u-blox Shinjuku 3 -> 108",
+  "fixed_height_check": "rejected 989 / 1254 U-correct FIX on tokyo/run2 / run3 where the map is locally off; not kept",
+  "in_filter_wrong_fix": "new FIX under UR3 (not FIX under U): 5659, of which 78 audited wrong (1.4%, against about 0.16% for U's own FIX); post-fix residuals, AFn and ratio do not separate them (post-fix RMS > 0.10 m catches 23 of 35 wrong AR fixes but rejects 10% of the correct new ones)",
+  "publish_only": "the filter and AR keep the GNSS-only state, so FIX and wrong FIX stay at U; the published FLOAT (and the solution history) take the height update"
+ },
+ "decision": "Both modes stay opt-in and nothing changes by default or in --preset urban. The publish-only mode is the recommended one: it never raised wrong FIX on the ten runs. The in-filter mode raises the score more (Tokyo +5.0 pp, Nagoya +7.2 pp mean) at the cost of wrong FIX (Nagoya 54 -> 199)."
+}

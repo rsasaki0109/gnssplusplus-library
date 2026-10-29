@@ -13,6 +13,10 @@ add_test(NAME python_phase_audit_tests
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_phase_audit.py)
 set_tests_properties(python_phase_audit_tests PROPERTIES LABELS core)
 
+add_test(NAME python_road_height_maps_tests
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_road_height_maps.py)
+set_tests_properties(python_road_height_maps_tests PROPERTIES LABELS core)
+
 add_test(NAME python_cli_argument_sequencing_tests
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_argument_sequencing.py)
 add_test(NAME python_gsdc_native_output_audit_tests
@@ -98,6 +102,7 @@ if(GTest_FOUND)
         test_disjoint_constellation_partition.cpp
         test_causal_ambiguity_arc.cpp
         test_nlos_weights.cpp
+        test_road_height_map.cpp
         test_float_trust_policy.cpp
         test_rtk_slip_detection.cpp
         test_rtk_adaptive_noise.cpp

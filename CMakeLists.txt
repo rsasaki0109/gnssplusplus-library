@@ -164,6 +164,8 @@ set(GNSS_RTK_RUNTIME_SOURCES
     src/algorithms/rtk_ins_time_update.cpp
     src/algorithms/rtk_carrier_prior.cpp
     src/algorithms/rtk_carrier_prior_epoch.cpp
+    src/algorithms/rtk_road_height.cpp
+    src/algorithms/road_height_map.cpp
     src/algorithms/rtk_covariance_consistency.cpp
     src/algorithms/rtk_tdcp_diagnostics.cpp
     src/algorithms/rtk_validation.cpp

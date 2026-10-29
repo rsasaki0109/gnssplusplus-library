@@ -319,6 +319,10 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 std::chrono::steady_clock::now() - bias_started)
                 .count();
 
+        if (!rtk_config_.road_height_publish_only) {
+            applyRoadHeightPrior();
+        }
+
         // Iterative KF update
         bool filter_ok = false;
         int max_kf_iterations = rtk_config_.kf_iterations;
@@ -407,6 +411,20 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             last_ar_ratio_ = 0.0;
             last_num_fixed_ambiguities_ = 0;
             solution = generateSolution(rover_obs.time, SolutionStatus::FLOAT, n_sats);
+            if (rtk_config_.road_height_publish_only) {
+                // The published FLOAT takes the road-height update of the position
+                // block; the filter and the ambiguity resolution below keep the
+                // GNSS-only state.
+                const Vector3d saved_position = filter_state_.state.head<3>();
+                const Matrix3d saved_position_covariance =
+                    filter_state_.covariance.topLeftCorner<3, 3>();
+                applyRoadHeightPrior(true);
+                if (debug_telemetry_.road_height_applied) {
+                    solution = generateSolution(rover_obs.time, SolutionStatus::FLOAT, n_sats);
+                }
+                filter_state_.state.head<3>() = saved_position;
+                filter_state_.covariance.topLeftCorner<3, 3>() = saved_position_covariance;
+            }
             const PositionSolution float_solution = solution;
 
             const double max_float_spp_divergence_m = rtk_config_.max_float_spp_divergence_m;
