@@ -211,6 +211,12 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         // reset seeds and AR cadence. Retry with FDE below only when the seed
         // has already failed the parity validity/maxdiff tests.
         clas_spp_config.enable_raim_fde = false;
+        // Upstream claslib, and MRTKLIB v0.7.4 for its private CLAS seed copy
+        // (mrtk_rtkpos.c rtkpos()), exclude satellites whose pseudorange
+        // residual exceeds 20 m while more than 7 rescode() rows remain.
+        clas_spp_config.large_residual_exclusion_m =
+            std::max(0.0, env_overrides_.clas_seed_residual_exclusion_m);
+        clas_spp_config.large_residual_exclusion_min_rows = 7;
         spp_processor_.setSPPConfig(clas_spp_config);
         seed = spp_processor_.processEpoch(obs, nav);
         const bool clas_seed_redundancy_failed =

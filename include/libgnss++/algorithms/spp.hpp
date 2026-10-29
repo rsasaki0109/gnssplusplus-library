@@ -41,6 +41,14 @@ public:
         bool enable_outlier_detection = true;
         double outlier_threshold_sigma = 3.0;         ///< Outlier detection threshold
         bool enable_raim_fde = true;                  ///< Enable leave-one-out RAIM/FDE
+        // claslib / MRTKLIB pntpos() exclsat(): from the second iteration,
+        // when the previous iteration's residual RMS is within this many
+        // metres, drop every satellite whose residual exceeds it for the
+        // rest of the solve. 0 disables (default).
+        double large_residual_exclusion_m = 0.0;
+        // exclsat() runs only while the previous rescode() row count,
+        // including MRTKLIB's NT=7 clock rank-constraint rows, exceeds this.
+        int large_residual_exclusion_min_rows = 7;
         double raim_fde_min_rms_improvement_ratio = 0.25; ///< Minimum fractional RMS improvement
         double raim_fde_min_rms_improvement_m = 1.0;  ///< Minimum absolute RMS improvement [m]
         double max_gdop = 50.0;                       ///< Reject solutions above this GDOP (<=0 disables)

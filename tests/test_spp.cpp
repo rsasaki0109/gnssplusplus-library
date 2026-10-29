@@ -769,6 +769,112 @@ TEST(SPPColdStartTest, HeaderSeededPathStillMaskedAndUnchanged) {
 }
 
 // ---------------------------------------------------------------------------
+// claslib / MRTKLIB exclsat() large-residual exclusion (default OFF).
+// ---------------------------------------------------------------------------
+namespace {
+
+// A 5 degree mask keeps the nine scene satellites, enough redundancy for a
+// single outlier to stand out.
+ProcessorConfig exclusionSceneConfig() {
+    ProcessorConfig config = syntheticColdStartConfig();
+    config.elevation_mask = 5.0;
+    return config;
+}
+
+// Adds bias_m to one satellite that the clean solution uses.
+ObservationData seededEpochWithBias(const SyntheticColdStartScene& scene,
+                                    double bias_m, SatelliteId* biased) {
+    ObservationData epoch = scene.observe(GNSSTime(2300, 100000.0));
+    epoch.receiver_position = scene.truth + Vector3d(50.0, -30.0, 20.0);
+    SPPProcessor clean;
+    clean.initialize(exclusionSceneConfig());
+    const auto clean_solution = clean.processEpoch(epoch, scene.nav);
+    if (!clean_solution.isValid() || clean_solution.satellites_used.size() < 8) {
+        return {};
+    }
+    *biased = clean_solution.satellites_used.front();
+    for (auto& observation : epoch.observations) {
+        if (observation.satellite == *biased) {
+            observation.pseudorange += bias_m;
+        }
+    }
+    return epoch;
+}
+
+bool usesSatellite(const PositionSolution& solution, const SatelliteId& satellite) {
+    return std::find(solution.satellites_used.begin(), solution.satellites_used.end(),
+                     satellite) != solution.satellites_used.end();
+}
+
+}  // namespace
+
+TEST(SPPLargeResidualExclusionTest, DropsSingleOutlierWhenRmsIsWithinThreshold) {
+    SyntheticColdStartScene scene;
+    SatelliteId biased;
+    const ObservationData epoch = seededEpochWithBias(scene, 60.0, &biased);
+    ASSERT_FALSE(epoch.observations.empty());
+
+    // RAIM FDE and the outlier screen would otherwise remove the outlier on
+    // their own; the CLAS seed turns both off as well.
+    SPPProcessor::SPPConfig off_config;
+    off_config.enable_raim_fde = false;
+    off_config.enable_outlier_detection = false;
+    SPPProcessor::SPPConfig on_config = off_config;
+    on_config.large_residual_exclusion_m = 20.0;
+    SPPProcessor off(off_config);
+    SPPProcessor on(on_config);
+    ASSERT_TRUE(off.initialize(exclusionSceneConfig()));
+    ASSERT_TRUE(on.initialize(exclusionSceneConfig()));
+
+    const auto off_solution = off.processEpoch(epoch, scene.nav);
+    const auto on_solution = on.processEpoch(epoch, scene.nav);
+    ASSERT_TRUE(off_solution.isValid());
+    ASSERT_TRUE(on_solution.isValid());
+    EXPECT_TRUE(usesSatellite(off_solution, biased));
+    EXPECT_FALSE(usesSatellite(on_solution, biased));
+
+    // The exclusion converges to the solve without that satellite.
+    ObservationData without = epoch;
+    without.observations.erase(
+        std::remove_if(without.observations.begin(), without.observations.end(),
+                       [&](const Observation& observation) {
+                           return observation.satellite == biased;
+                       }),
+        without.observations.end());
+    SPPProcessor reference(off_config);
+    ASSERT_TRUE(reference.initialize(exclusionSceneConfig()));
+    const auto reference_solution = reference.processEpoch(without, scene.nav);
+    ASSERT_TRUE(reference_solution.isValid());
+    EXPECT_LT((on_solution.position_ecef - reference_solution.position_ecef).norm(), 1e-2);
+    EXPECT_GT((off_solution.position_ecef - reference_solution.position_ecef).norm(), 3.0);
+}
+
+TEST(SPPLargeResidualExclusionTest, KeepsEverySatelliteWhenRmsExceedsThreshold) {
+    // exclsat() returns early when the whole solution is worse than the
+    // threshold; only a mostly consistent solution sheds its outliers.
+    SyntheticColdStartScene scene;
+    SatelliteId biased;
+    const ObservationData epoch = seededEpochWithBias(scene, 400.0, &biased);
+    ASSERT_FALSE(epoch.observations.empty());
+
+    SPPProcessor::SPPConfig off_config;
+    off_config.enable_raim_fde = false;
+    off_config.enable_outlier_detection = false;
+    SPPProcessor::SPPConfig on_config = off_config;
+    on_config.large_residual_exclusion_m = 20.0;
+    SPPProcessor off(off_config);
+    SPPProcessor on(on_config);
+    ASSERT_TRUE(off.initialize(exclusionSceneConfig()));
+    ASSERT_TRUE(on.initialize(exclusionSceneConfig()));
+
+    const auto off_solution = off.processEpoch(epoch, scene.nav);
+    const auto on_solution = on.processEpoch(epoch, scene.nav);
+    ASSERT_EQ(off_solution.isValid(), on_solution.isValid());
+    EXPECT_EQ(off_solution.satellites_used, on_solution.satellites_used);
+    EXPECT_EQ(off_solution.position_ecef, on_solution.position_ecef);
+}
+
+// ---------------------------------------------------------------------------
 // Barometer-aided height (default OFF).
 // ---------------------------------------------------------------------------
 namespace {
