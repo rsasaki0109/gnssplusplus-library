@@ -1058,3 +1058,25 @@ output. The changes are these:
   runtime measured here. This container ran three cases in parallel.
 - The 1 h / 6 h entries are unchanged. `pppar` 1 h / 6 h was re-run here and
   passes.
+
+**First accurate fix (2026-10-29).** On `mizu.pppar-ion.24h` the first
+oracle FIX comes at 300 s and the first native FIX at 870 s. The oracle's
+early FIX are not accurate, though. Against each station's own reference (the
+median of the oracle FIX over 12–24 h), they are off by:
+
+- 0.20–0.21 m horizontally at 300–390 s;
+- 0.30 m horizontally and up to 0.42 m vertically at 570–630 s.
+
+The first FIX within 0.10 m 3D therefore gives a different picture:
+
+| Case | Oracle first FIX / first FIX ≤ 0.10 m | Native first FIX / first FIX ≤ 0.10 m |
+| --- | --- | --- |
+| `alic.pppar.24h` | 270 s / 450 s | 300 s / **300 s** |
+| `mizu.pppar.24h` | 360 s / **360 s** | 360 s / 480 s |
+| `alic.pppar-ion.24h` | 360 s / 360 s | 330 s / **330 s** |
+| `mizu.pppar-ion.24h` | 300 s / 870 s | 870 s / 870 s |
+
+Neither side is consistently faster to an accurate fix. The 870 s versus 300 s
+of `mizu.pppar-ion` is the oracle fixing early to inaccurate positions, not a
+native convergence gap. The matrix still counts those six oracle FIX as
+"missed fixes", because it compares statuses, not accuracy.
