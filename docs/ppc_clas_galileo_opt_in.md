@@ -9,6 +9,15 @@ the share of epochs with a FIX within 0.3 m from 17.26% to 24.53%. It also
 adds 76 FIX epochs above 3 m, 69 of them in one 35 s window of tokyo/run1.
 Use it when more accurate fixes are worth an occasional large wrong fix.
 
+Adding `GNSS_PPP_CLAS_FIRST_FIX_AR_ALPHA=1` gives a conservative Galileo
+profile. The ratio test that starts a FIX segment then uses MRTKLIB's 1%
+significance level instead of 10%. On the six runs this removes every FIX
+above 3 m and cuts FIX above 1 m from 179 (default) to 102. FIX within 0.3 m
+are 19.28% of epochs, against 17.26% for the default. The cost is the FIX
+rate: 25.70% against 27.23%. tokyo/run2 drops to 19.99%, below the 21.7%
+MRTKLIB v0.4.2 target, so this profile also stays opt-in; see
+[Stricter first fix](#stricter-first-fix).
+
 ## Why Galileo was missing
 
 - **The filter.** The native filter follows MRTKLIB v0.5.1, whose CLAS
@@ -115,13 +124,111 @@ What the results show:
   once. The next 15-epoch FLOAT reset then wipes that recovered float, and the
   re-initialization is pulled away again by rows below the 20 m gate.
 
-These two patterns are the open work before the profile can become a
+These two patterns were the open work before the profile could become a
 default. All six runs were used both to find the mechanisms and to measure
 them; no held-out CLAS kinematic data with truth is available here.
+
+## Stricter first fix
+
+`GNSS_PPP_CLAS_FIRST_FIX_AR_ALPHA` sets the MRTKLIB F-test significance level,
+in percent, for a fix that would start a FIX segment, that is, when the
+previous epoch published no FIX. The accepted levels are the six rows of
+MRTKLIB's `qf` table (`pos2-aralpha`): 0.1, 0.5, 1, 5, 10 and 20. A fix that
+continues a segment keeps the clas.toml 10%. Unset, or a level outside the
+table, leaves every fix at 10% and the output byte-identical.
+
+**Why the first fix.** The wrong fixes were traced back to their reset on
+all six runs.
+
+- **The reset.** A full reset (FLOATCNT or maxdiffp) re-initializes the
+  filter from an SPP seed that is several metres off. On tokyo/run1 at TOW
+  187925.4, maxdiffp replaced a filter 1.0 m from the truth with a seed
+  10.8 m off.
+- **The float.** Within 1–3 s the float settles 3–20 m from the truth. The
+  code errors at 5 Hz are correlated in time, but the filter averages them
+  as white noise, so its covariance already looks converged.
+- **The first fix.** The first fix then comes at a ratio of 3.0–5.8 with
+  7–11 ambiguities, just above the 10% threshold (2.2–2.8). Fix-and-hold then
+  keeps it.
+
+**No per-epoch test separated them.** These quantities were compared between
+the first fixes of correct and wrong FIX segments:
+
+- the bootstrapped success rate of the accepted candidate: 0.90–0.998 for
+  wrong fixes, and as low as 0.6 for correct ones;
+- the fixed-failure-rate ratio test (Hou et al. 2016, Pf = 0.1%);
+- the filter–SPP distance;
+- the size of the float update.
+
+A stricter significance level for every first fix was the only change that
+removed the wrong fixes without removing most correct ones.
+
+Results with `GNSS_PPP_CLAS_GALILEO=1 GNSS_PPP_CLAS_FIRST_FIX_AR_ALPHA=1`,
+against the default:
+
+| Run | FIX | FIX within 0.3 m (of epochs) | FIX RMS2D | > 1 m | > 3 m | max FIX |
+| --- | --- | --- | --- | --- | --- | --- |
+| tokyo/run1 | 11.916 → 18.921% | 11.04 → 18.89% | 0.345 → 0.058 m | 83 → 0 | 0 → 0 | 1.96 → 0.39 m |
+| tokyo/run2 | 25.358 → 19.991% | 22.68 → 19.45% | 0.333 → 0.119 m | 21 → 0 | 0 → 0 | 1.33 → 0.47 m |
+| tokyo/run3 | 38.765 → 44.090% | 37.51 → 43.31% | 0.193 → 0.172 m | 49 → 102 | 0 → 0 | 2.99 → 1.34 m |
+| nagoya/run1 | 44.854 → 19.631% | 8.10 → 2.14% | 0.447 → 0.386 m | 26 → 0 | 0 → 0 | 1.04 → 0.56 m |
+| nagoya/run2 | 24.941 → 23.469% | 0.00 → 0.03% | 0.547 → 0.464 m | 0 → 0 | 0 → 0 | 0.77 → 0.77 m |
+| nagoya/run3 | 10.041 → 9.871% | 6.93 → 8.98% | 0.304 → 0.247 m | 0 → 0 | 0 → 0 | 0.58 → 0.49 m |
+| **Six runs** | **27.23 → 25.70%** | **17.26 → 19.28%** | **0.361 → 0.253 m** | **179 → 102** | **0 → 0** | |
+
+What the table shows:
+
+- **Accuracy.** No run has a FIX above 1.34 m, and FIX RMS2D falls on every
+  run. tokyo/run3 is the exception for FIX above 1 m: 102 against 49, all
+  between 1.0 and 1.34 m. The other runs have none.
+- **FIX rate.**
+  - tokyo/run1 and tokyo/run3 gain FIX.
+  - tokyo/run2 and nagoya/run1 lose many. Their fixes come mostly in short
+    segments right after a reset.
+  - tokyo/run2 (19.99%) and nagoya/run2 (23.47%) are measured against the
+    MRTKLIB v0.4.2 targets of 21.7% and 23.4%. tokyo/run2 misses its target,
+    so the hard sign-off is not met.
+- **Without Galileo.** The same setting on the GPS+QZSS default halves the
+  FIX rate to 13.77%. The fewer ambiguities leave no headroom over the
+  stricter thresholds, so use it only with `GNSS_PPP_CLAS_GALILEO=1`.
+
+**How 1% was chosen.** The level was chosen on these same six runs, among
+MRTKLIB's table values:
+
+| First-fix level (Galileo on) | FIX | FIX within 0.3 m | > 1 m | > 3 m |
+| --- | ---: | ---: | ---: | ---: |
+| 10% (the opt-in) | 35.87% | 24.53% | 389 | 76 |
+| 5% | 33.52% | 24.11% | 236 | 22 |
+| 1% | 25.70% | 19.28% | 102 | 0 |
+| 0.5% | 23.16% | 17.60% | 101 | 0 |
+
+1% is the least strict level without a FIX above 3 m.
 
 ## What did not work
 
 These variants were tried with Galileo rows on; none of them is in the code.
+
+While looking for the stricter first fix (six runs, Galileo rows on):
+
+- **A 10 m fresh-position code gate** (claslib's `maxdiffp` instead of 20 m).
+  FIX above 3 m rise from 76 to 107. Removing one wrong fix shifts the reset
+  timing and creates others.
+- **No AR for 5 s after a full reset.** FIX collapse to 2.87%. The 15-epoch
+  FLOAT reset (3 s at 5 Hz) leaves no float older than 5 s.
+- **A 75-epoch FLOAT reset** (15 s at 5 Hz). FIX above 3 m rise to 108 and FIX
+  above 1 m to 721.
+- **Code variance inflated 5x or 25x**, to model the time correlation. FIX
+  above 3 m: 27 and 133.
+- **1% for every fix**, not only the first. FIX 24.69%, and nagoya/run1 drops
+  to 11.58%, below its 17.0% target.
+- **1% only until the first fix after a reset.** Re-fixes after a lost fix
+  then bring back 32 FIX above 3 m.
+- **1% only when the candidate contains Galileo ambiguities.**
+  - FIX 27.99%, and tokyo/run2 is back at 24.46%.
+  - Two FIX above 3 m remain. One of them is a single 70 m epoch on
+    nagoya/run2, after an 8 s SPP-only stretch re-initialized the filter from
+    a seed 68 m off.
+- **Keeping the filter position across a FLOAT reset.** No improvement.
 
 - **Galileo in the float only, not in AR.** Accurate FIX reach only 19.26%,
   and tokyo/run3 still has 22 FIX above 3 m.
@@ -138,7 +245,8 @@ These variants were tried with Galileo rows on; none of them is in the code.
 python3 scripts/experiments/ppc/generate_ppc_clas_scorecard.py \
   --dataset-root data/PPC-Dataset --work-dir output/ppc_clas_galileo \
   --l6-cache output/ppc_clas_full/l6_cache --configs parity
-# with GNSS_PPP_CLAS_GALILEO=1 exported for the opt-in
+# with GNSS_PPP_CLAS_GALILEO=1 exported for the opt-in, and
+# GNSS_PPP_CLAS_FIRST_FIX_AR_ALPHA=1 added for the stricter first fix
 ```
 
 The MRTKLIB comparison used MRTKLIB v0.7.9 `mrtk post` with

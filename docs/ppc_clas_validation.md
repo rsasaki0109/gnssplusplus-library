@@ -21,8 +21,12 @@ previous seed byte for byte. Details:
 
 `GNSS_PPP_CLAS_GALILEO=1` is an opt-in Galileo profile. It raises six-run
 FIX to 35.87% and FIX within 0.3 m from 17.26% to 24.53% of epochs, but adds
-76 FIX epochs above 3 m, so it is not part of this sign-off. Details:
-[ppc_clas_galileo_opt_in.md](ppc_clas_galileo_opt_in.md).
+76 FIX epochs above 3 m, so it is not part of this sign-off. Adding
+`GNSS_PPP_CLAS_FIRST_FIX_AR_ALPHA=1` (MRTKLIB's 1% F-test for a fix that
+starts a FIX segment) gives zero FIX above 3 m and 102 above 1 m. FIX within
+0.3 m are 19.28% of epochs, at a 25.70% FIX rate. tokyo/run2 falls to 19.99%,
+below the 21.7% article target, so it is not part of the sign-off either.
+Details: [ppc_clas_galileo_opt_in.md](ppc_clas_galileo_opt_in.md).
 
 The accepted policy keeps the ordinary CLAS direct state-DD floor at six rows.
 Only an uninterrupted valid ambiguity hold from a preceding full-row FIX may

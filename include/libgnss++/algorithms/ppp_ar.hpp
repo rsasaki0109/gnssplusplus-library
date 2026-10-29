@@ -12,7 +12,12 @@ namespace libgnss::ppp_ar {
 
 SatelliteId clasRealSatellite(const SatelliteId& satellite);
 std::pair<GNSSSystem, int> ambiguityDdGroup(const SatelliteId& satellite);
-double claslibRatioThresholdForNb(int nb);
+// Row of MRTKLIB's F-test table for a significance level in percent
+// (0.1, 0.5, 1, 5, 10 or 20), or -1 when the level is not in the table.
+int claslibArAlphaRow(double alpha_pct);
+// MRTKLIB F-test ratio threshold for nb ambiguities. An unsupported
+// significance level uses the clas.toml default of 10%.
+double claslibRatioThresholdForNb(int nb, double alpha_pct = 10.0);
 
 int clasArMinimumDdRowsForEpoch(
     const ppp_shared::PPPConfig& config,

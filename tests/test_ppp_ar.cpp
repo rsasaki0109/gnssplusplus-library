@@ -3,6 +3,7 @@
 #include <libgnss++/algorithms/ppp_ar.hpp>
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 
+#include <cmath>
 #include <cstdlib>
 #include <limits>
 #include <map>
@@ -552,6 +553,85 @@ TEST(PPPArTest, DirectStateDdRatioRejectPreservesRatioForNextParIteration) {
     EXPECT_TRUE(std::isfinite(attempt.ratio));
     EXPECT_GT(attempt.ratio, 0.0);
     EXPECT_LT(attempt.ratio, attempt.state_required_ratio);
+}
+
+TEST(PPPArTest, ClaslibRatioThresholdFollowsTheMrtklibSignificanceTable) {
+    // mrtk_ppp_rtk.c qf[alpha][nb - 1]; clas.toml uses alpha = "10%".
+    EXPECT_DOUBLE_EQ(ppp_ar::claslibRatioThresholdForNb(7), 2.78);
+    EXPECT_DOUBLE_EQ(ppp_ar::claslibRatioThresholdForNb(7, 10.0), 2.78);
+    EXPECT_DOUBLE_EQ(ppp_ar::claslibRatioThresholdForNb(7, 5.0), 3.79);
+    EXPECT_DOUBLE_EQ(ppp_ar::claslibRatioThresholdForNb(7, 1.0), 6.99);
+    EXPECT_DOUBLE_EQ(ppp_ar::claslibRatioThresholdForNb(7, 0.1), 15.02);
+    EXPECT_DOUBLE_EQ(ppp_ar::claslibRatioThresholdForNb(1, 20.0), 9.47);
+    EXPECT_DOUBLE_EQ(ppp_ar::claslibRatioThresholdForNb(60, 1.0), 1.84);
+    // Beyond the table the last entry applies; a level outside it uses 10%.
+    EXPECT_DOUBLE_EQ(ppp_ar::claslibRatioThresholdForNb(80, 1.0), 1.84);
+    EXPECT_DOUBLE_EQ(ppp_ar::claslibRatioThresholdForNb(7, 2.0), 2.78);
+    EXPECT_TRUE(std::isinf(ppp_ar::claslibRatioThresholdForNb(0, 1.0)));
+    EXPECT_EQ(ppp_ar::claslibArAlphaRow(0.5), 1);
+    EXPECT_EQ(ppp_ar::claslibArAlphaRow(3.0), -1);
+}
+
+TEST(PPPArTest, DirectStateDdRatioTestUsesTheConfiguredSignificanceLevel) {
+    ppp_shared::PPPConfig config;
+    config.clas_mrtklib_float_parity = true;
+    config.use_clas_osr_filter = true;
+    config.kinematic_mode = true;
+    config.use_dynamics_model = true;
+    config.low_dynamics_mode = false;
+
+    ppp_shared::PPPState state;
+    state.pos_index = 0;
+    state.amb_index = 3;
+    state.total_states = 11;
+    state.state = VectorXd::Zero(state.total_states);
+    state.covariance = MatrixXd::Identity(state.total_states, state.total_states) * 1e-6;
+
+    const std::vector<SatelliteId> satellites = {
+        {GNSSSystem::GPS, 1}, {GNSSSystem::GPS, 2},
+        {GNSSSystem::GPS, 3}, {GNSSSystem::GPS, 4},
+        {GNSSSystem::GPS, 101}, {GNSSSystem::GPS, 102},
+        {GNSSSystem::GPS, 103}, {GNSSSystem::GPS, 104},
+    };
+    ppp_ar::EligibleAmbiguities eligible;
+    std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo> ambiguity_states;
+    for (int i = 0; i < static_cast<int>(satellites.size()); ++i) {
+        const int state_index = state.amb_index + i;
+        eligible.satellites.push_back(satellites[static_cast<size_t>(i)]);
+        eligible.state_indices.push_back(state_index);
+        eligible.scales.push_back(0.19);
+        state.ambiguity_indices[satellites[static_cast<size_t>(i)]] = state_index;
+        state.state(state_index) = static_cast<double>(i) * 0.19;
+        ambiguity_states[satellites[static_cast<size_t>(i)]].ambiguity_scale_m = 0.19;
+    }
+    std::map<SatelliteId, double> elevations;
+    for (int prn = 1; prn <= 4; ++prn) {
+        elevations[{GNSSSystem::GPS, static_cast<uint8_t>(prn)}] =
+            (35.0 + prn) * M_PI / 180.0;
+    }
+
+    const auto at_default = ppp_ar::resolveWlnlFix(
+        config, state, state.covariance, ambiguity_states, eligible,
+        ppp_ar::WlnlNlInfoProvider{}, false, &elevations);
+    ASSERT_TRUE(at_default.has_constrained_state);
+    EXPECT_EQ(at_default.nb, 6);
+    EXPECT_DOUBLE_EQ(at_default.state_required_ratio, 3.05);
+
+    config.clas_ar_alpha_pct = 1.0;
+    const auto at_one_percent = ppp_ar::resolveWlnlFix(
+        config, state, state.covariance, ambiguity_states, eligible,
+        ppp_ar::WlnlNlInfoProvider{}, false, &elevations);
+    ASSERT_TRUE(at_one_percent.has_constrained_state);
+    EXPECT_EQ(at_one_percent.nb, 6);
+    EXPECT_DOUBLE_EQ(at_one_percent.state_required_ratio, 8.47);
+}
+
+TEST(PPPArTest, FirstFixAlphaEnvDefaultsOff) {
+    // GNSS_PPP_CLAS_FIRST_FIX_AR_ALPHA is opt-in; unset keeps every fix at
+    // the clas.toml 10% significance level.
+    if (std::getenv("GNSS_PPP_CLAS_FIRST_FIX_AR_ALPHA") == nullptr) {
+        EXPECT_EQ(pppEnvOverrides().clas_first_fix_ar_alpha_pct, 0.0);
+    }
 }
 
 TEST(PPPArTest, BuildFixedObservationHelpersFilterInvalidProviders) {
