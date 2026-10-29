@@ -162,7 +162,8 @@ next leads:
   not adopted; see [Enhanced seed (not adopted)](#enhanced-seed-not-adopted).
 - **v0.7.4 claslib sync.** Correction-stream timing, BackupCSSR/BackupGrid,
   the ionosphere Gauss-Markov decay, and the claslib slot layout with Galileo
-  rows.
+  rows. Native already selects corrections the way v0.7.4 does; see
+  [Correction-stream timing](#correction-stream-timing).
 
 ## Enhanced seed (not adopted)
 
@@ -211,6 +212,34 @@ fixes, and fix-and-hold keeps the extra wrong integers. MRTKLIB's own design
 note reports the same coupling for its robust seed option. The TDCP parts were
 not ported, since the profile as a whole already raises the wrong-fix count in
 MRTKLIB.
+
+## Correction-stream timing
+
+MRTKLIB v0.7.4 (PR #246) reads CSSR through the correction set whose mask
+time equals the observation epoch, stopping at the first future mask. This
+fixed a one-epoch-stale correction selection in earlier MRTKLIB versions.
+
+Native was compared with the MRTKLIB v0.7.9 `OSRRES` trace on tokyo/run2,
+TOW 177600–177660 (301 epochs, twelve 5 s clock updates). The comparison
+covers 3043 satellite-epoch pairs:
+
+| Term | Native minus MRTKLIB |
+| --- | --- |
+| Clock and orbit corrections | at most 0.4 mm, including the update epochs |
+| Pseudorange correction (`PRC`) | 95% within 1 cm, at most 2.9 cm |
+| Code and phase biases | identical |
+
+So native already picks the same correction epoch as v0.7.4, and there is
+nothing to port.
+
+Native also computes no OSR for some satellites that the MRTKLIB trace
+lists, such as G04, G11 and J02 over 30 s or more. Over those epochs the
+rover has no carrier phase for them: J02 has only L5 code, and G04 and G11
+only L1 code and Doppler. MRTKLIB still writes their correction values, but
+it cannot form phase rows for them either.
+
+BackupCSSR/BackupGrid only matter when the correction stream stops; the PPC
+L6 data has no such gaps (the longest update interval is 5 s).
 
 ## Reproduce
 
