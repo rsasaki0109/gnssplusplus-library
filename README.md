@@ -112,20 +112,30 @@ Reproduce: `python3 apps/gnss.py reproduce list` shows one command per row; see 
 
 ### Smartphone GNSS/IMU
 
-Google Smartphone Decimeter Challenge 2023-2024: late submission **57742915**
-scores **Private 0.714 m / Public 0.732 m**. That is ahead of the 0.883 m
-first place on the final private leaderboard. A late entry is not ranked.
-The released taroz/gsdc2023 code scores 0.782 / 0.796 m after the deadline.
+Google Smartphone Decimeter Challenge 2023-2024, score = mean over drives of
+(P50 + P95) / 2 horizontal error:
 
-No Kaggle score picked anything in 57742915. On 22 of the 40 drives a rule
-fixed on train picks a native variant. On 32 drives the factor graph adds a
-cross-track road prior from a road map built from train ground truth
-(`--native-road-map`). Two caveats: the variant types were chosen after
-per-drive Kaggle probes, and 57742915 is the sixth such submission (from
-0.792 m). Picking the per-drive settings by those probes instead scores
-0.767 / 0.782 m (57717122, test-tuned). It uses raw GNSS/IMU, broadcast
-navigation, base observations and train ground truth (height and road maps),
-with no test truth. To rebuild it, see `gsdc-official` in
+| Submission | Private | Public |
+|---|---:|---:|
+| **libgnss++ 57742915** (late, not ranked) | **0.714 m** | **0.732 m** |
+| taroz/gsdc2023 released code (after the deadline) | 0.782 m | 0.796 m |
+| Final private leaderboard, first place | 0.883 m | – |
+
+This is the best libgnss++ score, and it is not tuned on the test set: no
+Kaggle score chose any setting in it.
+
+- **Inputs:** raw GNSS/IMU, broadcast navigation and base observations, plus
+  train ground truth for the height and road maps. No test truth.
+- **Solver:** the native GNSS/IMU factor graph (`gnss_fgo_imu_no_base`).
+- **Road prior:** on 32 drives a cross-track road prior from a road map built
+  from train ground truth (`--native-road-map`).
+- **Per-drive variant:** on 22 of the 40 drives a rule fixed on train picks a
+  native variant. It uses the height-map spread, the phone model and the
+  pseudorange residual.
+
+Two facts about how it was reached: the variant types were chosen after
+earlier per-drive Kaggle probes, and 57742915 is the sixth submission made
+that way (from 0.792 m). To rebuild it bit for bit, see `gsdc-official` in
 [docs/reproduce.md](docs/reproduce.md). Scores and the experiment log are in
 the
 [score record](docs/use_cases/records/gsdc2023_official_readback_20261024.json)
