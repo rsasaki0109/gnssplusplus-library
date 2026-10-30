@@ -342,6 +342,64 @@ Per run at 3D < 0.25 m, mean ± SD:
 `--correct-3d-m 0.25` (or `0.1`) makes the spread script score at that
 threshold.
 
+### UrbanNav out-of-sample check
+
+The guards were chosen and measured on the six PPC runs. UrbanNav Tokyo
+(2018-12-19, Trimble rover) is the check outside them.
+
+- **Data.** Odaiba and Shinjuku.
+  - The raw rover, base, navigation and reference files match the SHA256 that
+    `docs/urbannav_hero_clip_fix_evaluation.json` records.
+  - They were converted with `scripts/convert_urbannav_to_ppc_layout.py`.
+  - The lever arm is zero, as in
+    [the UrbanNav holdout contract](online_pva_default_switch_holdout_v1.md).
+  - The base is `--base-ecef -3961904.9530 3348993.7578 3698211.7553`, as in
+    `scripts/analysis/evaluate_urbannav_fix_continuity.py`.
+- **Not untouched.** These drives were used before for the `gnss solve`
+  KF-hold evaluation ([NO_GO](rtk_hold_ambiguity_update.md)). The guards had
+  not been run on them under `gnss fuse --navi776-tc`.
+- **Rule, written before the run.**
+  - A is `--navi776-tc`. B is A plus `--hold-kalman-update
+    --hold-kalman-update-validated-only --min-fix-satellites 4`.
+  - B passes if, on both drives, (1) its mean wrong-FIX rate at 0.5 m is below
+    A's, and (2) its mean FIX within 0.25 m is not more than 1 pp below A's.
+- **A discarded first run.** It used the RINEX header base position, which is
+  0.72 m east of the base coordinate above, and put almost every FIX 0.7 m off.
+  It was rerun with `--base-ecef`. The rule was not changed.
+
+Nine runs each. FIX within 0.5 m, 0.25 m and 0.10 m are % of epochs, and wrong
+FIX is % of FIX at 0.5 m (mean ± SD). FIX above 3 m is the mean count per run.
+
+| Drive | Arm | FIX within 0.5 m | Wrong FIX | FIX within 0.25 m | FIX within 0.10 m | FIX > 3 m |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Odaiba | A | 64.67 ± 0.03 | 3.60 ± 0.11 | 62.46 ± 0.02 | 52.67 ± 0.04 | 11 |
+| Odaiba | B | 63.21 ± 0.01 | 2.03 ± 0.08 | 61.48 ± 0.01 | 52.54 ± 0.01 | 65 |
+| Shinjuku | A | 64.87 ± 0.36 | 17.63 ± 0.14 | 53.93 ± 0.34 | 43.38 ± 0.34 | 60 |
+| Shinjuku | B | 68.66 ± 0.04 | 5.49 ± 0.00 | 58.38 ± 0.02 | 45.08 ± 0.03 | 44 |
+
+- **B passes the rule on both drives.**
+  - The wrong-FIX rate falls from 3.60% to 2.03% on Odaiba and from 17.63% to
+    5.49% on Shinjuku.
+  - FIX within 0.25 m change by −0.98 pp on Odaiba, just inside the 1 pp limit,
+    and by +4.45 pp on Shinjuku.
+- **B holds a larger wrong fix on Odaiba.**
+  - FIX above 3 m rise from 11 to 65. All nine runs hold a fix about 12 m off
+    at TOW 273759–273773 for 13 s.
+  - A is also wrong in that window, but 6 to 10.5 m off and for 8 epochs.
+  - A validated but wrong AR fix is held by the KF hold. The wrong-FIX rate
+    falling does not exclude large wrong fixes.
+- **The guards stay opt-in.**
+
+```sh
+python3 scripts/convert_urbannav_to_ppc_layout.py --raw-dir <raw> --run Odaiba \
+  --output-root data/urbannav_ppc
+python3 scripts/analysis/ppc_fuse_spread.py --dataset-root data/urbannav_ppc \
+  --runs urbannav/Odaiba_trimble urbannav/Shinjuku_trimble --lever-arm 0,0,0 \
+  --out-dir output/ppc_fuse_spread/urbannav_b \
+  -- --base-ecef -3961904.9530 3348993.7578 3698211.7553 \
+  --hold-kalman-update --hold-kalman-update-validated-only --min-fix-satellites 4
+```
+
 ## In-KF component: heavy-tail front-end
 
 `--integrity-student-t-*` (IRLS Student-t / Huber / Laplacian) weights the RTK
