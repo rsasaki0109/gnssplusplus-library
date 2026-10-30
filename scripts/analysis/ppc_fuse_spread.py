@@ -143,7 +143,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--dataset-root", type=Path, default=ROOT_DIR / "data" / "PPC-Dataset")
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--gnss-fuse", type=Path, help="gnss_fuse binary (default: build tree)")
-    parser.add_argument("--runs", nargs="+", default=list(RUNS), choices=RUNS)
+    parser.add_argument("--runs", nargs="+", default=list(RUNS),
+                        help="run directories under --dataset-root (default: the six PPC runs)")
+    parser.add_argument("--lever-arm", help="body-FLU lever arm x,y,z for every run, for runs "
+                        "outside PPC (default: the PPC lever arm of each city)")
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--pre-fix-lever-arms", action="store_true",
                         help="perturb the pre-fix (FRD) lever arms instead, for comparison only")
@@ -165,6 +168,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--jobs must be >= 1")
     if not args.correct_3d_m > 0.0:
         parser.error("--correct-3d-m must be > 0")
+    if args.lever_arm is not None:
+        try:
+            args.lever_arm = tuple(float(value) for value in args.lever_arm.split(","))
+        except ValueError:
+            parser.error("--lever-arm must be x,y,z")
+        if len(args.lever_arm) != 3 or not all(math.isfinite(v) for v in args.lever_arm):
+            parser.error("--lever-arm must be three finite numbers x,y,z")
+    else:
+        unknown = [run for run in args.runs if run.split("/")[0] not in LEVER_ARMS]
+        if unknown:
+            parser.error(f"--lever-arm is required for runs outside PPC: {', '.join(unknown)}")
     return args
 
 
@@ -172,6 +186,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     bases = PRE_FIX_LEVER_ARMS if args.pre_fix_lever_arms else LEVER_ARMS
+    if args.lever_arm is not None:
+        bases = {run.split("/")[0]: args.lever_arm for run in args.runs}
     plan = []
     for run in args.runs:
         city = run.split("/")[0]
