@@ -128,10 +128,45 @@ three Nagoya runs with the FLU vector:
 The Tokyo values swing with a few large corrections and do not separate the
 two signs.
 
-The numbers are in-sample, and two runs do better with the previous vector:
+### Run-to-run spread
 
-- tokyo/run3: correct FIX −3.7 pp;
-- nagoya/run3: correct FIX −0.9 pp.
+A single run is not enough to compare two lever arms. Moving the lever arm by
+2–4 cm, far below its uncertainty, moves the correct FIX of a Tokyo run by up
+to 5 pp. Each sign was therefore run nine times: the value above and eight
+perturbations (z ±0.02 and ±0.04 m, y ±0.02 m, x ±0.02 m). Each cell is the
+mean ± sample SD over the nine runs, correct FIX first and wrong FIX second.
+The last row is the six-run mean ± its standard error.
+
+| Run | Previous lever arm | FLU lever arm |
+| --- | --- | --- |
+| tokyo/run1 | 72.88 ± 2.17% / 7.45 ± 2.78% | 72.18 ± 2.52% / 7.39 ± 2.97% |
+| tokyo/run2 | 80.42 ± 1.83% / 3.05 ± 1.58% | 81.39 ± 1.24% / 2.89 ± 1.14% |
+| tokyo/run3 | 78.09 ± 1.72% / 4.74 ± 0.52% | 76.99 ± 1.60% / 5.11 ± 2.04% |
+| nagoya/run1 | 69.24 ± 3.28% / 8.57 ± 2.98% | 75.05 ± 0.00% / 4.50 ± 0.00% |
+| nagoya/run2 | 47.62 ± 0.45% / 5.30 ± 0.38% | 50.30 ± 0.00% / 4.69 ± 0.00% |
+| nagoya/run3 | 53.68 ± 0.56% / 15.13 ± 1.03% | 52.62 ± 1.08% / 17.91 ± 1.34% |
+| **Mean** | **66.99 ± 0.26% / 7.37 ± 0.25%** | **68.09 ± 0.19% / 7.08 ± 0.22%** |
+
+What the spread shows:
+
+- **The FLU vector raises the six-run correct FIX by 1.10 ± 0.32 pp.** The
+  wrong-FIX rate does not change significantly (−0.29 ± 0.33 pp); the
+  single-run table above overstates that drop.
+- **nagoya/run1 and nagoya/run2 gain for real.** With FLU their scores barely
+  move under the perturbations (by at most 0.01 pp). With the previous vector, nagoya/run1 ranges
+  from 65.01% to 75.02%.
+- **The Tokyo differences are within the spread.** The single-run tokyo/run3
+  loss of 3.7 pp is −1.10 ± 0.79 pp over nine runs.
+- **nagoya/run3 loses for real: wrong FIX rise from 15.13% to 17.91%.**
+  - Almost all of it is in one window, TOW 554714–554788.
+  - In that window every arm holds a wrong fix, RTK only included: 14.5 m
+    without the IMU, 0.8 m with the previous vector, 2.4 m with FLU.
+  - With FLU the hold starts 14 s earlier, from a first fix at ratio 3.8 with
+    7 ambiguities.
+  - This is the RTK filter's wrong-hold problem, not a lever-arm effect.
+
+Other RTK+IMU comparisons on these runs need the same treatment: on a single
+Tokyo run, a difference below about 2 pp is noise.
 
 The urban use-case guide, its field checklist, the `gnss fuse` page, the
 example configuration and the `urban-continuity-bundle` default now pass the
