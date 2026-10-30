@@ -70,7 +70,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--lever-arm",
-        default="0.31,0,-0.55",
+        default="0.31,0,0.55",
         help="IMU-to-antenna body-FLU lever arm in metres (default: PPC Tokyo).",
     )
     parser.add_argument("--preset", default="low-cost")

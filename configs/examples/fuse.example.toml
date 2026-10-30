@@ -10,9 +10,9 @@ rtk_pos_out = "output/rtk_solution.pos"
 preset = "low-cost"
 navi776_tc = true
 
-# Tokyo PPC IMU-to-antenna lever arm in the published vehicle coordinates,
-# meters. Preserve the signed Z component from data/PPC-Dataset/README.md.
-lever_arm = [0.31, 0.0, -0.55]
+# Tokyo PPC IMU-to-antenna lever arm in body FLU (x forward, y left, z up),
+# meters. data/PPC-Dataset/README.md lists it in FRD as [0.31, 0.0, -0.55].
+lever_arm = [0.31, 0.0, 0.55]
 
 # Suppress false ZUPT when the last-known GNSS Doppler speed proves motion. A
 # moving decision remains latched until a later low-speed GNSS velocity

@@ -16,7 +16,7 @@ gnss fuse \
   --base  data/PPC-Dataset/tokyo/run1/base.obs \
   --nav   data/PPC-Dataset/tokyo/run1/base.nav \
   --imu   data/PPC-Dataset/tokyo/run1/imu.csv \
-  --lever-arm 0.31,0,-0.55 \
+  --lever-arm 0.31,0,0.55 \
   --preset low-cost \
   --out output/fused.pos
 ```

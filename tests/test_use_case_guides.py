@@ -178,8 +178,8 @@ class UseCaseGuideTest(unittest.TestCase):
         ):
             self.assertIn(token, live)
 
-    def test_tokyo_ppc_lever_arm_preserves_the_published_signed_z(self) -> None:
-        """The urban recipe must not silently flip Tokyo's vertical lever arm."""
+    def test_tokyo_ppc_lever_arm_is_passed_in_body_flu(self) -> None:
+        """`--lever-arm` is body FLU; the PPC README's Tokyo value is FRD."""
         contract_doc = (ROOT_DIR / "docs" / "ppc_reproduction.md").read_text(encoding="utf-8")
         self.assertIn("`[0.31, 0.0, -0.55]`", contract_doc)
 
@@ -188,12 +188,13 @@ class UseCaseGuideTest(unittest.TestCase):
         example_config = (ROOT_DIR / "configs" / "examples" / "fuse.example.toml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("--lever-arm 0.31,0,-0.55", urban)
-        self.assertIn("`0.31,0,-0.55`", urban)
-        self.assertIn("--lever-arm 0.31,0,-0.55", imu_fusion)
-        self.assertIn("lever_arm = [0.31, 0.0, -0.55]", example_config)
-        self.assertNotIn("0.31,0,0.55", urban)
-        self.assertNotIn("0.31,0,0.55", imu_fusion)
+        self.assertIn("--lever-arm 0.31,0,0.55", urban)
+        self.assertIn("`0.31,0,0.55`", urban)
+        self.assertIn("ppc_rtk_vs_gnss_imu_fusion.md#ppc-lever-arm-convention", urban)
+        self.assertIn("--lever-arm 0.31,0,0.55", imu_fusion)
+        self.assertIn("lever_arm = [0.31, 0.0, 0.55]", example_config)
+        self.assertNotIn("--lever-arm 0.31,0,-0.55", urban)
+        self.assertNotIn("--lever-arm 0.31,0,-0.55", imu_fusion)
 
     def test_referenced_small_fixtures_exist(self) -> None:
         for relative_path in (

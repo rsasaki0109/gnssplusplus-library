@@ -41,7 +41,7 @@ continuous fused stream from the same observations in one pass:
 ```bash
 python3 apps/gnss.py fuse \
   --data-dir data/PPC-Dataset/tokyo/run1 \
-  --lever-arm 0.31,0,-0.55 \
+  --lever-arm 0.31,0,0.55 \
   --preset low-cost \
   --zupt --no-nhc \
   --max-epochs 200 \
@@ -55,11 +55,13 @@ python3 apps/gnss.py pos2kml \
   --status all
 ```
 
-`--lever-arm x,y,z` is the IMU-to-antenna offset in the PPC vehicle coordinates,
-in metres. Tokyo's published PPC value is `0.31,0,-0.55`; keep its signed Z
-component (do not replace it with `+0.55`). Measure it for a different vehicle.
-The complete IMU CSV and axis contract is in
-[GNSS/IMU fusion](../imu_fusion.md).
+`--lever-arm x,y,z` is the IMU-to-antenna offset in the body FLU frame (x
+forward, y left, z up), in metres. The PPC README publishes Tokyo's offset in
+FRD (x forward, y right, z down) as `0.31,0,-0.55`; in FLU it is `0.31,0,0.55`,
+with the antenna above the IMU. Do not pass the FRD value directly; see the
+[PPC lever-arm convention](../ppc_rtk_vs_gnss_imu_fusion.md#ppc-lever-arm-convention).
+Measure the offset for a different vehicle. The complete IMU CSV and axis
+contract is in [GNSS/IMU fusion](../imu_fusion.md).
 
 Frame contract: the ESKF's internal `toPositionSolution()` is IMU-origin
 position/velocity and is retained for propagation and RTK coupling. The
@@ -95,13 +97,13 @@ variables are the motion constraints:
 python3 apps/gnss.py fuse \
   --data-dir data/PPC-Dataset/tokyo/run1 \
   --gnss-pos output/use_cases/urban_fusion/rtk.pos \
-  --lever-arm 0.31,0,-0.55 --no-zupt --no-nhc \
+  --lever-arm 0.31,0,0.55 --no-zupt --no-nhc \
   --out output/use_cases/urban_fusion/fused_imu_only.pos
 
 python3 apps/gnss.py fuse \
   --data-dir data/PPC-Dataset/tokyo/run1 \
   --gnss-pos output/use_cases/urban_fusion/rtk.pos \
-  --lever-arm 0.31,0,-0.55 --zupt --nhc \
+  --lever-arm 0.31,0,0.55 --zupt --nhc \
   --out output/use_cases/urban_fusion/fused_zupt_nhc.pos
 ```
 
@@ -159,7 +161,7 @@ maximum horizontal error, error-growth rate, and reacquisition discontinuity.
 
 ### R1 Tokyo run1 frozen candidate
 
-The R1 candidate keeps the PPC lever-arm contract (`0.31,0,-0.55`) and adds
+The R1 candidate uses the Tokyo FLU lever arm (`0.31,0,0.55`) and adds
 the deterministic Doppler recovery policy. A velocity update is gated at
 `--max-velocity-nis 25`; after three consecutive trusted, finite/PSD Doppler
 rejections, only the lever-arm-compensated velocity is re-anchored, with a
@@ -176,7 +178,7 @@ until this run1 artifact has passed the project's accuracy review):
 ```bash
 python3 apps/gnss.py fuse \
   --data-dir data/PPC-Dataset/tokyo/run1 \
-  --lever-arm 0.31,0,-0.55 \
+  --lever-arm 0.31,0,0.55 \
   --preset low-cost \
   --zupt --no-nhc \
   --max-velocity-nis 25 \
@@ -222,19 +224,32 @@ reported as operationally unusable even when the score gate passes. The
 manifest is written incrementally so a failed conversion, plot, or score still
 leaves the log and failure evidence.
 
-The checked artifacts used the same options with the names
-`negative_z_velocity_reanchor_3500*` (first 3,500 epochs) and
-`negative_z_velocity_reanchor_unbounded_run1*` (full run1):
+Scored on the current tree with the FLU lever arm, and with the earlier
+`0.31,0,-0.55` value for comparison:
 
-| R1 artifact | Fused availability | Bridge coverage | Max bridge H error | Max reacquisition step | Fixed-P95 regression vs RTK |
+| R1 run (lever arm) | Fused availability | Bridge coverage | Max bridge H error | Max reacquisition step | Fixed-P95 regression vs RTK |
+|---|---:|---:|---:|---:|---:|
+| 3,500 epochs, `0.31,0,0.55` | 99.600% | 99.333% | 32.043 m | 10.071 m | 1.937 m |
+| 3,500 epochs, `0.31,0,-0.55` | 99.600% | 99.333% | 31.257 m | 10.156 m | 2.015 m |
+| Full run1, `0.31,0,0.55` | 99.724% | 99.230% | 61.672 m | 10.071 m | 1.850 m |
+| Full run1, `0.31,0,-0.55` | 99.724% | 99.230% | 62.535 m | 10.156 m | 1.942 m |
+
+The full run1 has 207 complete bridges and no non-finite fused epochs with
+either value. Both full-run scores pass the frozen gates (coverage >=99%, max
+bridge <=75 m, reacquisition <=15 m, fixed-P95 regression <=5 m, and fused
+availability >= RTK availability). The correction is a frame fix, not a
+tuning choice, and its effect on these metrics is below 1 m.
+
+The R1 artifacts archived before the frame fix used `0.31,0,-0.55` and an
+earlier tree, under the names `negative_z_velocity_reanchor_3500*` (first
+3,500 epochs) and `negative_z_velocity_reanchor_unbounded_run1*` (full run1):
+
+| Archived R1 artifact (`0.31,0,-0.55`) | Fused availability | Bridge coverage | Max bridge H error | Max reacquisition step | Fixed-P95 regression vs RTK |
 |---|---:|---:|---:|---:|---:|
 | 3,500-epoch gate | 99.600% | 99.334% | 55.580 m | 10.154 m | 2.068 m |
 | Full run1 | 99.724% | 99.233% | 64.898 m | 10.154 m | 2.718 m |
 
-Both artifacts contain no non-finite fused epochs. The full-run score passes
-the frozen gates (coverage >=99%, max bridge <=75 m, reacquisition <=15 m,
-fixed-P95 regression <=5 m, and fused availability >= RTK availability). Its
-gated score and per-bridge ledger are archived at
+The archived full-run gated score and per-bridge ledger are
 `output/use_cases/urban_fusion_full/negative_z_velocity_reanchor_unbounded_run1_gated_score.json`
 and
 `output/use_cases/urban_fusion_full/negative_z_velocity_reanchor_unbounded_run1_gated_segments.csv`.
@@ -243,7 +258,8 @@ the run2/run3 holdouts.
 
 Continuity is not the same as an operationally usable bridge. In this
 low-cost Tokyo run1, the largest `propagation_age_s` in the segment ledger is
-87.2 s (segment 169). A deployment profile should set a vehicle- and
+87.2 s with either lever-arm value (segment 168 on the current tree, 169 in
+the archived ledger). A deployment profile should set a vehicle- and
 environment-specific maximum bridge age; 60 s is a conservative starting
 recommendation for this profile. Mark any segment over that limit as
 **unusable** for the application, even when the fused file remains continuous,
@@ -255,8 +271,10 @@ behind the availability percentage.
 The run1 candidate was frozen before evaluating the holdouts. The score gates
 are the coverage, bridge-error, reacquisition, fixed-P95-regression,
 fused-availability, and non-finite limits shown above. The following table is
-the immutable post-freeze record; percentages are reported by the bundle
-scorer and are not rounded for the gate decision:
+the immutable post-freeze record. It predates the FLU lever-arm fix: all three
+bundles used `0.31,0,-0.55`, and the holdouts were not rerun with the corrected
+value. Percentages are reported by the bundle scorer and are not rounded for
+the gate decision:
 
 | Bundle | Reference epochs | RTK fixed | Complete bridges | Fused availability vs RTK | Coverage | Max bridge H | Reacquisition | Fixed-P95 regression | Max propagation age | Score gate |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
@@ -281,10 +299,11 @@ run2 score pass is not a field-usable result under the current checklist.
 See the [R1-09 field checklist](urban_rtk_imu_field_checklist.md) for the
 usable/degraded/unusable classification and the one-command hand-off.
 
-R1-05 also replayed the same saved RTK stream with the frozen lever arm and
-recovery settings while changing only the motion constraints. The replay
-comparison is useful for rejecting NHC, but its saved-RTK timestamp population
-is not the in-process full-run denominator above:
+R1-05 also replayed the same saved RTK stream with the frozen lever arm (the
+pre-fix `0.31,0,-0.55`) and recovery settings while changing only the motion
+constraints. The replay comparison is useful for rejecting NHC, but its
+saved-RTK timestamp population is not the in-process full-run denominator
+above:
 
 | Replay profile | Bridge coverage | Max bridge H error | Max reacquisition step |
 |---|---:|---:|---:|

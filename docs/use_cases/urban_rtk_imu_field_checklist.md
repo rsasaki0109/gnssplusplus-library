@@ -16,7 +16,7 @@ Do not change these values when reproducing the frozen candidate:
 
 | Setting | Frozen value | Contract |
 |---|---|---|
-| IMU-to-antenna lever arm | `0.31,0,-0.55` m | PPC vehicle coordinates; signed Z is negative |
+| IMU-to-antenna lever arm | `0.31,0,0.55` m | Body FLU; the PPC README value `0.31,0,-0.55` is FRD |
 | Preset | `low-cost` | Tokyo R1 profile |
 | ZUPT/NHC | ZUPT on, NHC off | NHC is not part of the frozen profile |
 | Position gate | NIS `500`, FIX patience `30` | Position-only recovery; FLOAT resets patience |
@@ -112,6 +112,10 @@ The immutable evidence directories are
 `output/use_cases/urban_fusion_full/r1_frozen_bundle/`,
 `output/use_cases/urban_fusion_full/r1_holdout_run2/`, and
 `output/use_cases/urban_fusion_full/r1_holdout_run3/`.
+
+These records predate the lever-arm frame fix and used `0.31,0,-0.55`. The fix
+came from the [PPC lever-arm convention](../ppc_rtk_vs_gnss_imu_fusion.md#ppc-lever-arm-convention)
+audit, not from the holdouts, and the holdouts were not rerun with it.
 
 Run3 is a frozen holdout result. Do **not** rerun it, retune against it, or
 reclassify it as development data. Do not use either holdout to alter the
