@@ -70,6 +70,15 @@ TEST(RTKValidationTest, HoldAttemptRequiresStableHistoryAndHeldIntegers) {
     EXPECT_TRUE(rtk_validation::canAttemptHoldFix(5, 5, true, true));
 }
 
+TEST(RTKValidationTest, ValidatedOnlyKalmanHoldSkipsTheHoldFixFallback) {
+    EXPECT_TRUE(rtk_validation::holdAppliesAfterHoldFix(false, false));
+    EXPECT_TRUE(rtk_validation::holdAppliesAfterHoldFix(true, false));
+    // The restriction only concerns the Kalman hold; the legacy overwrite keeps
+    // re-applying the held integers after a fallback fix.
+    EXPECT_TRUE(rtk_validation::holdAppliesAfterHoldFix(false, true));
+    EXPECT_FALSE(rtk_validation::holdAppliesAfterHoldFix(true, true));
+}
+
 TEST(RTKValidationTest, NonFixedDriftGuardRejectsLowSpeedBoundedOutliers) {
     std::vector<PositionSolution> solutions = {
         makeValidationSolution(0.0, SolutionStatus::FIXED, Eigen::Vector3d(0.0, 0.0, 0.0)),

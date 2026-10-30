@@ -287,6 +287,49 @@ generated with explicit component flags before the Doppler baseline gate
 became part of `--navi776-tc`. They remain useful ablations but are not
 current-preset results; the table above supersedes them.
 
+### Nine-run re-check (2026-10-30)
+
+The sign-off above compares one run per arm. On these runs a 2–4 cm
+lever-arm change moves a Tokyo run by up to 5 pp
+([run-to-run spread](ppc_rtk_vs_gnss_imu_fusion.md#run-to-run-spread)). The
+preset and its components were therefore rerun nine times each with
+`scripts/analysis/ppc_fuse_spread.py` (FLU lever arms, current tree).
+
+Each cell is correct FIX (3D < 0.5 m, % of epochs) / wrong FIX (% of FIX),
+mean ± SD over the nine runs. "M4" is `--tc-closed-loop --tc-velocity-states`,
+the OFF arm above.
+
+| Run | M4 | M4 + adaptive noise | M4 + Doppler rows | `--navi776-tc` |
+| --- | --- | --- | --- | --- |
+| tokyo/run1 | 72.67 ± 1.47 / 6.38 ± 1.52 | 72.13 ± 0.93 / 7.54 ± 1.56 | 72.49 ± 3.26 / 7.33 ± 2.41 | 72.18 ± 2.52 / 7.39 ± 2.97 |
+| tokyo/run2 | 74.68 ± 2.29 / 3.28 ± 0.79 | 77.76 ± 1.05 / 3.26 ± 0.85 | 81.49 ± 1.13 / 3.48 ± 1.20 | 81.39 ± 1.24 / 2.89 ± 1.14 |
+| tokyo/run3 | 80.13 ± 2.04 / 3.02 ± 1.26 | 80.85 ± 2.08 / 3.18 ± 1.21 | 78.47 ± 1.64 / 5.01 ± 1.34 | 76.99 ± 1.60 / 5.11 ± 2.04 |
+| Six-run mean ± SE | 67.58 ± 0.20 / 6.63 ± 0.14 | 68.12 ± 0.15 / 6.85 ± 0.14 | 68.40 ± 0.22 / 7.16 ± 0.18 | 68.09 ± 0.19 / 7.08 ± 0.22 |
+
+The Nagoya runs are identical in all four arms. Their 9.4 km baseline turns
+the Doppler rows and the adaptive noise off at the 1000 m gate. The six-run
+mean includes them.
+
+- **The tokyo/run2 gain is real.** It is +6.7 pp of correct FIX over M4, about
+  eight standard errors. Most of it comes from the Doppler rows (+6.8 pp alone;
+  adaptive noise alone +3.1 pp).
+- **tokyo/run3 loses 3.1 pp of correct FIX against M4** (about 3.6 standard
+  errors), and its wrong-FIX rate rises from 3.02% to 5.11%.
+  - The Doppler rows alone lose 1.7 pp; adaptive noise on top loses 1.5 pp
+    more.
+  - The single-run sign-off also showed this run's 50 cm share falling, while
+    its fix rate rose.
+- **tokyo/run1 shows no difference.**
+- **Over six runs the preset adds 0.51 pp of correct FIX** (about 1.8 standard
+  errors) and 0.45 pp of wrong-FIX rate. Its benefit is concentrated on
+  tokyo/run2.
+
+```sh
+python3 scripts/analysis/ppc_fuse_spread.py --without-navi776-tc \
+  --dataset-root data/PPC-Dataset --out-dir output/ppc_fuse_spread/m4 \
+  -- --tc-closed-loop --tc-velocity-states
+```
+
 ### Tokyo2 tail and runtime diagnosis
 
 Full-run ablations identified the Doppler rows as the main source of both

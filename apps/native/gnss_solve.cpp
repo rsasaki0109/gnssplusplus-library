@@ -140,6 +140,7 @@ struct SolveConfig {
     bool hold_fix_unchanged_set = false;
     bool kf_relinearize_from_epoch_prior = false;
     bool hold_ambiguity_kalman_update = false;
+    bool hold_ambiguity_kalman_update_validated_only = false;
     bool fix_history_motion_compensation = false;
     bool max_position_jump_motion_compensation = false;
     int hold_fix_min_matched_pairs = 4;
@@ -1599,6 +1600,9 @@ void printAdvancedUsage(const char* program_name) {
         << "                             max position jump check (default: off)\n"
         << "  --hold-kalman-update       Apply held DD integers as a Kalman pseudo-observation\n"
         << "                             instead of overwriting the ambiguities (default: off)\n"
+        << "  --hold-kalman-update-validated-only\n"
+        << "                             With --hold-kalman-update, apply it only after a validated\n"
+        << "                             AR fix, not after the hold-fix fallback (default: off)\n"
         << "  --hold-fix-min-matched-pairs <n>\n"
         << "                             Min held DD pairs for the hold-fix fallback (default: 4)\n"
         << "  --hold-fix-max-update-nis-per-obs <v>\n"
@@ -2677,6 +2681,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.hold_ambiguity_kalman_update = true;
             continue;
         }
+        if (arg == "--hold-kalman-update-validated-only") {
+            config.hold_ambiguity_kalman_update_validated_only = true;
+            continue;
+        }
         if (arg == "--kf-relinearize-from-prior") {
             config.kf_relinearize_from_epoch_prior = true;
             continue;
@@ -3285,6 +3293,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.min_fix_satellites < 0) {
         argumentError("--min-fix-satellites must be >= 0", argv[0]);
+    }
+    if (config.hold_ambiguity_kalman_update_validated_only &&
+        !config.hold_ambiguity_kalman_update) {
+        argumentError("--hold-kalman-update-validated-only requires --hold-kalman-update", argv[0]);
     }
     if (config.elevation_mask_deg < 0.0 || config.elevation_mask_deg >= 90.0) {
         argumentError("--elevation-mask-deg must be in [0, 90)", argv[0]);
@@ -3908,6 +3920,8 @@ int main(int argc, char* argv[]) {
         rtk_config.hold_fix_unchanged_set_only = config.hold_fix_unchanged_set;
         rtk_config.kf_relinearize_from_epoch_prior = config.kf_relinearize_from_epoch_prior;
         rtk_config.hold_ambiguity_kalman_update = config.hold_ambiguity_kalman_update;
+        rtk_config.hold_ambiguity_kalman_update_validated_only =
+            config.hold_ambiguity_kalman_update_validated_only;
         rtk_config.fix_history_motion_compensation = config.fix_history_motion_compensation;
         rtk_config.max_position_jump_motion_compensation =
             config.max_position_jump_motion_compensation;

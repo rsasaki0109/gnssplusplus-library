@@ -251,6 +251,7 @@ struct FuseOptions {
     // Mirror gnss_solve's --hold-kalman-update and --min-fix-satellites; no
     // preset touches them. Off by default.
     bool hold_kalman_update = false;
+    bool hold_kalman_update_validated_only = false;
     int min_fix_satellites = 0;
 
     // navi.776 A2: innovation-based adaptive measurement variance, mirroring
@@ -840,6 +841,10 @@ void printAdvancedUsage(const char* program_name) {
         << "                                (mirrors `gnss solve`; default: RTKConfig's own, 6)\n"
         << "  --hold-kalman-update         Apply held DD integers as a Kalman pseudo-observation\n"
         << "                                instead of overwriting the ambiguities\n"
+        << "                                (mirrors `gnss solve`; default: off)\n"
+        << "  --hold-kalman-update-validated-only\n"
+        << "                                With --hold-kalman-update, apply it only after a\n"
+        << "                                validated AR fix, not after the hold-fix fallback\n"
         << "                                (mirrors `gnss solve`; default: off)\n"
         << "  --min-fix-satellites <k>     Min non-reference satellites in an ambiguity-resolution\n"
         << "                                FIX (mirrors `gnss solve`; default: 0 = off)\n"
@@ -2041,6 +2046,8 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.max_subset_ar_drop_steps = std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--hold-kalman-update") {
             options.hold_kalman_update = true;
+        } else if (arg == "--hold-kalman-update-validated-only") {
+            options.hold_kalman_update_validated_only = true;
         } else if (arg == "--min-fix-satellites") {
             options.min_fix_satellites = std::stoi(requireValue(arg, i, argc, argv));
             if (options.min_fix_satellites < 0) {
@@ -2109,6 +2116,10 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     }
     if (options.tightly_coupled_dd_imu && options.base_path.empty()) {
         argumentError("--tight-dd-imu requires --base", argv[0]);
+    }
+    if (options.hold_kalman_update_validated_only && !options.hold_kalman_update) {
+        argumentError("--hold-kalman-update-validated-only requires --hold-kalman-update",
+                      argv[0]);
     }
     if (options.library_fix_integrity_gate &&
         options.base_path.empty()) {
@@ -2526,6 +2537,8 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         rtk_config.max_subset_drop_steps_for_ar = options.max_subset_ar_drop_steps;
     }
     rtk_config.hold_ambiguity_kalman_update = options.hold_kalman_update;
+    rtk_config.hold_ambiguity_kalman_update_validated_only =
+        options.hold_kalman_update_validated_only;
     rtk_config.min_fix_satellites = options.min_fix_satellites;
     rtk_config.cmc_aware_reference_selection = options.cmc_aware_reference_selection;
     rtk_config.cmc_ref_level_m = options.cmc_ref_level_m;

@@ -69,6 +69,17 @@ Odaiba age5_doppler3 (missing +98, P95 +1.34 m) and Shinjuku age5_doppler3
 R failed, and adds >2/>3 m errors on both drives. **Decision: keep the option
 off.** Nothing was retuned.
 
+## Validated-only follow-up
+
+`--hold-kalman-update-validated-only`
+(`RTKConfig::hold_ambiguity_kalman_update_validated_only`) restricts the KF
+hold to epochs after a validated ambiguity-resolution FIX, as RTKLIB holdamb
+does. After a hold-fix fallback FIX the held integers are then not applied at
+all. It was measured only under `gnss fuse --navi776-tc` on the PPC runs
+([measurement](ppc_rtk_vs_gnss_imu_fusion.md#kf-hold-only-after-validated-fixes)),
+not on the drives above. Off by default; without it, `gnss solve` output is
+byte-identical.
+
 ## What this establishes
 
 - The legacy overwrite does propagate wrong basins through the hold path. The

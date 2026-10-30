@@ -130,6 +130,11 @@ bool canAttemptHoldFix(int consecutive_fix_count,
            has_held_dd_integers;
 }
 
+bool holdAppliesAfterHoldFix(bool hold_ambiguity_kalman_update,
+                             bool kalman_update_validated_only) {
+    return !(hold_ambiguity_kalman_update && kalman_update_validated_only);
+}
+
 NonFixedDriftGuardResult filterNonFixedStationaryDrift(
     const std::vector<PositionSolution>& solutions,
     const NonFixedDriftGuardConfig& config) {
