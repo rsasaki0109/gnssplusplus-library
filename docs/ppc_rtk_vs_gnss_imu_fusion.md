@@ -167,6 +167,13 @@ What the spread shows:
 
 Other RTK+IMU comparisons on these runs need the same treatment: on a single
 Tokyo run, a difference below about 2 pp is noise.
+`scripts/analysis/ppc_fuse_spread.py` runs the nine members per run and prints
+this table. Add `--pre-fix-lever-arms` for the previous-lever-arm column:
+
+```sh
+python3 scripts/analysis/ppc_fuse_spread.py \
+  --dataset-root data/PPC-Dataset --out-dir output/ppc_fuse_spread/flu
+```
 
 The urban use-case guide, its field checklist, the `gnss fuse` page, the
 example configuration and the `urban-continuity-bundle` default now pass the
@@ -230,8 +237,13 @@ What the table shows:
   - The same six runs then measured it, so the result is in-sample.
   - k = 4 was not chosen here. The default is unchanged.
 
-To reproduce, append `--hold-kalman-update --min-fix-satellites 4` to the
-replay command.
+To reproduce a column, pass its flags to the spread script after `--`:
+
+```sh
+python3 scripts/analysis/ppc_fuse_spread.py \
+  --dataset-root data/PPC-Dataset --out-dir output/ppc_fuse_spread/both \
+  -- --hold-kalman-update --min-fix-satellites 4
+```
 
 ## In-KF component: heavy-tail front-end
 
