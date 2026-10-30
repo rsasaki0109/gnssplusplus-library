@@ -1,0 +1,424 @@
+diff --git a/include/libgnss++/algorithms/ppp.hpp b/include/libgnss++/algorithms/ppp.hpp
+index ad74e39..8350ec0 100644
+--- a/include/libgnss++/algorithms/ppp.hpp
++++ b/include/libgnss++/algorithms/ppp.hpp
+@@ -344,6 +344,22 @@ public:
+     }
+ 
+ private:
++    // GNSS_DIAG_CLAS_IMU experiment: a loosely-coupled INS fed with the
++    // published CLAS solutions predicts the antenna position for a full reset.
++    struct ClasInsDiag;
++    std::shared_ptr<ClasInsDiag> clas_ins_diag_;
++    bool clas_ins_seed_valid_ = false;
++    Eigen::Vector3d clas_ins_seed_ecef_ = Eigen::Vector3d::Zero();
++    Eigen::Matrix3d clas_ins_seed_cov_ = Eigen::Matrix3d::Zero();
++    bool clas_ins_disp_valid_ = false;
++    Eigen::Vector3d clas_ins_disp_ecef_ = Eigen::Vector3d::Zero();
++    Eigen::Vector3d clas_ins_vel_ecef_ = Eigen::Vector3d::Zero();
++    double clas_ins_disp_dt_ = 0.0;
++    bool clas_ins_doppler_valid_ = false;
++    Eigen::Vector3d clas_ins_doppler_vel_ecef_ = Eigen::Vector3d::Zero();
++    Eigen::Matrix3d clas_ins_doppler_vel_cov_ = Eigen::Matrix3d::Identity();
++    void clasInsBeforeEpoch(const GNSSTime& time);
++    void clasInsAfterEpoch(const PositionSolution& solution);
+     // White-box unit-test access (defined in tests/test_ppp.cpp).
+     friend struct PPPProcessorTestAccess;
+ 
+diff --git a/src/algorithms/ppp.cpp b/src/algorithms/ppp.cpp
+index a3884b3..dd9b0ae 100644
+--- a/src/algorithms/ppp.cpp
++++ b/src/algorithms/ppp.cpp
+@@ -772,7 +772,10 @@ PositionSolution PPPProcessor::processEpochStandard(
+ 
+ PositionSolution PPPProcessor::processEpoch(const ObservationData& obs, const NavigationData& nav) {
+     if (ppp_config_.use_clas_osr_filter) {
+-        return processEpochCLAS(obs, nav);
++        clasInsBeforeEpoch(obs.time);
++        PositionSolution clas_solution = processEpochCLAS(obs, nav);
++        clasInsAfterEpoch(clas_solution);
++        return clas_solution;
+     }
+ 
+     // Standard PPP path: precise/broadcast navigation with optional inline
+diff --git a/src/algorithms/ppp_clas_epoch.cpp b/src/algorithms/ppp_clas_epoch.cpp
+index 7e40ed5..45c2b23 100644
+--- a/src/algorithms/ppp_clas_epoch.cpp
++++ b/src/algorithms/ppp_clas_epoch.cpp
+@@ -223,6 +223,12 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
+         clas_spp_config.large_residual_exclusion_min_rows = 7;
+         spp_processor_.setSPPConfig(clas_spp_config);
+         seed = spp_processor_.processEpoch(obs, nav);
++        clas_ins_doppler_valid_ = seed.isValid() && seed.has_velocity &&
++                                  seed.velocity_ecef.allFinite();
++        if (clas_ins_doppler_valid_) {
++            clas_ins_doppler_vel_ecef_ = seed.velocity_ecef;
++            clas_ins_doppler_vel_cov_ = seed.velocity_covariance;
++        }
+         const bool clas_seed_redundancy_failed =
+             seed.isValid() && clasSeedFailsRedundancyGate(seed);
+         double baseline_filter_spp_distance_m =
+@@ -650,9 +656,26 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
+     const bool clas_reset_from_pre_fde_seed =
+         env_overrides_.clas_galileo && !filter_initialized_ &&
+         has_clas_pre_fde_seed && clas_pre_fde_seed.isValid() && seed.isValid();
++    PositionSolution clas_init_seed =
++        clas_reset_from_pre_fde_seed ? clas_pre_fde_seed : seed;
++    if (!filter_initialized_ && clas_ins_seed_valid_ && clas_init_seed.isValid()) {
++        if (pppDebugEnabled()) {
++            std::cerr << std::setprecision(12) << "[CLAS-INS-SEED] tow=" << obs.time.tow
++                      << " shift_m=" << (clas_ins_seed_ecef_ - clas_init_seed.position_ecef).norm()
++                      << " ins_sigma_m=" << std::sqrt(clas_ins_seed_cov_.trace())
++                      << std::setprecision(6) << "\n";
++        }
++        clas_init_seed.position_ecef = clas_ins_seed_ecef_;
++    }
++    static const bool ins_time_update = std::getenv("GNSS_DIAG_CLAS_IMU_TIME_UPDATE") != nullptr;
++    const bool ins_pre_valid = filter_initialized_ && filter_state_.pos_index >= 0;
++    const Eigen::Vector3d ins_pre_pos = ins_pre_valid
++        ? Eigen::Vector3d(filter_state_.state.segment<3>(filter_state_.pos_index))
++        : Eigen::Vector3d::Zero();
++    const double ins_pre_dt = has_last_processed_time_ ? (obs.time - last_processed_time_) : -1.0;
+     const auto epoch_preparation = ppp_clas::prepareEpochState(
+         obs,
+-        clas_reset_from_pre_fde_seed ? clas_pre_fde_seed : seed,
++        clas_init_seed,
+         ssr_products_,
+         filter_state_,
+         filter_initialized_,
+@@ -667,6 +690,86 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
+         clas_dispersion_compensation_,
+         clas_phase_bias_repair_,
+         clas_ambiguity_initial_variance);
++    {
++        static const double vel_sigma = std::getenv("GNSS_DIAG_CLAS_VEL_UPDATE_SIGMA")
++            ? std::atof(std::getenv("GNSS_DIAG_CLAS_VEL_UPDATE_SIGMA")) : 0.0;
++        static const bool vel_from_doppler = std::getenv("GNSS_DIAG_CLAS_VEL_UPDATE_DOPPLER") != nullptr;
++        const int v = filter_state_.vel_index;
++        if (vel_sigma > 0.0 && epoch_preparation.ready && !epoch_preparation.initialized_this_epoch &&
++            v >= 0 && v + 3 <= filter_state_.state.size()) {
++            bool ok = false;
++            Eigen::Vector3d z = Eigen::Vector3d::Zero();
++            Eigen::Matrix3d rv = Eigen::Matrix3d::Identity() * vel_sigma * vel_sigma;
++            if (vel_from_doppler) {
++                ok = clas_ins_doppler_valid_;
++                z = clas_ins_doppler_vel_ecef_;
++                rv += clas_ins_doppler_vel_cov_;
++            } else {
++                ok = clas_ins_disp_valid_;
++                z = clas_ins_vel_ecef_;
++            }
++            if (ok && z.allFinite()) {
++                const Eigen::Vector3d y = z - filter_state_.state.segment<3>(v);
++                const Eigen::Matrix3d sm = filter_state_.covariance.block<3, 3>(v, v) + rv;
++                const Eigen::Matrix3d si = sm.inverse();
++                const double nis = y.dot(si * y);
++                if (pppDebugEnabled()) {
++                    std::cerr << "[CLAS-VEL-UPD] tow=" << std::setprecision(12) << obs.time.tow
++                              << std::setprecision(6) << " nis=" << nis << " dv=" << y.norm() << "\n";
++                }
++                if (nis < 16.27) {
++                    const Eigen::MatrixXd pcols = filter_state_.covariance.middleCols(v, 3);
++                    const Eigen::MatrixXd k = pcols * si;
++                    filter_state_.state += k * y;
++                    filter_state_.covariance -= k * pcols.transpose();
++                    filter_state_.covariance =
++                        0.5 * (filter_state_.covariance + filter_state_.covariance.transpose());
++                }
++            }
++        }
++    }
++    if (ins_time_update && ins_pre_valid && epoch_preparation.ready &&
++        !epoch_preparation.initialized_this_epoch && clas_ins_disp_valid_ &&
++        std::abs(ins_pre_dt - clas_ins_disp_dt_) < 1e-3) {
++        if (pppDebugEnabled()) {
++            const Eigen::Vector3d dyn_disp =
++                filter_state_.state.segment<3>(filter_state_.pos_index) - ins_pre_pos;
++            std::cerr << std::setprecision(6) << "[CLAS-INS-TU] tow=" << std::setprecision(12) << obs.time.tow
++                      << std::setprecision(6) << " dt=" << ins_pre_dt
++                      << " dyn=" << dyn_disp.norm() << " ins=" << clas_ins_disp_ecef_.norm()
++                      << " diff=" << (dyn_disp - clas_ins_disp_ecef_).norm() << "\n";
++        }
++        filter_state_.state.segment<3>(filter_state_.pos_index) = ins_pre_pos + clas_ins_disp_ecef_;
++        if (filter_state_.vel_index >= 0 &&
++            filter_state_.vel_index + 3 <= filter_state_.state.size()) {
++            filter_state_.state.segment<3>(filter_state_.vel_index) = clas_ins_vel_ecef_;
++        }
++    }
++    {
++        static const double ins_seed_var =
++            std::getenv("GNSS_DIAG_CLAS_IMU_SEED_VAR_M2")
++                ? std::atof(std::getenv("GNSS_DIAG_CLAS_IMU_SEED_VAR_M2"))
++                : 0.0;
++        static const bool ins_seed_cov = std::getenv("GNSS_DIAG_CLAS_IMU_SEED_COV") != nullptr;
++        static const double ins_seed_cov_scale =
++            std::getenv("GNSS_DIAG_CLAS_IMU_SEED_COV_SCALE")
++                ? std::atof(std::getenv("GNSS_DIAG_CLAS_IMU_SEED_COV_SCALE"))
++                : 1.0;
++        if ((ins_seed_var > 0.0 || ins_seed_cov) && epoch_preparation.ready &&
++            epoch_preparation.initialized_this_epoch && clas_ins_seed_valid_ &&
++            filter_state_.pos_index >= 0) {
++            const Eigen::Matrix3d seed_cov = ins_seed_cov
++                ? Eigen::Matrix3d(ins_seed_cov_scale * clas_ins_seed_cov_)
++                : Eigen::Matrix3d(Eigen::Matrix3d::Identity() * ins_seed_var);
++            if (seed_cov.allFinite() && seed_cov.trace() > 0.0) {
++                const int n = static_cast<int>(filter_state_.covariance.rows());
++                filter_state_.covariance.block(filter_state_.pos_index, 0, 3, n).setZero();
++                filter_state_.covariance.block(0, filter_state_.pos_index, n, 3).setZero();
++                filter_state_.covariance.block(filter_state_.pos_index, filter_state_.pos_index, 3, 3) =
++                    seed_cov;
++            }
++        }
++    }
+     if (!epoch_preparation.ready) {
+         if (allow_hybrid_fallback) {
+             return fallback_to_standard("prepare_epoch_state");
+@@ -1777,3 +1880,248 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
+ }
+ 
+ }  // namespace libgnss
++
++// ---------------------------------------------------------------------------
++// GNSS_DIAG_CLAS_IMU experiment (not production code).
++#include <libgnss++/fusion/fusion_processor.hpp>
++#include <libgnss++/io/imu.hpp>
++#include <libgnss++/core/coordinates.hpp>
++#include <cstdlib>
++#include <sstream>
++
++namespace libgnss {
++
++struct PPPProcessor::ClasInsDiag {
++    std::unique_ptr<LooseCouplingProcessor> fusion;
++    ImuSeries imu;
++    size_t cursor = 0;
++    double max_age_s = 30.0;
++    bool has_fix = false;
++    GNSSTime last_fix_time;
++    bool prev_valid = false;
++    GNSSTime prev_time;
++    Eigen::Vector3d prev_pos = Eigen::Vector3d::Zero();
++    bool prev_vel_valid = false;
++    Eigen::Vector3d prev_vel_enu = Eigen::Vector3d::Zero();
++    bool disabled = false;
++    bool post_valid = false;
++    GNSSTime post_time;
++    Eigen::Vector3d post_pos = Eigen::Vector3d::Zero();
++    bool has_update = false;
++    GNSSTime last_update_time;
++    int fix_run = 0;
++    bool fix_run_valid = false;
++    GNSSTime fix_run_last;
++};
++
++namespace {
++Eigen::Matrix3d clasInsEnuRotation(const Eigen::Vector3d& ecef) {
++    const double lon = std::atan2(ecef.y(), ecef.x());
++    const double p = std::hypot(ecef.x(), ecef.y());
++    const double lat = std::atan2(ecef.z(), p * (1.0 - 6.69437999014e-3));
++    Eigen::Matrix3d r;
++    r << -std::sin(lon), std::cos(lon), 0.0,
++         -std::sin(lat) * std::cos(lon), -std::sin(lat) * std::sin(lon), std::cos(lat),
++          std::cos(lat) * std::cos(lon), std::cos(lat) * std::sin(lon), std::sin(lat);
++    return r;  // ECEF -> ENU
++}
++}  // namespace
++
++void PPPProcessor::clasInsBeforeEpoch(const GNSSTime& time) {
++    clas_ins_seed_valid_ = false;
++    static const char* imu_path = std::getenv("GNSS_DIAG_CLAS_IMU");
++    if (imu_path == nullptr) return;
++    if (!clas_ins_diag_) {
++        auto diag = std::make_shared<ClasInsDiag>();
++        const auto load = loadImuCsv(imu_path, diag->imu);
++        if (!load.ok) {
++            std::cerr << "[CLAS-INS] failed to load IMU: " << load.error << "\n";
++            diag->disabled = true;
++        }
++        LooseCouplingProcessor::Config cfg;
++        cfg.process_noise.accel_noise_density = 2.84e-4;
++        cfg.process_noise.gyro_noise_density = 4.01e-5;
++        cfg.process_noise.accel_bias_random_walk = 3.14e-4;
++        cfg.process_noise.gyro_bias_random_walk = 9.70e-6;
++        cfg.max_position_update_nis_per_observation = 500.0;
++        cfg.max_velocity_update_nis_per_observation = 500.0;
++        cfg.max_consecutive_gate_rejections = 1;
++        cfg.max_consecutive_velocity_gate_rejections = 3;
++        cfg.max_gnss_velocity_reanchor_mps = 20.0;
++        if (const char* v = std::getenv("GNSS_DIAG_CLAS_IMU_ALIGN_SPEED")) {
++            cfg.align_velocity_threshold_mps = std::atof(v);
++        }
++        cfg.heading_latch_direction_test = std::getenv("GNSS_DIAG_CLAS_IMU_DIRTEST") != nullptr;
++        cfg.consider_attitude_and_biases_before_heading_latch =
++            std::getenv("GNSS_DIAG_CLAS_IMU_CONSIDER") != nullptr;
++        if (const char* lever = std::getenv("GNSS_DIAG_CLAS_IMU_LEVER")) {
++            std::string text(lever);
++            for (char& c : text) if (c == ',') c = ' ';
++            std::istringstream in(text);
++            double x = 0, y = 0, z = 0;
++            in >> x >> y >> z;
++            cfg.lever_arm_body = Eigen::Vector3d(x, y, z);
++        }
++        if (const char* age = std::getenv("GNSS_DIAG_CLAS_IMU_MAX_AGE_S")) {
++            diag->max_age_s = std::atof(age);
++        }
++        diag->fusion = std::make_unique<LooseCouplingProcessor>(cfg);
++        clas_ins_diag_ = diag;
++    }
++    auto& d = *clas_ins_diag_;
++    if (d.disabled) return;
++    while (d.cursor < d.imu.samples.size() && d.imu.samples[d.cursor].time <= time) {
++        d.fusion->processImuSample(d.imu.samples[d.cursor]);
++        ++d.cursor;
++    }
++    {
++        static std::ofstream dump;
++        static bool dump_open = false;
++        if (!dump_open) {
++            dump_open = true;
++            if (const char* path = std::getenv("GNSS_DIAG_CLAS_IMU_DUMP")) {
++                dump.open(path);
++                dump << "tow,init,aligned,x,y,z,vx,vy,vz,qw,qx,qy,qz,last_fix_age,converged\n";
++            }
++        }
++        if (dump.is_open() && d.fusion->isInitialized() && d.fusion->isOriginSet()) {
++            const PositionSolution p = d.fusion->toAntennaPositionSolution();
++            const auto& q = d.fusion->state().nominal.attitude_body_to_enu;
++            dump << std::setprecision(12) << time.tow << ',' << 1 << ',' << d.fusion->isHeadingAligned()
++                 << ',' << p.position_ecef.x() << ',' << p.position_ecef.y() << ',' << p.position_ecef.z()
++                 << ',' << p.velocity_ecef.x() << ',' << p.velocity_ecef.y() << ',' << p.velocity_ecef.z()
++                 << ',' << q.w() << ',' << q.x() << ',' << q.y() << ',' << q.z() << ','
++                 << (d.has_fix ? (time - d.last_fix_time) : -1.0) << ','
++                 << d.fusion->isHeadingConverged() << "\n";
++        }
++    }
++    clas_ins_disp_valid_ = false;
++    if (d.post_valid && d.has_update && (time - d.last_update_time) <= 2.0 &&
++        d.fusion->isInitialized() && d.fusion->isOriginSet() &&
++        (std::getenv("GNSS_DIAG_CLAS_IMU_REQUIRE_CONVERGED") ? d.fusion->isHeadingConverged()
++                                                             : d.fusion->isHeadingAligned())) {
++        const PositionSolution pred = d.fusion->toAntennaPositionSolution();
++        if (pred.position_ecef.allFinite() && pred.velocity_ecef.allFinite()) {
++            clas_ins_disp_ecef_ = pred.position_ecef - d.post_pos;
++            clas_ins_vel_ecef_ = pred.velocity_ecef;
++            clas_ins_disp_dt_ = time - d.post_time;
++            clas_ins_disp_valid_ = clas_ins_disp_dt_ > 0.0 && clas_ins_disp_dt_ <= 0.25;
++        }
++    }
++    static const bool no_seed = std::getenv("GNSS_DIAG_CLAS_IMU_NO_SEED") != nullptr;
++    if (!no_seed && d.has_fix && (time - d.last_fix_time) <= d.max_age_s &&
++        d.fusion->isInitialized() && d.fusion->isOriginSet()) {
++        Eigen::Vector3d pos;
++        Eigen::Matrix3d cov;
++        if (d.fusion->predictedAntennaPositionEcef(pos, cov) && pos.allFinite()) {
++            clas_ins_seed_valid_ = true;
++            clas_ins_seed_ecef_ = pos;
++            clas_ins_seed_cov_ = cov;
++        }
++    }
++}
++
++void PPPProcessor::clasInsAfterEpoch(const PositionSolution& solution) {
++    {
++        static std::ofstream vdump;
++        static bool vdump_open = false;
++        if (!vdump_open) {
++            vdump_open = true;
++            if (const char* path = std::getenv("GNSS_DIAG_CLAS_DOPPLER_DUMP")) {
++                vdump.open(path);
++                vdump << "tow,valid,vx,vy,vz,sx,sy,sz\n";
++            }
++        }
++        if (vdump.is_open()) {
++            vdump << std::setprecision(12) << solution.time.tow << ',' << clas_ins_doppler_valid_ << ','
++                  << clas_ins_doppler_vel_ecef_.x() << ',' << clas_ins_doppler_vel_ecef_.y() << ','
++                  << clas_ins_doppler_vel_ecef_.z() << ',' << std::sqrt(clas_ins_doppler_vel_cov_(0, 0)) << ','
++                  << std::sqrt(clas_ins_doppler_vel_cov_(1, 1)) << ',' << std::sqrt(clas_ins_doppler_vel_cov_(2, 2)) << "\n";
++        }
++    }
++    if (!clas_ins_diag_ || clas_ins_diag_->disabled) return;
++    auto& d = *clas_ins_diag_;
++    const bool ppp = solution.status == SolutionStatus::PPP_FIXED ||
++                     solution.status == SolutionStatus::PPP_FLOAT;
++    const bool fixed_raw = solution.status == SolutionStatus::PPP_FIXED;
++    if (fixed_raw && d.fix_run_valid && (solution.time - d.fix_run_last) <= 0.25) {
++        ++d.fix_run;
++    } else {
++        d.fix_run = fixed_raw ? 1 : 0;
++    }
++    d.fix_run_valid = fixed_raw;
++    d.fix_run_last = solution.time;
++    static const int min_fix_run = std::getenv("GNSS_DIAG_CLAS_IMU_MIN_FIX_RUN")
++        ? std::atoi(std::getenv("GNSS_DIAG_CLAS_IMU_MIN_FIX_RUN")) : 1;
++    // Anchor the INS only on fixes that have held for min_fix_run epochs.
++    const bool fixed = fixed_raw && d.fix_run >= min_fix_run;
++    bool vel_valid = false;
++    Eigen::Vector3d vel_enu = Eigen::Vector3d::Zero();
++    const Eigen::Matrix3d r = clasInsEnuRotation(solution.position_ecef);
++    if (ppp && d.prev_valid) {
++        const double dt = solution.time - d.prev_time;
++        if (dt > 0.0 && dt <= 0.25) {
++            vel_enu = r * (solution.position_ecef - d.prev_pos) / dt;
++            // A reset or a fix change makes consecutive rates disagree.
++            vel_valid = d.prev_vel_valid && (vel_enu - d.prev_vel_enu).norm() < 1.0;
++            d.prev_vel_enu = vel_enu;
++            d.prev_vel_valid = true;
++        } else {
++            d.prev_vel_valid = false;
++        }
++    } else {
++        d.prev_vel_valid = false;
++    }
++    d.prev_valid = ppp;
++    d.prev_time = solution.time;
++    d.prev_pos = solution.position_ecef;
++    auto record_post = [&]() {
++        if (d.fusion->isInitialized() && d.fusion->isOriginSet()) {
++            d.post_pos = d.fusion->toAntennaPositionSolution().position_ecef;
++            d.post_time = solution.time;
++            d.post_valid = d.post_pos.allFinite();
++        }
++    };
++    static const bool doppler_vel = std::getenv("GNSS_DIAG_CLAS_IMU_DOPPLER") != nullptr;
++    if (doppler_vel) {
++        // Doppler velocity from the SPP seed is independent of the CLAS filter.
++        vel_valid = clas_ins_doppler_valid_;
++        if (vel_valid) vel_enu = r * clas_ins_doppler_vel_ecef_;
++    }
++    if (!(fixed || vel_valid) || (!doppler_vel && !ppp)) {
++        record_post();
++        return;
++    }
++
++    PositionSolution g;
++    g.time = solution.time;
++    g.position_ecef = solution.position_ecef;
++    g.status = fixed ? SolutionStatus::FIXED : SolutionStatus::FLOAT;
++    g.num_satellites = solution.num_satellites;
++    g.ratio = solution.ratio;
++    const Eigen::Vector3d pos_var_enu = fixed ? Eigen::Vector3d(0.01, 0.01, 0.04)
++                                              : Eigen::Vector3d(1e6, 1e6, 1e6);
++    g.position_covariance = r.transpose() * pos_var_enu.asDiagonal() * r;
++    if (vel_valid) {
++        g.has_velocity = true;
++        g.velocity_ecef = r.transpose() * vel_enu;
++        g.velocity_covariance =
++            r.transpose() * Eigen::Vector3d(0.01, 0.01, 0.04).asDiagonal() * r;
++        if (doppler_vel) {
++            static const double vel_floor = std::getenv("GNSS_DIAG_CLAS_IMU_DOPPLER_SIGMA")
++                ? std::atof(std::getenv("GNSS_DIAG_CLAS_IMU_DOPPLER_SIGMA")) : 0.1;
++            g.velocity_covariance = clas_ins_doppler_vel_cov_ +
++                Eigen::Matrix3d::Identity() * vel_floor * vel_floor;
++        }
++    }
++    d.fusion->processGnssSolution(g);
++    d.has_update = true;
++    d.last_update_time = solution.time;
++    record_post();
++    if (fixed) {
++        d.has_fix = true;
++        d.last_fix_time = solution.time;
++    }
++}
++
++}  // namespace libgnss

@@ -239,6 +239,10 @@ While looking for the stricter first fix (six runs, Galileo rows on):
 - **The pre-FDE reset seed without Galileo.** nagoya/run2 loses 320 FIX. The
   seed change is therefore tied to the Galileo flag.
 
+The PPC IMU did not help either: as the reset position, as the time update,
+or as a check of the first fix. See
+[CLAS with the PPC IMU](ppc_clas_imu_experiments.md).
+
 ## Reproduce
 
 ```sh
