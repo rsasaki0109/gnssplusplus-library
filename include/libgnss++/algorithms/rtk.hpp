@@ -163,6 +163,13 @@ public:
         // position. Off keeps the legacy overwrite, which writes the integer
         // into the satellite ambiguity and zeroes its correlations.
         bool hold_ambiguity_kalman_update = false;
+        // Opt-in, with hold_ambiguity_kalman_update: apply that update only
+        // after a validated ambiguity-resolution FIX, as RTKLIB does, and not
+        // after the hold-fix fallback (tryHoldFix), whose integers are not
+        // re-validated. A wrong fallback hold otherwise pulls the float into
+        // its basin, where later AR fixes confirm it
+        // (docs/ppc_rtk_vs_gnss_imu_fusion.md). Off applies it after both.
+        bool hold_ambiguity_kalman_update_validated_only = false;
         // Opt-in: compare a kinematic AR candidate against the last FIX
         // propagated by the latest Doppler velocity (both at most 2 s old)
         // in the consecutive-FIX history check. Off keeps the stationary

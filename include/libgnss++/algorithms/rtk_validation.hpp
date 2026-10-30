@@ -133,6 +133,11 @@ bool canAttemptHoldFix(int consecutive_fix_count,
                        bool has_last_fixed_position,
                        bool has_held_dd_integers);
 
+/// Whether a FIX from the hold-fix fallback re-applies the held integers. Only
+/// the Kalman hold restricted to validated AR fixes skips it.
+bool holdAppliesAfterHoldFix(bool hold_ambiguity_kalman_update,
+                             bool kalman_update_validated_only);
+
 NonFixedDriftGuardResult filterNonFixedStationaryDrift(
     const std::vector<PositionSolution>& solutions,
     const NonFixedDriftGuardConfig& config = NonFixedDriftGuardConfig{});

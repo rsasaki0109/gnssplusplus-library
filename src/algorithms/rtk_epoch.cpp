@@ -819,7 +819,10 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                         consecutive_float_count_ = 0;
                         recordFixedEpoch(solution);
                         debug_telemetry_.final_fixed_applied = true;
-                        if (holdEligibleFixCount() >= rtk_config_.min_hold_count) {
+                        if (holdEligibleFixCount() >= rtk_config_.min_hold_count &&
+                            rtk_validation::holdAppliesAfterHoldFix(
+                                rtk_config_.hold_ambiguity_kalman_update,
+                                rtk_config_.hold_ambiguity_kalman_update_validated_only)) {
                             applyHoldAmbiguity();
                         }
                         applied_fix_solution = true;

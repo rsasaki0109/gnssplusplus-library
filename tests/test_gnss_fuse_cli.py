@@ -160,10 +160,26 @@ class GnssFuseCliTest(unittest.TestCase):
             "--imu", "missing-imu.csv",
             "--gnss-pos", "missing-solution.pos",
             "--hold-kalman-update",
+            "--hold-kalman-update-validated-only",
             "--min-fix-satellites", "4",
         )
         self.assertEqual(result.returncode, 1)
         self.assertIn("failed to load IMU CSV", result.stderr)
+
+    def test_validated_only_kalman_hold_requires_the_kalman_hold(self) -> None:
+        result = self.run_fuse("--help-advanced")
+        self.assertIn("--hold-kalman-update-validated-only", result.stdout)
+
+        result = self.run_fuse(
+            "--imu", "missing-imu.csv",
+            "--gnss-pos", "missing-solution.pos",
+            "--hold-kalman-update-validated-only",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(
+            "--hold-kalman-update-validated-only requires --hold-kalman-update",
+            result.stderr,
+        )
 
 
 if __name__ == "__main__":

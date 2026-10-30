@@ -220,7 +220,8 @@ What the table shows:
   FIX.**
   - Four runs drop to 2% or less: tokyo/run2 1.96%, tokyo/run3 0.52%,
     nagoya/run1 0.39% and nagoya/run3 0.72%.
-  - tokyo/run1 keeps about 7%.
+  - tokyo/run1 keeps about 7% (see
+    [the validated-only KF hold](#kf-hold-only-after-validated-fixes)).
   - Correct FIX falls most on nagoya/run1 (−7.7 pp) and tokyo/run1 (−4.8 pp).
 - **The KF hold alone is not usable.** It removes the nagoya/run3 wrong hold,
   but creates a 194 s wrong hold on nagoya/run2 (wrong FIX 4.69% → 24.75%).
@@ -243,6 +244,59 @@ To reproduce a column, pass its flags to the spread script after `--`:
 python3 scripts/analysis/ppc_fuse_spread.py \
   --dataset-root data/PPC-Dataset --out-dir output/ppc_fuse_spread/both \
   -- --hold-kalman-update --min-fix-satellites 4
+```
+
+### KF hold only after validated fixes
+
+With both guards, 70% of the tokyo/run1 wrong FIX lie in one window, TOW
+188699–188827. There six of the nine runs hold a fix whose horizontal error is
+0.22 m and whose height is 0.99 m off. Without the KF hold, eight of the nine
+runs fix correctly in that window.
+
+- At TOW 188699.4 the satellites drop from 13 to 10. Both traced runs, with
+  and without the KF hold, briefly fix about 0.9 m low.
+- Without the KF hold, an AR fix with 12 ambiguities is correct again 1.2 s
+  later.
+- With it, hold-fix fallback fixes (5 to 14 ambiguities, ratio at the
+  threshold) apply the wrong integers as measurements, the float follows them,
+  and later AR fixes with 8 ambiguities at ratio 4 confirm the wrong height.
+- This is the same mechanism as the nagoya/run2 hold above, with too many
+  satellites for k = 4 to stop it.
+
+`--hold-kalman-update-validated-only` (with `--hold-kalman-update`) applies the
+KF hold only after a validated ambiguity-resolution FIX, as RTKLIB holdamb
+does, and not after the hold-fix fallback. Same runs:
+
+| Run | KF hold, validated only | Both, KF hold validated only |
+| --- | --- | --- |
+| tokyo/run1 | 76.14 ± 2.13 / 8.03 ± 1.90 | 72.19 ± 1.80 / 1.62 ± 0.80 |
+| tokyo/run2 | 81.18 ± 2.13 / 3.90 ± 2.39 | 81.58 ± 0.80 / 1.63 ± 0.61 |
+| tokyo/run3 | 80.78 ± 1.31 / 3.81 ± 0.89 | 78.48 ± 0.90 / 0.70 ± 0.27 |
+| nagoya/run1 | 69.11 ± 0.01 / 6.23 ± 0.01 | 67.64 ± 0.01 / 2.52 ± 0.01 |
+| nagoya/run2 | 52.85 ± 0.01 / 8.35 ± 0.01 | 52.52 ± 0.59 / 4.81 ± 0.09 |
+| nagoya/run3 | 63.36 ± 0.05 / 3.77 ± 0.08 | 50.65 ± 0.00 / 0.72 ± 0.00 |
+| **Mean** | **70.57 ± 0.18 / 5.68 ± 0.18** | **67.18 ± 0.13 / 2.00 ± 0.06** |
+| FIX > 3 m per run | 71 | 27 |
+
+- **With k = 4 the wrong-FIX rate falls from 7.08% to 2.00%, for 0.91 pp of
+  correct FIX.**
+  - The wrong-FIX rate falls on five runs. On nagoya/run2 it rises slightly,
+    from 4.69% to 4.81%.
+  - tokyo/run1 drops from 7.39% to 1.62% with the same correct FIX.
+  - nagoya/run1 loses 7.4 pp of correct FIX, the main cost.
+- **Without k = 4 the six-run means improve on both counts** (70.57% / 5.68%
+  against 68.09% / 7.08%). However, the nagoya/run1 correct FIX falls by
+  5.9 pp, and the nagoya/run2 wrong-FIX rate rises from 4.69% to 8.35%.
+- **Selection.**
+  - The restriction follows RTKLIB and has no threshold.
+  - It was written after seeing the tokyo/run1 failure, and the same six runs
+    measure it, so it is in-sample like the KF hold.
+  - The default is unchanged.
+
+```sh
+python3 scripts/analysis/ppc_fuse_spread.py \
+  --dataset-root data/PPC-Dataset --out-dir output/ppc_fuse_spread/validated \
+  -- --hold-kalman-update --hold-kalman-update-validated-only --min-fix-satellites 4
 ```
 
 ## In-KF component: heavy-tail front-end
