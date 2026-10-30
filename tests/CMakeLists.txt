@@ -13,6 +13,10 @@ add_test(NAME python_phase_audit_tests
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_phase_audit.py)
 set_tests_properties(python_phase_audit_tests PROPERTIES LABELS core)
 
+add_test(NAME python_ppc_fuse_spread_tests
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppc_fuse_spread.py)
+set_tests_properties(python_ppc_fuse_spread_tests PROPERTIES LABELS core)
+
 add_test(NAME python_road_height_maps_tests
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_road_height_maps.py)
 set_tests_properties(python_road_height_maps_tests PROPERTIES LABELS core)
