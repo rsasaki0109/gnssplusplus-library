@@ -82,7 +82,8 @@ int main(int argc, char** argv) {
         OnlineRtkImuProcessor::Config config;
         config.base_position_ecef = base_header.approximate_position;
         const bool nagoya = data.generic_string().find("nagoya") != std::string::npos;
-        config.fusion.lever_arm_body = nagoya ? Vector3d(.593, -.670, -1.216) : Vector3d(.31, 0., .55);
+        // PPC lists the lever arms in FRD; body FLU flips the y and z signs.
+        config.fusion.lever_arm_body = nagoya ? Vector3d(.593, .670, 1.216) : Vector3d(.31, 0., .55);
         std::array<std::unique_ptr<OnlineRtkImuProcessor>, 5> processors;
         std::array<std::ofstream, 5> files;
         const std::array<std::string, 5> names{"normal", "missing_base", "late_base", "imu_gap", "delayed_rover"};
