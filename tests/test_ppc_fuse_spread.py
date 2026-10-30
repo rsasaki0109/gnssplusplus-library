@@ -48,6 +48,9 @@ class PpcFuseSpreadTest(unittest.TestCase):
         self.assertAlmostEqual(result["wrong_pct"], 200.0 / 3.0)
         self.assertAlmostEqual(result["fix_pct"], 75.0)
         self.assertEqual(result["fix_above_3m"], 1.0)
+        strict = spread.score(matched, correct_3d_m=0.1)
+        self.assertAlmostEqual(strict["correct_pct"], 0.0)
+        self.assertAlmostEqual(strict["wrong_pct"], 100.0)
         with self.assertRaises(ValueError):
             spread.score([])
 
@@ -74,6 +77,9 @@ class PpcFuseSpreadTest(unittest.TestCase):
         args = spread.parse_args(["--out-dir", "out", "--without-navi776-tc", "--",
                                   "--tc-closed-loop", "--tc-velocity-states"])
         self.assertEqual(args.extra, ["--tc-closed-loop", "--tc-velocity-states"])
+        self.assertEqual(spread.parse_args(["--out-dir", "out"]).correct_3d_m, 0.5)
+        with self.assertRaises(SystemExit):
+            spread.parse_args(["--out-dir", "out", "--correct-3d-m", "0"])
 
 
 if __name__ == "__main__":

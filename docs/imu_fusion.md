@@ -80,7 +80,8 @@ default:
   than k non-reference satellites.
 
 With `--navi776-tc` on the six PPC runs, all three together cut the wrong-FIX
-rate from 7.08% to 2.00% of FIX, at a cost of 0.91 pp of correct FIX
+rate from 7.08% to 2.00% of FIX. FIX within 0.5 m fall by 0.91 pp of epochs,
+but FIX within 0.25 m rise from 62.93% to 65.90%
 ([measurement](ppc_rtk_vs_gnss_imu_fusion.md#kf-hold-only-after-validated-fixes)).
 
 ## Position frame contract
