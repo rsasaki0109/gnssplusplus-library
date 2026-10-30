@@ -115,12 +115,16 @@ The immutable evidence directories are
 
 These records predate the lever-arm frame fix and used `0.31,0,-0.55`. The fix
 came from the [PPC lever-arm convention](../ppc_rtk_vs_gnss_imu_fusion.md#ppc-lever-arm-convention)
-audit, not from the holdouts, and the holdouts were not rerun with it.
+audit, not from the holdouts. At the project owner's request the holdouts were
+rerun once with it ([FLU lever-arm re-run](urban_rtk_fgo.md#flu-lever-arm-re-run)):
+run2 passes, and run3 still fails only fused availability, because the fused
+stream starts 2 s after the RTK stream. The hold stands.
 
 Run3 is a frozen holdout result. Do **not** rerun it, retune against it, or
 reclassify it as development data. Do not use either holdout to alter the
 frozen R1 recipe. A new candidate requires new, explicitly authorized
-development data and a new release review.
+development data and a new release review. The lever-arm re-run above is the
+one exception, approved by the project owner.
 
 ## Field sign-off
 

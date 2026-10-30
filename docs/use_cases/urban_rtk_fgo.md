@@ -272,9 +272,9 @@ The run1 candidate was frozen before evaluating the holdouts. The score gates
 are the coverage, bridge-error, reacquisition, fixed-P95-regression,
 fused-availability, and non-finite limits shown above. The following table is
 the immutable post-freeze record. It predates the FLU lever-arm fix: all three
-bundles used `0.31,0,-0.55`, and the holdouts were not rerun with the corrected
-value. Percentages are reported by the bundle scorer and are not rounded for
-the gate decision:
+bundles used `0.31,0,-0.55`. The re-run with the corrected value is in
+[FLU lever-arm re-run](#flu-lever-arm-re-run). Percentages are reported by the
+bundle scorer and are not rounded for the gate decision:
 
 | Bundle | Reference epochs | RTK fixed | Complete bridges | Fused availability vs RTK | Coverage | Max bridge H | Reacquisition | Fixed-P95 regression | Max propagation age | Score gate |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
@@ -286,8 +286,8 @@ All three bundles have `nonfinite=0`. The run2 and run3 artifacts are
 archived at `output/use_cases/urban_fusion_full/r1_holdout_run2/` and
 `output/use_cases/urban_fusion_full/r1_holdout_run3/`; run1 is archived at
 `output/use_cases/urban_fusion_full/r1_frozen_bundle/` and its exact repeat
-is byte-for-byte deterministic. Run3 was not rerun, retuned, or downgraded to
-development data. Its single fused-availability failure keeps the R1 profile
+is byte-for-byte deterministic. Run3 was not retuned or downgraded to
+development data; it was rerun once, for the lever-arm fix. Its single fused-availability failure keeps the R1 profile
 offered for field use **on hold**; do not change the frozen settings using
 these holdout observations. A future release decision must either accept the
 explicit hold or produce a separately approved candidate on newly authorized
@@ -298,6 +298,32 @@ run1 (87.2 s), run2 (96.6 s), and run3 (63.4 s) all exceed it. Thus, even the
 run2 score pass is not a field-usable result under the current checklist.
 See the [R1-09 field checklist](urban_rtk_imu_field_checklist.md) for the
 usable/degraded/unusable classification and the one-command hand-off.
+
+#### FLU lever-arm re-run
+
+At the project owner's request (2026-10-30), run2 and run3 were rerun once
+with the FLU lever arm and the frozen gates. This is a second use of the two
+holdouts, so a pass here is not a clean holdout result. The pre-fix value was
+rerun on the same tree as a control. All six bundles have `nonfinite=0`.
+
+| Run | Lever arm | Reference epochs | RTK fixed | Complete bridges | Fused availability vs RTK | Coverage | Max bridge H | Reacquisition | Fixed-P95 regression | Max propagation age | Score gate |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| run1 | `0.31,0,0.55` | 11,951 | 8,445 | 207 | 99.723872% vs 99.113045% | 99.229892% | 61.672084 m | 10.070695 m | 1.849954 m | 87.2 s | PASS |
+| run1 | `0.31,0,-0.55` | 11,951 | 8,445 | 207 | 99.723872% vs 99.113045% | 99.229892% | 62.534847 m | 10.156169 m | 1.941814 m | 87.2 s | PASS |
+| run2 | `0.31,0,0.55` | 9,151 | 7,195 | 129 | 99.890722% vs 99.595673% | 99.795501% | 15.449242 m | 0.744604 m | 0.229597 m | 96.6 s | PASS |
+| run2 | `0.31,0,-0.55` | 9,151 | 7,195 | 129 | 99.890722% vs 99.595673% | 99.795501% | 15.054549 m | 0.749080 m | 0.227142 m | 96.6 s | PASS |
+| run3 | `0.31,0,0.55` | 15,301 | 11,119 | 233 | 99.934645% vs 99.986929% | 99.904352% | 26.271852 m | 10.517787 m | 0.471901 m | 63.4 s | **FAIL** (availability only) |
+| run3 | `0.31,0,-0.55` | 15,301 | 11,119 | 233 | 99.934645% vs 99.986929% | 99.904352% | 26.201175 m | 16.740150 m | 0.484217 m | 63.4 s | **FAIL** (availability; reacquisition 16.74 m > 15 m) |
+
+- **Run3 still fails the same single gate.** The fused stream starts 2.0 s
+  (10 epochs) after the RTK stream, while the INS initializes. In run3 the RTK
+  stream misses only 2 epochs, so fused availability cannot reach RTK
+  availability. The lever arm does not change this.
+- **The profile stays on hold.** Emitting RTK epochs before the INS is
+  initialized, or excluding the start-up from the gate, would be a rule chosen
+  after seeing run3. It needs its own approval and new development data.
+- **On the current tree the pre-fix value also fails run3 on reacquisition**
+  (16.74 m), where the frozen record had 10.52 m.
 
 R1-05 also replayed the same saved RTK stream with the frozen lever arm (the
 pre-fix `0.31,0,-0.55`) and recovery settings while changing only the motion
