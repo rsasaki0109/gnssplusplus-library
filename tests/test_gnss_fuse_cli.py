@@ -141,6 +141,30 @@ class GnssFuseCliTest(unittest.TestCase):
                 result.stderr,
             )
 
+    def test_rtk_hold_and_fix_satellite_options_mirror_gnss_solve(self) -> None:
+        result = self.run_fuse("--help-advanced")
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("--hold-kalman-update", result.stdout)
+        self.assertIn("--min-fix-satellites <k>", result.stdout)
+
+        result = self.run_fuse(
+            "--imu", "missing-imu.csv",
+            "--gnss-pos", "missing-solution.pos",
+            "--min-fix-satellites", "-1",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("--min-fix-satellites must be >= 0", result.stderr)
+
+        result = self.run_fuse(
+            "--max-epochs", "0",
+            "--imu", "missing-imu.csv",
+            "--gnss-pos", "missing-solution.pos",
+            "--hold-kalman-update",
+            "--min-fix-satellites", "4",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("failed to load IMU CSV", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

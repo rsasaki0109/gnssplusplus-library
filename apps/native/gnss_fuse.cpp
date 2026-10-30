@@ -248,6 +248,10 @@ struct FuseOptions {
     double rtk_snr_reference_dbhz = 45.0;
     double rtk_snr_max_variance_scale = 25.0;
     int max_subset_ar_drop_steps = -1;  // < 0 leaves RTKConfig's own default (6)
+    // Mirror gnss_solve's --hold-kalman-update and --min-fix-satellites; no
+    // preset touches them. Off by default.
+    bool hold_kalman_update = false;
+    int min_fix_satellites = 0;
 
     // navi.776 A2: innovation-based adaptive measurement variance, mirroring
     // gnss_solve's --rtk-adaptive-noise family. Off by default.
@@ -834,6 +838,11 @@ void printAdvancedUsage(const char* program_name) {
         << "  --max-subset-ar-drop-steps <n>\n"
         << "                                Max worst-variance DD pairs dropped during subset AR\n"
         << "                                (mirrors `gnss solve`; default: RTKConfig's own, 6)\n"
+        << "  --hold-kalman-update         Apply held DD integers as a Kalman pseudo-observation\n"
+        << "                                instead of overwriting the ambiguities\n"
+        << "                                (mirrors `gnss solve`; default: off)\n"
+        << "  --min-fix-satellites <k>     Min non-reference satellites in an ambiguity-resolution\n"
+        << "                                FIX (mirrors `gnss solve`; default: 0 = off)\n"
         << "  --rtk-pos-out <path>          Also write the per-epoch RTK (pre-fusion) solution\n"
         << "                                stream to <path>, in the same format `gnss solve`\n"
         << "                                writes -- lets the PPC scoring pipeline evaluate the\n"
@@ -2030,6 +2039,13 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.rtk_snr_max_variance_scale = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--max-subset-ar-drop-steps") {
             options.max_subset_ar_drop_steps = std::stoi(requireValue(arg, i, argc, argv));
+        } else if (arg == "--hold-kalman-update") {
+            options.hold_kalman_update = true;
+        } else if (arg == "--min-fix-satellites") {
+            options.min_fix_satellites = std::stoi(requireValue(arg, i, argc, argv));
+            if (options.min_fix_satellites < 0) {
+                argumentError("--min-fix-satellites must be >= 0", argv[0]);
+            }
         } else if (arg == "--rtk-adaptive-noise") {
             options.rtk_adaptive_noise = true;
         } else if (arg == "--rtk-single-stabilizer") {
@@ -2509,6 +2525,8 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     if (options.max_subset_ar_drop_steps >= 0) {
         rtk_config.max_subset_drop_steps_for_ar = options.max_subset_ar_drop_steps;
     }
+    rtk_config.hold_ambiguity_kalman_update = options.hold_kalman_update;
+    rtk_config.min_fix_satellites = options.min_fix_satellites;
     rtk_config.cmc_aware_reference_selection = options.cmc_aware_reference_selection;
     rtk_config.cmc_ref_level_m = options.cmc_ref_level_m;
     rtk_config.cmc_ref_switch_epochs = options.cmc_ref_switch_epochs;

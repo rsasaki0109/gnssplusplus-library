@@ -68,6 +68,17 @@ requires finite target/covariance data and changes only position (including
 its covariance block); it never retries a rejected EKF update or overwrites
 velocity, attitude, or biases.
 
+The RTK half takes two wrong-fix guards from `gnss solve`, both off by default:
+
+- `--hold-kalman-update` applies the held integers as a Kalman
+  pseudo-observation instead of overwriting the ambiguities.
+- `--min-fix-satellites <k>` refuses an ambiguity-resolution FIX with fewer
+  than k non-reference satellites.
+
+With `--navi776-tc` on the six PPC runs, the two together cut the wrong-FIX
+rate from 7.08% to 2.58% of FIX, at a cost of 1.62 pp of correct FIX
+([measurement](ppc_rtk_vs_gnss_imu_fusion.md#wrong-fix-guards-under-navi776-tc)).
+
 ## Position frame contract
 
 The loose ESKF nominal `position_enu` and `velocity_enu` are always the IMU

@@ -178,6 +178,61 @@ max bridge error by 0.79 m
 commands on this page keep `0.31,0,-0.55` because they reproduce the recorded
 tables.
 
+## Wrong-fix guards under `--navi776-tc`
+
+`gnss solve` has wrong-fix guards that `gnss fuse` did not expose. Two of them
+are now passed through, both off by default:
+
+- `--hold-kalman-update` applies the held integers as a Kalman
+  pseudo-observation (RTKLIB holdamb) instead of overwriting the ambiguities
+  ([hold-ambiguity note](rtk_hold_ambiguity_update.md)).
+- `--min-fix-satellites <k>` refuses an ambiguity-resolution FIX with fewer
+  than k non-reference satellites. k = 4 was chosen and validated on other data
+  for `gnss solve` ([RTK fixes from few satellites](interfaces.md#rtk-fixes-from-few-satellites)).
+
+Six runs with the FLU lever arm and the replay benchmark's `--navi776-tc`
+command, nine runs each as in [Run-to-run spread](#run-to-run-spread). Each
+cell is correct FIX (% of epochs) / wrong FIX (% of FIX), mean ± SD. The mean
+row is the six-run mean ± its standard error. The last row is the mean count
+of FIX above 3 m horizontal per run.
+
+| Run | `--navi776-tc` | `--min-fix-satellites 4` | `--hold-kalman-update` | Both |
+| --- | --- | --- | --- | --- |
+| tokyo/run1 | 72.18 ± 2.52 / 7.39 ± 2.97 | 64.81 ± 7.79 / 4.14 ± 4.26 | 76.17 ± 1.73 / 7.77 ± 1.30 | 67.34 ± 2.32 / 7.01 ± 3.37 |
+| tokyo/run2 | 81.39 ± 1.24 / 2.89 ± 1.14 | 79.76 ± 0.65 / 1.76 ± 0.85 | 81.37 ± 2.58 / 4.06 ± 2.56 | 81.10 ± 0.74 / 1.96 ± 0.70 |
+| tokyo/run3 | 76.99 ± 1.60 / 5.11 ± 2.04 | 73.91 ± 1.49 / 1.54 ± 1.07 | 80.46 ± 1.68 / 3.80 ± 0.84 | 79.17 ± 1.41 / 0.52 ± 0.21 |
+| nagoya/run1 | 75.05 ± 0.00 / 4.50 ± 0.00 | 74.22 ± 0.00 / 1.40 ± 0.00 | 69.04 ± 0.01 / 4.33 ± 0.01 | 67.35 ± 0.01 / 0.39 ± 0.01 |
+| nagoya/run2 | 50.30 ± 0.00 / 4.69 ± 0.00 | 49.27 ± 0.00 / 4.31 ± 0.00 | 43.58 ± 0.00 / 24.75 ± 0.00 | 53.22 ± 0.00 / 4.87 ± 0.00 |
+| nagoya/run3 | 52.62 ± 1.08 / 17.91 ± 1.34 | 45.06 ± 0.17 / 11.36 ± 0.04 | 63.42 ± 0.05 / 3.77 ± 0.08 | 50.65 ± 0.00 / 0.72 ± 0.00 |
+| **Mean** | **68.09 ± 0.19 / 7.08 ± 0.22** | **64.50 ± 0.44 / 4.09 ± 0.25** | **69.01 ± 0.20 / 8.08 ± 0.17** | **66.47 ± 0.16 / 2.58 ± 0.19** |
+| FIX > 3 m per run | 54 | 11 | 74 | 29 |
+
+What the table shows:
+
+- **Both together cut the wrong-FIX rate by 4.5 pp for 1.6 pp of correct
+  FIX.**
+  - Four runs drop to 2% or less: tokyo/run2 1.96%, tokyo/run3 0.52%,
+    nagoya/run1 0.39% and nagoya/run3 0.72%.
+  - tokyo/run1 keeps about 7%.
+  - Correct FIX falls most on nagoya/run1 (−7.7 pp) and tokyo/run1 (−4.8 pp).
+- **The KF hold alone is not usable.** It removes the nagoya/run3 wrong hold,
+  but creates a 194 s wrong hold on nagoya/run2 (wrong FIX 4.69% → 24.75%).
+  With the held integers applied as measurements, the float follows the wrong
+  hold, and subset fixes with only four ambiguities then pass at ratios of 800
+  to 3,000.
+- **k = 4 removes those thin fixes.** Alone it also cuts the wrong-FIX rate,
+  but loses 3.6 pp of correct FIX.
+- **The KF hold was selected on these runs.**
+  - It was picked from eight existing guards, screened on one nagoya/run3 run:
+    hold-fix NIS 10, NIS 10 with phase fit 0.5, a 1 m hold divergence limit,
+    an unchanged hold set, 8 hold pairs, 5 fix satellites, the KF hold and the
+    satellite-count ratio.
+  - The same six runs then measured it, so the result is in-sample.
+  - k = 4 was not chosen here. The default is unchanged.
+
+To reproduce, append `--hold-kalman-update --min-fix-satellites 4` to the
+replay command.
+
 ## In-KF component: heavy-tail front-end
 
 `--integrity-student-t-*` (IRLS Student-t / Huber / Laplacian) weights the RTK
