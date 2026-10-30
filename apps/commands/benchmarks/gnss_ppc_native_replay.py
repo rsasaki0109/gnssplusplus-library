@@ -21,7 +21,9 @@ ROOT = application_root(__file__)
 RUNS = tuple(f"{city}/run{number}" for city in ("tokyo", "nagoya") for number in (1, 2, 3))
 COMMON = ["--preset", "low-cost", "--ratio", "2.4", "--max-subset-ar-drop-steps", "18",
           "--rtk-snr-weighting", "--no-arfilter"]
-LEVER_ARMS = {"tokyo": "0.31,0,0.55", "nagoya": "0.593,-0.670,-1.216"}
+# IMU-to-antenna lever arms in body FLU. The PPC README lists them in FRD
+# (Tokyo 0.31,0,-0.55; Nagoya 0.593,-0.670,-1.216), so y and z change sign.
+LEVER_ARMS = {"tokyo": "0.31,0,0.55", "nagoya": "0.593,0.670,1.216"}
 
 
 def sha256(path: Path) -> str:

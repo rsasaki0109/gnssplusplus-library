@@ -101,7 +101,10 @@ location before comparison. Euler angles use FRD to NED, aerospace 3-2-1;
 heading increases clockwise from north. GPST matches are exact after rounding
 to microseconds. There is no interpolation, fitted time offset, mounting angle
 or global heading adjustment. The identity IMU xyz-to-FLU convention and PPC
-lever arms (Tokyo: 0.31,0,0.55 m; Nagoya: 0.593,-0.670,-1.216 m) are fixed.
+lever arms are fixed: body FLU Tokyo 0.31,0,0.55 m and Nagoya 0.593,0.670,1.216 m.
+The PPC README lists them in FRD (Nagoya 0.593,-0.670,-1.216). Results recorded on
+this page before 2026-10-30 used that FRD Nagoya vector as FLU; see
+[the lever-arm check](ppc_rtk_vs_gnss_imu_fusion.md#ppc-lever-arm-convention).
 
 Errors include per-axis and norm RMSE, P50, P95 and maximum; circular Euler
 errors and full SO(3) rotation error; output fractions/rates; exact time-match

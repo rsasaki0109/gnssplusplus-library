@@ -76,6 +76,67 @@ The stack raises correct-FIX on all three runs (+8.7 pp macro) and lowers
 wrong-FIX and P95, but is not uniformly better per run (tokyo3 official and
 tokyo2 wrong-FIX/P95 regress slightly).
 
+## PPC lever-arm convention
+
+The PPC README gives the IMU axes and the antenna lever arm in FRD (x forward,
+y right, z down): Tokyo `0.31, 0.0, -0.55` m and Nagoya `0.593, -0.670,
+-1.216` m. `--lever-arm` takes body FLU, so y and z change sign:
+
+| City | FLU lever arm |
+| --- | --- |
+| Tokyo | `0.31,0,0.55` |
+| Nagoya | `0.593,0.670,1.216` |
+
+The `imu.csv` samples themselves are already FLU (stationary Acc Z ≈ +9.81).
+Before 2026-10-30 two inputs disagreed with this:
+
+- **Nagoya.** `gnss ppc-native-replay` and the online PVA tools passed the
+  Nagoya FRD vector as FLU, putting the antenna 1.34 m to the wrong side and
+  2.4 m too low.
+- **Tokyo.** The commands on this page pass `0.31,0,-0.55` (antenna below the
+  IMU). The replay benchmark already used `0.31,0,0.55`.
+
+Six runs with the replay benchmark's command (`--preset low-cost --ratio 2.4
+--max-subset-ar-drop-steps 18 --rtk-snr-weighting --no-arfilter`, plus
+`--navi776-tc` for the coupled arms) were scored on the coupled RTK stream.
+FIX is status 4, and a correct FIX is within 0.5 m 3D. The table gives correct
+FIX as a share of epochs, followed by wrong FIX as a share of FIX:
+
+| Run | RTK only | Previous lever arm | FLU lever arm |
+| --- | --- | --- | --- |
+| tokyo/run1 | 68.89% / 10.18% | 71.61% / 8.17% | 72.75% / 4.75% |
+| tokyo/run2 | 77.66% / 2.14% | 80.27% / 2.38% | 80.96% / 1.85% |
+| tokyo/run3 | 71.99% / 3.71% | 80.54% / 4.45% | 76.88% / 5.57% |
+| nagoya/run1 | 66.34% / 15.06% | 68.16% / 9.98% | 75.05% / 4.50% |
+| nagoya/run2 | 45.35% / 9.93% | 47.84% / 5.10% | 50.30% / 4.69% |
+| nagoya/run3 | 32.68% / 31.60% | 54.15% / 14.18% | 53.30% / 17.10% |
+| **Mean** | **60.49% / 12.10%** | **67.10% / 7.38%** | **68.21% / 6.41%** |
+
+For the replay benchmark only the Nagoya rows change, since its Tokyo lever arm
+was already FLU.
+
+The INS-to-GNSS consistency points the same way without the reference. The
+mean squared INS position correction (`imu_time_offset_score`) drops on all
+three Nagoya runs with the FLU vector:
+
+| Run | Previous | FLU |
+| --- | ---: | ---: |
+| nagoya/run1 | 1.149 m² | 0.902 m² |
+| nagoya/run2 | 3.121 m² | 3.071 m² |
+| nagoya/run3 | 3.461 m² | 3.343 m² |
+
+The Tokyo values swing with a few large corrections and do not separate the
+two signs.
+
+The numbers are in-sample, and two runs do better with the previous vector:
+
+- tokyo/run3: correct FIX −3.7 pp;
+- nagoya/run3: correct FIX −0.9 pp.
+
+The urban use-case guide, its example configuration and their tests still use
+the Tokyo FRD sign; they are left for a separate change because their recorded
+results were produced with it.
+
 ## In-KF component: heavy-tail front-end
 
 `--integrity-student-t-*` (IRLS Student-t / Huber / Laplacian) weights the RTK

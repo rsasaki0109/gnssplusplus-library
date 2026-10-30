@@ -75,9 +75,10 @@ int main(int argc, char** argv) {
         const bool v8_or_later = candidate == "velocity_consistency_v8" || v9_or_later;
         const bool v7_or_later = candidate == "velocity_consistency_v7" || v8_or_later;
         // urbannav: UrbanNav documents no antenna-IMU lever arm; zero is a declared
-        // assumption (docs/online_pva_default_switch_holdout_v1.md).
+        // assumption (docs/online_pva_default_switch_holdout_v1.md). PPC lists the
+        // lever arms in FRD; body FLU flips the y and z signs.
         config.fusion.lever_arm_body = city == "urbannav" ? Vector3d(0., 0., 0.)
-            : nagoya ? Vector3d(.593, -.670, -1.216) : Vector3d(.31, 0., .55);
+            : nagoya ? Vector3d(.593, .670, 1.216) : Vector3d(.31, 0., .55);
         config.tight_time_update = scenario != "loose_only";
         if (candidate == "velocity_consistency_v3" || candidate == "velocity_consistency_v4" ||
             candidate == "velocity_consistency_v5" || candidate == "velocity_consistency_v6" ||

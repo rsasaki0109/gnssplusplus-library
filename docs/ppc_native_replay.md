@@ -39,8 +39,12 @@ python3 apps/gnss.py ppc-native-replay --dataset-root /datasets/PPC-Dataset \
 A positive epoch cap is explicitly labelled `smoke`. The fresh baseline uses
 `low-cost`, ratio 2.4, 18 subset drops, SNR weighting and disabled AR filtering.
 The fusion route additionally enables `navi776-tc` and uses the documented
-city-specific antenna lever arms. The actual arrays passed to each executable
-are the authoritative recipe, stored in `manifest.json`.
+city-specific antenna lever arms in body FLU: Tokyo `0.31,0,0.55` and Nagoya
+`0.593,0.670,1.216`. The PPC README lists them in FRD; before 2026-10-30 the
+Nagoya FRD vector was passed unchanged (see
+[the lever-arm check](ppc_rtk_vs_gnss_imu_fusion.md#ppc-lever-arm-convention)).
+The actual arrays passed to each executable are the authoritative recipe,
+stored in `manifest.json`.
 
 The manifest also records native algorithm environment knobs found in the
 solver/algorithm sources, including null for unset values. This captures
