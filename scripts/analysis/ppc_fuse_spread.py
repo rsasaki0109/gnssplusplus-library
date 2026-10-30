@@ -61,12 +61,13 @@ def member_lever_arms(base: tuple[float, float, float]) -> list[str]:
             for offset in PERTURBATIONS]
 
 
-def score(matched: list[comparison.MatchedEpoch]) -> dict[str, float]:
+def score(matched: list[comparison.MatchedEpoch],
+          correct_3d_m: float = CORRECT_3D_M) -> dict[str, float]:
     """Correct FIX (% of epochs), wrong FIX (% of FIX), FIX rate and FIX above 3 m."""
     if not matched:
         raise ValueError("no epochs matched the reference")
     fixed = [epoch for epoch in matched if epoch.status == RTK_FIXED_STATUS]
-    correct = sum(math.sqrt(e.east_m**2 + e.north_m**2 + e.up_m**2) < CORRECT_3D_M for e in fixed)
+    correct = sum(math.sqrt(e.east_m**2 + e.north_m**2 + e.up_m**2) < correct_3d_m for e in fixed)
     return {
         "correct_pct": 100.0 * correct / len(matched),
         "wrong_pct": 100.0 * (len(fixed) - correct) / len(fixed) if fixed else 0.0,
@@ -75,10 +76,12 @@ def score(matched: list[comparison.MatchedEpoch]) -> dict[str, float]:
     }
 
 
-def score_file(pos: Path, reference_csv: Path) -> dict[str, float]:
+def score_file(pos: Path, reference_csv: Path,
+               correct_3d_m: float = CORRECT_3D_M) -> dict[str, float]:
     reference = comparison.read_reference_csv(reference_csv)
     solution = comparison.read_libgnss_pos(pos)
-    return score(comparison.match_to_reference(solution, reference, MATCH_TOLERANCE_S)[SKIP_EPOCHS:])
+    matched = comparison.match_to_reference(solution, reference, MATCH_TOLERANCE_S)[SKIP_EPOCHS:]
+    return score(matched, correct_3d_m)
 
 
 def summarize(per_run: dict[str, list[dict[str, float]]]) -> dict:
@@ -146,6 +149,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="perturb the pre-fix (FRD) lever arms instead, for comparison only")
     parser.add_argument("--without-navi776-tc", action="store_true",
                         help="omit --navi776-tc so that the arguments after -- set the coupling")
+    parser.add_argument("--correct-3d-m", type=float, default=CORRECT_3D_M,
+                        help="3D error below which a FIX counts as correct; wrong FIX are "
+                             "the others (default: 0.5)")
     parser.add_argument("--score-only", action="store_true",
                         help="score the RTK streams already in --out-dir")
     parser.add_argument("extra", nargs=argparse.REMAINDER,
@@ -157,6 +163,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         args.extra = PRESET + args.extra
     if args.jobs < 1:
         parser.error("--jobs must be >= 1")
+    if not args.correct_3d_m > 0.0:
+        parser.error("--correct-3d-m must be > 0")
     return args
 
 
@@ -179,8 +187,10 @@ def main(argv: list[str] | None = None) -> int:
                 job.result()
     per_run: dict[str, list[dict[str, float]]] = {run: [] for run in args.runs}
     for run, _, pos in plan:
-        per_run[run].append(score_file(pos, args.dataset_root / run / "reference.csv"))
+        per_run[run].append(score_file(pos, args.dataset_root / run / "reference.csv",
+                                       args.correct_3d_m))
     summary = summarize(per_run)
+    summary["correct_3d_m"] = args.correct_3d_m
     summary["command"] = {"common": COMMON, "arguments": args.extra,
                           "lever_arms": {run: member_lever_arms(bases[run.split("/")[0]])
                                          for run in args.runs}}

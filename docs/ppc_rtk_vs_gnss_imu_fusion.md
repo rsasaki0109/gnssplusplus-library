@@ -283,7 +283,8 @@ does, and not after the hold-fix fallback. Same runs:
   - The wrong-FIX rate falls on five runs. On nagoya/run2 it rises slightly,
     from 4.69% to 4.81%.
   - tokyo/run1 drops from 7.39% to 1.62% with the same correct FIX.
-  - nagoya/run1 loses 7.4 pp of correct FIX, the main cost.
+  - nagoya/run1 loses 7.4 pp of correct FIX, the main cost at this threshold
+    ([at a stricter threshold](#at-a-stricter-threshold) it gains instead).
 - **Without k = 4 the six-run means improve on both counts** (70.57% / 5.68%
   against 68.09% / 7.08%). However, the nagoya/run1 correct FIX falls by
   5.9 pp, and the nagoya/run2 wrong-FIX rate rises from 4.69% to 8.35%.
@@ -298,6 +299,48 @@ python3 scripts/analysis/ppc_fuse_spread.py \
   --dataset-root data/PPC-Dataset --out-dir output/ppc_fuse_spread/validated \
   -- --hold-kalman-update --hold-kalman-update-validated-only --min-fix-satellites 4
 ```
+
+#### At a stricter threshold
+
+The 0.5 m threshold counts biased holds as correct.
+
+- On nagoya/run1, 663 of the 5,884 FIX epochs of `--navi776-tc` lie 0.25 to
+  0.5 m off.
+- Most of the gap is one window after TOW 551154:
+  - `--navi776-tc` holds a fix about 0.34 m off for 100 s.
+  - With the KF hold, the float instead follows a run of wrong AR fixes at a
+    satellite drop (0.25 to 0.98 m off, ratio 9 to 412). It stays about 0.9 m
+    off and FLOAT for 115 s.
+
+Counting a FIX as correct below 0.10 m or 0.25 m instead, six-run mean ± SE
+(% of epochs):
+
+| Arm | 3D < 0.10 m | 3D < 0.25 m | 3D < 0.50 m |
+| --- | ---: | ---: | ---: |
+| `--navi776-tc` | 41.49 ± 0.27 | 62.93 ± 0.28 | 68.09 ± 0.19 |
+| KF hold, validated only, k = 4 | 44.22 ± 0.12 | 65.90 ± 0.14 | 67.18 ± 0.13 |
+| KF hold, validated only | 44.58 ± 0.11 | 68.35 ± 0.17 | 70.57 ± 0.18 |
+
+Per run at 3D < 0.25 m, mean ± SD:
+
+| Run | `--navi776-tc` | KF hold, validated only, k = 4 | KF hold, validated only |
+| --- | --- | --- | --- |
+| tokyo/run1 | 66.94 ± 4.18 | 69.91 ± 1.98 | 72.46 ± 1.82 |
+| tokyo/run2 | 78.77 ± 1.47 | 80.84 ± 0.83 | 79.99 ± 2.12 |
+| tokyo/run3 | 73.25 ± 2.02 | 77.75 ± 1.02 | 78.92 ± 1.11 |
+| nagoya/run1 | 66.19 ± 0.00 | 66.97 ± 0.01 | 67.52 ± 0.01 |
+| nagoya/run2 | 42.49 ± 0.00 | 50.38 ± 0.60 | 50.53 ± 0.01 |
+| nagoya/run3 | 49.91 ± 0.96 | 49.58 ± 0.00 | 60.70 ± 0.07 |
+
+- **With k = 4, the validated-only KF hold matches or beats `--navi776-tc` on
+  every run at 0.25 m.** nagoya/run3 is level (49.58% against 49.91%).
+  nagoya/run1 goes from 66.19% to 66.97%. Its 7.4 pp loss at 0.5 m is the
+  biased holds.
+- **Without k = 4 it is ahead on every run at 0.25 m.** Its wrong-FIX rate at
+  0.5 m is still higher on nagoya/run1 and nagoya/run2.
+
+`--correct-3d-m 0.25` (or `0.1`) makes the spread script score at that
+threshold.
 
 ## In-KF component: heavy-tail front-end
 
