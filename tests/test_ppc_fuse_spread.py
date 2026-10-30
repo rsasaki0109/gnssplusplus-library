@@ -67,9 +67,13 @@ class PpcFuseSpreadTest(unittest.TestCase):
     def test_arguments_after_the_separator_reach_gnss_fuse(self) -> None:
         args = spread.parse_args(["--out-dir", "out", "--runs", "nagoya/run3", "--",
                                   "--hold-kalman-update", "--min-fix-satellites", "4"])
-        self.assertEqual(args.extra, ["--hold-kalman-update", "--min-fix-satellites", "4"])
+        self.assertEqual(args.extra,
+                         ["--navi776-tc", "--hold-kalman-update", "--min-fix-satellites", "4"])
         self.assertEqual(args.runs, ["nagoya/run3"])
-        self.assertEqual(spread.parse_args(["--out-dir", "out"]).extra, [])
+        self.assertEqual(spread.parse_args(["--out-dir", "out"]).extra, ["--navi776-tc"])
+        args = spread.parse_args(["--out-dir", "out", "--without-navi776-tc", "--",
+                                  "--tc-closed-loop", "--tc-velocity-states"])
+        self.assertEqual(args.extra, ["--tc-closed-loop", "--tc-velocity-states"])
 
 
 if __name__ == "__main__":

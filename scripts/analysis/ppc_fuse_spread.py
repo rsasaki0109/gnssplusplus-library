@@ -40,7 +40,8 @@ import generate_driving_comparison as comparison  # noqa: E402
 RUNS = tuple(f"{city}/run{number}" for city in ("tokyo", "nagoya") for number in (1, 2, 3))
 # Same command and body-FLU lever arms as gnss_ppc_native_replay.py.
 COMMON = ["--preset", "low-cost", "--ratio", "2.4", "--max-subset-ar-drop-steps", "18",
-          "--rtk-snr-weighting", "--no-arfilter", "--navi776-tc"]
+          "--rtk-snr-weighting", "--no-arfilter"]
+PRESET = ["--navi776-tc"]
 LEVER_ARMS = {"tokyo": (0.31, 0.0, 0.55), "nagoya": (0.593, 0.670, 1.216)}
 # The PPC README vectors (FRD), passed as FLU before the lever-arm fix.
 PRE_FIX_LEVER_ARMS = {"tokyo": (0.31, 0.0, -0.55), "nagoya": (0.593, -0.670, -1.216)}
@@ -143,6 +144,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--pre-fix-lever-arms", action="store_true",
                         help="perturb the pre-fix (FRD) lever arms instead, for comparison only")
+    parser.add_argument("--without-navi776-tc", action="store_true",
+                        help="omit --navi776-tc so that the arguments after -- set the coupling")
     parser.add_argument("--score-only", action="store_true",
                         help="score the RTK streams already in --out-dir")
     parser.add_argument("extra", nargs=argparse.REMAINDER,
@@ -150,6 +153,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if args.extra and args.extra[0] == "--":
         args.extra = args.extra[1:]
+    if not args.without_navi776_tc:
+        args.extra = PRESET + args.extra
     if args.jobs < 1:
         parser.error("--jobs must be >= 1")
     return args
@@ -176,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     for run, _, pos in plan:
         per_run[run].append(score_file(pos, args.dataset_root / run / "reference.csv"))
     summary = summarize(per_run)
-    summary["command"] = {"common": COMMON, "extra": args.extra,
+    summary["command"] = {"common": COMMON, "arguments": args.extra,
                           "lever_arms": {run: member_lever_arms(bases[run.split("/")[0]])
                                          for run in args.runs}}
     (args.out_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
