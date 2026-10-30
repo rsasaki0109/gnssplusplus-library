@@ -59,7 +59,7 @@ class GnssFuseCliTest(unittest.TestCase):
                         "[gnss_fuse]",
                         'gnss_pos = "missing-solution.pos"',
                         'imu = "missing-imu.csv"',
-                        "lever_arm = [0.31, 0.0, -0.55]",
+                        "lever_arm = [0.31, 0.0, 0.55]",
                         "navi776_tc = false",
                         "zupt_gnss_speed_gate = false",
                         "base_interp = true",

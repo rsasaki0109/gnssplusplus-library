@@ -133,9 +133,15 @@ The numbers are in-sample, and two runs do better with the previous vector:
 - tokyo/run3: correct FIX −3.7 pp;
 - nagoya/run3: correct FIX −0.9 pp.
 
-The urban use-case guide, its example configuration and their tests still use
-the Tokyo FRD sign; they are left for a separate change because their recorded
-results were produced with it.
+The urban use-case guide, its field checklist, the `gnss fuse` page, the
+example configuration and the `urban-continuity-bundle` default now pass the
+Tokyo FLU vector too. On Tokyo run1 the R1 recipe passes its gates with either
+sign. Over the full run the FLU vector lowers the max bridge error by 0.86 m and
+the fixed-P95 regression by 0.09 m; over the first 3,500 epochs it raises the
+max bridge error by 0.79 m
+([R1 table](use_cases/urban_rtk_fgo.md#r1-tokyo-run1-frozen-candidate)). The
+commands on this page keep `0.31,0,-0.55` because they reproduce the recorded
+tables.
 
 ## In-KF component: heavy-tail front-end
 

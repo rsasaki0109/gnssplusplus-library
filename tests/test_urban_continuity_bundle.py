@@ -25,7 +25,7 @@ class UrbanContinuityBundleTest(unittest.TestCase):
                 root / "data",
                 root / "data" / "reference.csv",
                 root / "bundle",
-                [0.31, 0.0, -0.55],
+                [0.31, 0.0, 0.55],
                 "low-cost",
                 True,
                 25.0,
@@ -36,7 +36,7 @@ class UrbanContinuityBundleTest(unittest.TestCase):
 
             fuse = commands["fuse"]
             self.assertIn("--lever-arm", fuse)
-            self.assertIn("0.31,0,-0.55", fuse)
+            self.assertIn("0.31,0,0.55", fuse)
             self.assertIn("--zupt", fuse)
             self.assertIn("--no-nhc", fuse)
             self.assertIn("--max-velocity-nis", fuse)
