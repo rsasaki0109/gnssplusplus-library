@@ -137,6 +137,11 @@ presets. The accepted tuning and research flags remain backward-compatible
 and are listed under `gnss fuse --help-advanced`. Prefer `--navi776-tc`
 instead of spelling out its component tight-coupling flags.
 
+With `--navi776-tc` (or `--tc-velocity-states`), use the RTK stream written by
+`--rtk-pos-out`. The fused `--out` stream can be kilometres off on the PPC
+Tokyo runs, because the loose ESKF takes a wrong RTK velocity state
+([known issue](navi776_techniques.md#known-issue-the-velocity-state-2026-10-31)).
+
 For repeatable runs, put defaults in a flat TOML `[gnss_fuse]` table and pass
 `--config <path>`. Keys may use `snake_case` or `kebab-case`; vector values
 such as `lever_arm` and `base_ecef` use three-element arrays. Command-line

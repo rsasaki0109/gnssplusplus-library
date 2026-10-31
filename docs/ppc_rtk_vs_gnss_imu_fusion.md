@@ -411,6 +411,198 @@ python3 scripts/analysis/ppc_fuse_spread.py --dataset-root data/urbannav_ppc \
   --hold-kalman-update --hold-kalman-update-validated-only --min-fix-satellites 4
 ```
 
+### Why tokyo/run3 loses to M4
+
+On tokyo/run3, `--navi776-tc` has 3.1 pp less correct FIX than M4
+([nine-run re-check](navi776_techniques.md#nine-run-re-check-2026-10-30)).
+The nine runs of both arms were compared epoch by epoch.
+
+- **Two windows.** Per run, `--navi776-tc` loses 1,224 correct-FIX epochs (814
+  to FLOAT, 410 to wrong FIX) and gains 745, a net loss of 479 of 15,239.
+  - TOW 180660–180840 loses 324 net, and TOW 181680–181920 loses 267.
+  - The rest of the run gains 112.
+- **The first window depends on the lever arm.**
+  - The car stands still there for about 100 s.
+  - All nine M4 runs give the same result: 739 correct-FIX epochs.
+  - The nine `--navi776-tc` runs give 82 to 731.
+- **The mechanism**, traced on the run whose lever arm has y moved by −2 cm
+  (`0.310,-0.020,0.550`, 82 correct-FIX epochs in the window):
+  1. While the car stands, the float drifts. The subset AR fixes on it, at
+     ratio 13–28, move from 0.06 m to 0.22 m off horizontally in 1.6 s (TOW
+     180665.0–180666.6), and the full-set ratio falls from 6.8 to 1.8.
+  2. At TOW 180666.8 LAMBDA fails (ratio 1.5). The hold-fix fallback rounds the
+     6 of its 10 pairs that have no held integer, and the fix jumps 0.34 m.
+  3. At TOW 180669.2 it rounds 7 of 11 and jumps 0.76 m, to 0.91 m off.
+  4. It stays fixed for the rest of the stop, 0.79–0.99 m off (10th–90th
+     percentile, 96 s). 78% of these epochs have ratio 6.5 or less.
+  - Over the stop (TOW 180665–180765) this run has 16 correct and 485 wrong
+    FIX epochs. The same lever arm with only the Doppler rows has 498 correct
+    and none wrong, and with only the adaptive noise 501 and none.
+- **The second window ends the same way.** With the unperturbed lever arm, at
+  TOW 181887.0:
+  - LAMBDA fails (ratio 1.02).
+  - The fallback rounds 12 of 30 pairs, jumps 0.86 m and holds for 25 s.
+  - M4 keeps an AR fix there at ratio 29.
+- **Few holds turn a correct FIX wrong, but one can last a whole stop.** With
+  the unperturbed lever arm on the six runs, 35 of 3,396 hold-fix epochs turn
+  a correct FIX wrong, 13 of them with rounded pairs.
+
+Three hold guards were measured, nine runs each. Correct FIX is % of epochs
+(mean ± SD per run, ± SE for the six-run mean), and wrong FIX is % of FIX at
+0.5 m (six-run mean ± SE).
+
+| Arm | tokyo/run3, 0.5 m | tokyo/run3, 0.25 m | Six runs, 0.5 m | Six runs, 0.25 m | Wrong FIX |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| M4 | 80.13 ± 2.04 | 76.99 ± 2.00 | 67.58 ± 0.20 | 62.99 ± 0.20 | 6.63 ± 0.14 |
+| `--navi776-tc` | 76.99 ± 1.60 | 73.25 ± 2.02 | 68.09 ± 0.19 | 62.93 ± 0.28 | 7.08 ± 0.22 |
+| + no hold that rounds a pair | 74.85 ± 1.84 | 73.82 ± 1.97 | 63.53 ± 0.18 | 61.79 ± 0.19 | 4.83 ± 0.03 |
+| + no hold that rounding moves by more than 0.1 m | 74.68 ± 3.26 | 73.49 ± 3.10 | 67.64 ± 0.20 | 64.25 ± 0.21 | 5.07 ± 0.07 |
+| + KF hold, validated only | 80.78 ± 1.31 | 78.92 ± 1.11 | 70.57 ± 0.18 | 68.35 ± 0.17 | 5.68 ± 0.18 |
+
+- **"No hold that rounds a pair"** is `RTKConfig::hold_fix_unchanged_set_only`
+  (`gnss solve --hold-fix-unchanged-set`). `gnss fuse` has no flag for it, and
+  it was measured with an experiment build.
+- **"More than 0.1 m"** exists only in an experiment build.
+  - It compares the hold on all pairs with the hold on the matched pairs alone.
+  - Correct rounded holds move by a median of 0.009 m (90th percentile
+    0.063 m). The 13 that turn a correct FIX wrong move by a median of 0.16 m.
+  - The 0.1 m was chosen on these runs.
+  - A χ² test of the same move against its own covariance needs no threshold.
+    However, the KF covariance is about ten times too small for it, and it
+    rejects 63% of the correct rounded holds.
+- **Neither of these two guards recovers tokyo/run3.** Both lose more correct
+  FIX there. The rounded hold is only the last step; the cause is the float
+  drift before it. Neither guard is adopted.
+- **The validated-only KF hold does recover it**: 80.78% against M4's 80.13%
+  (78.92% against 76.99% at 0.25 m).
+  - The KF hold keeps the float on the integers of the last validated fix, so
+    it does not drift while the car stands.
+  - In the first window, seven of its nine runs have at most 11 wrong-FIX
+    epochs; the `--navi776-tc` runs have 42 to 586. Its correct FIX there
+    (403–656) stays below M4's 739.
+  - Its costs are those [above](#kf-hold-only-after-validated-fixes): it is
+    in-sample, the nagoya/run2 wrong-FIX rate is 8.35%, and on UrbanNav it
+    was measured only with `--min-fix-satellites 4`.
+
+### Independent checks of a re-acquired fix (not adopted)
+
+The [Nagoya 3 root cause](ppc_nagoya3_wrong_fix_root_cause.md) asks for a
+permit: a fix may be re-acquired only when an estimator that does not share
+the KF state agrees. Three candidates were measured under `--navi776-tc`,
+with the unperturbed lever arm on the six runs.
+
+- **Where the wrong FIX start.**
+  - 1,401 of the 2,319 wrong-FIX epochs (60%) lie in FIX segments whose first
+    epoch is already wrong. So do 207 of the 306 FIX more than 3 m off
+    horizontally (68%).
+  - 1,099 of those 1,401 epochs follow a FLOAT gap of 5 s or less.
+  - A check at re-acquisition is therefore the right place.
+- **Same-epoch SPP does not separate them.**
+  - In wrong-FIX epochs the SPP is itself off: median 14.2 m for wrong FIX
+    0.5–3 m off and 10.6 m for those 3 m or more off (3D), against 2.9 m for
+    correct FIX. It shares the corrupted code measurements.
+  - The best per-epoch gate (FIX–SPP distance in their combined covariance,
+    χ² above 50) removes 47 of the 470 FIX 3 m or more off, and 32 correct FIX.
+- **`--library-fix-integrity-gate` is fail-closed on every epoch.**
+  - On tokyo/run2 it cuts the wrong-FIX rate from 1.85% to 0.04% and FIX above
+    3 m from 36 to 0.
+  - However, correct FIX fall from 80.96% to 57.37%.
+  - It also changes the RTK configuration, so it cannot serve as a
+    re-acquisition-only check.
+- **An INS bridged from the last FIX does not separate them.**
+  - The bridge copies the loose ESKF's velocity, attitude and biases at each
+    FIX, anchors on that FIX, and then propagates with the IMU only.
+  - Under `--navi776-tc` the loose ESKF diverges: its velocity input, the RTK
+    velocity state, is metres per second off
+    ([known issue](navi776_techniques.md#known-issue-the-velocity-state-2026-10-31)).
+    The bridge was therefore measured with experiment build B of that note,
+    in which the loose ESKF takes the SPP Doppler velocity.
+  - Its error against the truth is 0.13 m (median) less than 1 s after the
+    FIX, but 2.66 m after 1–5 s and 15.7 m after 5–30 s. That is about 13 times
+    its own σ.
+  - 156 of the 208 segments that start wrong follow a wrong FIX, which the
+    bridge inherits.
+  - Where the last FIX is correct and the gap is 5 s or less, rejecting a
+    re-acquired fix more than 0.5 m from the bridge removes 32 of 40 wrong
+    starts and 86 of 268 correct ones.
+
+As with [CLAS and the PPC IMU](ppc_clas_imu_experiments.md), the INS has no
+absolute position except the fixes it is meant to check. None of the three is
+adopted.
+
+### Candidates on UrbanNav Hong Kong and Tokyo
+
+On the six PPC runs a few events decide most comparisons. The candidates of
+the last sections were therefore also run on UrbanNav, nine runs each.
+
+- **Data.**
+  - UrbanNav Tokyo Odaiba and Shinjuku: Trimble rover, as in
+    [the out-of-sample check](#urbannav-out-of-sample-check).
+  - UrbanNav Hong Kong Deep-Urban-1 and Harsh-Urban-1: NovAtel Flexpak6 rover
+    at 1 Hz, HKSC base 2.7–5.6 km away, Xsens IMU.
+    - Converted with `scripts/convert_urbannav_hk_to_ppc_layout.py`. Every
+      output matches the SHA256 recorded in
+      [holdout contract v3](online_pva_default_switch_holdout_v3.md).
+    - That contract scored them, so they are development data. `gnss fuse`
+      had not been run on them before.
+    - The baselines are longer than 1 km, so the Doppler rows and the
+      adaptive noise are off there. The lever arm is zero, as in the
+      contract.
+- **The Hong Kong truth is about 0.6 m from the antenna.**
+  - The FIX of `--navi776-tc` on Deep are offset from the truth by a constant
+    vector in the body frame: 0.56 m backwards, 0.01 m left and 0.23 m down
+    (median of the 230 FIX within 1.5 m of the truth). Without a correction
+    almost every correct FIX would score as wrong.
+  - The documented extrinsics do not reproduce it. `extrinsic.yaml` of the
+    UrbanNav repository gives a translation of (0, 0.86, −0.31) m (x right,
+    y forward, z up) for `ANTENNA_T_IMU` and 0.14 m up for `body_T_SPAN`.
+  - The measured offset is therefore added to the truth for every arm and
+    both Hong Kong runs. It was estimated with the truth, from the control
+    arm.
+- **Harsh-Urban-1 cannot separate the arms.** Every arm fixes 3.8–4.9% of
+  the epochs, and 98% of those fixes are wrong.
+
+Correct FIX (% of epochs) / wrong FIX (% of FIX) at 0.5 m, mean of nine
+runs. The PPC column is the six-run mean.
+
+| Arm | PPC | Odaiba | Shinjuku | HK Deep |
+| --- | ---: | ---: | ---: | ---: |
+| `--navi776-tc` | 68.09 / 7.08 | 64.67 / 3.60 | 64.87 / 17.63 | 17.07 / 32.2 |
+| + validated-only KF hold | **70.57 / 5.68** | 64.05 / 4.77 | **72.68 / 8.26** | 16.40 / 31.3 |
+| + RTK ZUPT (experiment) | 67.44 / 7.88 | 64.77 / 3.37 | 64.93 / 17.67 | 14.03 / 40.4 |
+| + RTK ZUPT and validated-only KF hold (experiment) | 69.29 / 7.76 | 64.11 / 4.57 | 72.68 / 8.28 | 15.00 / 37.5 |
+| B: corrected velocity loop (experiment) | 65.42 / 10.38 | 64.80 / 3.32 | 63.50 / 18.33 | **19.93 / 27.9** |
+| No high-residual FLOAT reset (experiment) | 55.57 / 11.07 | 63.38 / 5.34 | 64.59 / 18.21 | 13.93 / 40.2 |
+
+- **The validated-only KF hold is the only candidate that holds up.**
+  - It gains 2.5 pp on PPC and 7.8 pp on Shinjuku, where the wrong-FIX rate
+    halves.
+  - It loses 0.6 pp on Odaiba, where the wrong-FIX rate rises by 1.2 pp, and
+    0.7 pp on HK Deep.
+  - At 0.25 m it goes from 62.93% to 68.35% on PPC and from 53.93% to 59.87%
+    on Shinjuku. It is 0.1 pp better on Odaiba and 1.3 pp worse on HK Deep.
+  - Every dataset here is development data for it.
+  - A [frozen holdout](navi776_kf_hold_holdout.md) on HK Medium-Urban-1 was
+    [inconclusive](navi776_kf_hold_holdout_results.md): the control fixes
+    only 1.49% of the epochs there. The preset is unchanged.
+- **The RTK ZUPT** ([velocity-state note](navi776_techniques.md#known-issue-the-velocity-state-2026-10-31))
+  changes UrbanNav by 0.1 pp or less and loses 3 pp on HK Deep.
+- **The corrected velocity loop B** is the best arm on HK Deep (+2.9 pp, wrong
+  FIX −4.3 pp). However, it loses on PPC and on Shinjuku.
+- **The high-residual FLOAT reset is worth keeping.**
+  - The `low-cost` preset resets every ambiguity after five FLOAT epochs whose
+    prefit residuals exceed 4 m RMS or 10 m. The prefit residuals include the
+    rows that the update then rejects (3 m outlier threshold).
+  - On the six runs it fires 636 times. The median prefit RMS there is
+    11.3 m, against 0.52 m for the rows the update keeps.
+  - After a reset every lock count starts again, and AR waits five epochs.
+    On nagoya/run1 at TOW 550943.8 that cost the stop described in the
+    velocity-state note.
+  - Even so, without it the PPC runs fall to 55.57% correct FIX, and Odaiba,
+    Shinjuku and HK Deep lose too.
+
+## In-KF component: heavy-tail front-end
+
 ## In-KF component: heavy-tail front-end
 
 `--integrity-student-t-*` (IRLS Student-t / Huber / Laplacian) weights the RTK

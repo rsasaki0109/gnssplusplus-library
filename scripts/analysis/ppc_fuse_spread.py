@@ -10,6 +10,8 @@ mean ± its standard error.
 
 Scoring follows the lever-arm comparison: raw PPC reference, 0.25 s matching,
 60-epoch skip, FIX = status 4, correct FIX = 3D error below 0.5 m.
+`--truth-offset-body` moves the reference to the antenna first, for data whose
+reference point is not the antenna (UrbanNav Hong Kong).
 
 Example (the "both" column of the wrong-fix-guard table):
 
@@ -21,7 +23,10 @@ Example (the "both" column of the wrong-fix-guard table):
 from __future__ import annotations
 
 import argparse
+import bisect
 from concurrent.futures import ThreadPoolExecutor
+import csv
+import dataclasses
 import json
 import math
 import os
@@ -76,11 +81,44 @@ def score(matched: list[comparison.MatchedEpoch],
     }
 
 
+def read_headings(reference_csv: Path) -> list[tuple[float, float]]:
+    """(GPS TOW, heading in rad clockwise from north) of each reference row."""
+    with reference_csv.open(newline="") as handle:
+        reader = csv.reader(handle)
+        column = next(reader).index("Heading (deg)")
+        return [(float(row[0]), math.radians(float(row[column]))) for row in reader]
+
+
+def move_truth_to_antenna(matched: list[comparison.MatchedEpoch],
+                          headings: list[tuple[float, float]],
+                          offset_body: tuple[float, float, float]) -> list[comparison.MatchedEpoch]:
+    """Errors against the reference moved by a constant body-frame antenna offset.
+
+    `offset_body` is the antenna minus the reference point, x right, y forward,
+    z up, rotated to ENU with the heading of the nearest reference row.
+    """
+    times = [t for t, _ in headings]
+    right, forward, up = offset_body
+    moved = []
+    for epoch in matched:
+        i = bisect.bisect_left(times, epoch.tow)
+        j = min((k for k in (i - 1, i) if 0 <= k < len(times)), key=lambda k: abs(times[k] - epoch.tow))
+        h = headings[j][1]
+        east = epoch.east_m - (forward * math.sin(h) + right * math.cos(h))
+        north = epoch.north_m - (forward * math.cos(h) - right * math.sin(h))
+        moved.append(dataclasses.replace(epoch, east_m=east, north_m=north, up_m=epoch.up_m - up,
+                                         horiz_error_m=math.hypot(east, north)))
+    return moved
+
+
 def score_file(pos: Path, reference_csv: Path,
-               correct_3d_m: float = CORRECT_3D_M) -> dict[str, float]:
+               correct_3d_m: float = CORRECT_3D_M,
+               truth_offset_body: tuple[float, float, float] | None = None) -> dict[str, float]:
     reference = comparison.read_reference_csv(reference_csv)
     solution = comparison.read_libgnss_pos(pos)
     matched = comparison.match_to_reference(solution, reference, MATCH_TOLERANCE_S)[SKIP_EPOCHS:]
+    if truth_offset_body is not None:
+        matched = move_truth_to_antenna(matched, read_headings(reference_csv), truth_offset_body)
     return score(matched, correct_3d_m)
 
 
@@ -155,6 +193,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--correct-3d-m", type=float, default=CORRECT_3D_M,
                         help="3D error below which a FIX counts as correct; wrong FIX are "
                              "the others (default: 0.5)")
+    parser.add_argument("--truth-offset-body", metavar="RIGHT,FORWARD,UP",
+                        help="antenna minus reference point in the body frame (m), applied with "
+                             "the reference heading before scoring; write it with '=' when the "
+                             "first value is negative (default: none)")
     parser.add_argument("--score-only", action="store_true",
                         help="score the RTK streams already in --out-dir")
     parser.add_argument("extra", nargs=argparse.REMAINDER,
@@ -168,6 +210,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--jobs must be >= 1")
     if not args.correct_3d_m > 0.0:
         parser.error("--correct-3d-m must be > 0")
+    if args.truth_offset_body is not None:
+        try:
+            args.truth_offset_body = tuple(float(v) for v in args.truth_offset_body.split(","))
+        except ValueError:
+            parser.error("--truth-offset-body must be right,forward,up")
+        if len(args.truth_offset_body) != 3 or not all(math.isfinite(v) for v in args.truth_offset_body):
+            parser.error("--truth-offset-body must be three finite numbers right,forward,up")
     if args.lever_arm is not None:
         try:
             args.lever_arm = tuple(float(value) for value in args.lever_arm.split(","))
@@ -204,9 +253,11 @@ def main(argv: list[str] | None = None) -> int:
     per_run: dict[str, list[dict[str, float]]] = {run: [] for run in args.runs}
     for run, _, pos in plan:
         per_run[run].append(score_file(pos, args.dataset_root / run / "reference.csv",
-                                       args.correct_3d_m))
+                                       args.correct_3d_m, args.truth_offset_body))
     summary = summarize(per_run)
     summary["correct_3d_m"] = args.correct_3d_m
+    if args.truth_offset_body is not None:
+        summary["truth_offset_body"] = list(args.truth_offset_body)
     summary["command"] = {"common": COMMON, "arguments": args.extra,
                           "lever_arms": {run: member_lever_arms(bases[run.split("/")[0]])
                                          for run in args.runs}}

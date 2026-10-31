@@ -2,7 +2,8 @@
 """Convert raw UrbanNav Hong Kong files (NovAtel Flexpak6 rover, HKSC base) to the PPC run layout.
 
 Implements the "Conversion to the PPC run layout" section of
-docs/online_pva_default_switch_holdout_v2.md. Pure standard library (the optional
+docs/online_pva_default_switch_holdout_v2.md. HKMediumUrban1 is converted the same way for
+docs/navi776_kf_hold_holdout.md; the manifest names the contract of each run. Pure standard library (the optional
 ``hatanaka`` package is needed only to unpack Compact RINEX base files). The raw files are
 read as data only; nothing from them is executed.
 
@@ -30,9 +31,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from convert_urbannav_to_ppc_layout import (  # noqa: E402  shared, unchanged helpers of the Tokyo converter
     PPC_IMU_HEADER, PPC_REFERENCE_HEADER, gps_tow, pin, split_rinex_header)
 
-RUNS = ("HKDeepUrban1", "HKHarshUrban1")
+# Each run and the contract that governs its use, recorded in the manifest.
+RUNS = {
+    "HKDeepUrban1": "docs/online_pva_default_switch_holdout_v2.md",
+    "HKHarshUrban1": "docs/online_pva_default_switch_holdout_v2.md",
+    "HKMediumUrban1": "docs/navi776_kf_hold_holdout.md",
+}
 ROVERS = ("novatel",)
-CONTRACT = "docs/online_pva_default_switch_holdout_v2.md"
 
 LEAP_SECONDS = 18                    # GPST - UTC from 2017-01-01 to 2021; checked against the truth time columns
 UNIX_TO_GPS_NS = (315964800 - LEAP_SECONDS)*10**9  # gps_ns = unix_ns - UNIX_TO_GPS_NS
@@ -536,7 +541,7 @@ def verify_converted(directory):
 
 def convert(run, rover, rover_obs, reference, imu, base_obs, nav, output_root):
     if run not in RUNS or rover not in ROVERS:
-        raise ValueError(f"run must be one of {RUNS} and rover one of {ROVERS}")
+        raise ValueError(f"run must be one of {tuple(RUNS)} and rover one of {ROVERS}")
     base_obs, nav = [Path(p) for p in base_obs], [Path(p) for p in nav]
     inputs = dict(rover_obs=Path(rover_obs), reference=Path(reference), imu=Path(imu))
     missing = [str(p) for p in [*inputs.values(), *base_obs, *nav] if not p.is_file()]
@@ -566,7 +571,7 @@ def convert(run, rover, rover_obs, reference, imu, base_obs, nav, output_root):
     if stats["verification"]["rover_epochs_without_truth_row"] or stats["verification"]["rover_epochs_without_imu_sample"]:
         raise ValueError(f"converted rover epochs lack truth or IMU samples: {stats['verification']}")
     manifest = dict(
-        schema="libgnsspp.urbannav_hk_ppc_conversion.v1", contract=CONTRACT, run=run, rover=rover, converter=pin(__file__),
+        schema="libgnsspp.urbannav_hk_ppc_conversion.v1", contract=RUNS[run], run=run, rover=rover, converter=pin(__file__),
         raw_inputs=dict(zip(names, [pin(inputs["rover_obs"]), [pin(p) for p in base_obs], [pin(p) for p in nav],
                                     pin(inputs["imu"]), pin(inputs["reference"])])),
         outputs={name: pin(target/name) for name in names},

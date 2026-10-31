@@ -81,6 +81,26 @@ class PpcFuseSpreadTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             spread.parse_args(["--out-dir", "out", "--correct-3d-m", "0"])
 
+    def test_truth_offset_is_rotated_by_the_reference_heading(self) -> None:
+        # Heading 90 deg (east): forward is east, right is south.
+        headings = [(0.0, math.radians(90.0)), (1.0, math.radians(90.0))]
+        antenna_error = epoch(4, east=-0.5, north=-0.1, up=-0.2)  # 0.5 m behind, 0.1 m right, 0.2 m down
+        moved = spread.move_truth_to_antenna([antenna_error], headings, (0.1, -0.5, -0.2))
+        self.assertAlmostEqual(moved[0].east_m, 0.0)
+        self.assertAlmostEqual(moved[0].north_m, 0.0)
+        self.assertAlmostEqual(moved[0].up_m, 0.0)
+        self.assertAlmostEqual(moved[0].horiz_error_m, 0.0)
+        self.assertAlmostEqual(spread.score(moved)["correct_pct"], 100.0)
+        self.assertAlmostEqual(spread.score([antenna_error])["correct_pct"], 0.0)
+
+    def test_truth_offset_argument_needs_three_numbers(self) -> None:
+        args = spread.parse_args(["--out-dir", "out", "--truth-offset-body=-0.014,-0.563,-0.227"])
+        self.assertEqual(args.truth_offset_body, (-0.014, -0.563, -0.227))
+        self.assertIsNone(spread.parse_args(["--out-dir", "out"]).truth_offset_body)
+        for bad in ("1,2", "a,b,c", "1,2,nan"):
+            with self.assertRaises(SystemExit):
+                spread.parse_args(["--out-dir", "out", f"--truth-offset-body={bad}"])
+
     def test_runs_outside_ppc_need_an_explicit_lever_arm(self) -> None:
         with self.assertRaises(SystemExit):
             spread.parse_args(["--out-dir", "out", "--runs", "urbannav/Odaiba_trimble"])
