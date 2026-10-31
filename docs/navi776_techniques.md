@@ -392,6 +392,39 @@ error is against the reference trajectory; the fused error is 3D.
   - C, changing only the loose ESKF's input, still changes the RTK stream: the
     closed loop restarts from the loose ESKF after a failed re-anchor. On one
     run per PPC run, correct FIX fall from 68.21% to 66.99%.
+- **With the validated-only KF hold the gap remains.** B with
+  `--hold-kalman-update --hold-kalman-update-validated-only` scores 68.14% /
+  6.51%, against 70.57% / 5.68% for the preset with the same hold. It is
+  lower on every run, by 0.6 (nagoya/run3) to 7.0 pp (nagoya/run1).
+- **Most of the difference is a few stops.**
+  - On nagoya/run1 and tokyo/run1, B loses 95 s and 110 s while the car stands
+    still. It re-acquires a fix 0.7–1.9 m off and holds it, while the preset
+    happens to be correct there.
+  - With B the nine runs move together, so one such event counts nine times.
+    The ± of its means then reflects only the lever arm, not these events.
+- **A zero-velocity update for the RTK does not help either.**
+  - The closed-loop INS has a ZUPT, but its velocity is reset to the RTK
+    velocity state at every epoch, so it has no effect.
+  - Its IMU-only detector is also unreliable. Of the epochs it flags as
+    stationary on the six runs, 67% are (reference speed below 0.1 m/s), and
+    7,488 are at more than 1 m/s.
+  - The previous epoch's SPP Doppler speed below 0.1 m/s is a far better
+    detector: 99.7% of its flags are stationary, one epoch is above 1 m/s, and
+    it finds 74% of the stationary epochs (90% below 0.2 m/s).
+  - With that detector, an experiment build sets the closed-loop time update
+    to zero displacement and zero velocity. Over nine runs per PPC run:
+
+    | | Correct FIX at 0.5 m | 0.25 m | Wrong FIX |
+    | --- | ---: | ---: | ---: |
+    | `--navi776-tc` | 68.09% | 62.93% | 7.08% |
+    | `--navi776-tc`, RTK ZUPT | 67.44% | 62.58% | 7.88% |
+    | `--navi776-tc`, validated-only KF hold | 70.57% | 68.35% | 5.68% |
+    | `--navi776-tc`, validated-only KF hold, RTK ZUPT | 69.29% | 67.23% | 7.76% |
+
+  - The ZUPT gains 3.2 pp on tokyo/run3, where the stop was lost. However, it
+    loses 6.6 pp on nagoya/run1. There every carrier pair is lost for 0.4 s
+    just as the car stops, the code-only float is pulled 6 m off, and a fix
+    about 2 m off is then held for the rest of the stop.
 - **Nothing is changed.** The preset's RTK results depend on this loop, and
   every fix tried scores worse on the six runs it was tuned on. A fix needs an
   attitude and bias correction for the closed-loop INS and an honest velocity
