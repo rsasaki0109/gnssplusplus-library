@@ -484,6 +484,51 @@ Three hold guards were measured, nine runs each. Correct FIX is % of epochs
     in-sample, the nagoya/run2 wrong-FIX rate is 8.35%, and on UrbanNav it
     was measured only with `--min-fix-satellites 4`.
 
+### Independent checks of a re-acquired fix (not adopted)
+
+The [Nagoya 3 root cause](ppc_nagoya3_wrong_fix_root_cause.md) asks for a
+permit: a fix may be re-acquired only when an estimator that does not share
+the KF state agrees. Three candidates were measured under `--navi776-tc`,
+with the unperturbed lever arm on the six runs.
+
+- **Where the wrong FIX start.**
+  - 1,401 of the 2,319 wrong-FIX epochs (60%) lie in FIX segments whose first
+    epoch is already wrong. So do 207 of the 306 FIX more than 3 m off
+    horizontally (68%).
+  - 1,099 of those 1,401 epochs follow a FLOAT gap of 5 s or less.
+  - A check at re-acquisition is therefore the right place.
+- **Same-epoch SPP does not separate them.**
+  - In wrong-FIX epochs the SPP is itself off: median 14.2 m for wrong FIX
+    0.5–3 m off and 10.6 m for those 3 m or more off (3D), against 2.9 m for
+    correct FIX. It shares the corrupted code measurements.
+  - The best per-epoch gate (FIX–SPP distance in their combined covariance,
+    χ² above 50) removes 47 of the 470 FIX 3 m or more off, and 32 correct FIX.
+- **`--library-fix-integrity-gate` is fail-closed on every epoch.**
+  - On tokyo/run2 it cuts the wrong-FIX rate from 1.85% to 0.04% and FIX above
+    3 m from 36 to 0.
+  - However, correct FIX fall from 80.96% to 57.37%.
+  - It also changes the RTK configuration, so it cannot serve as a
+    re-acquisition-only check.
+- **An INS bridged from the last FIX does not separate them.**
+  - The bridge copies the loose ESKF's velocity, attitude and biases at each
+    FIX, anchors on that FIX, and then propagates with the IMU only.
+  - Under `--navi776-tc` the loose ESKF diverges: its velocity input, the RTK
+    velocity state, is metres per second off (under investigation). The bridge
+    was therefore measured with an experiment build that feeds the loose ESKF
+    the SPP Doppler velocity.
+  - Its error against the truth is 0.13 m (median) less than 1 s after the
+    FIX, but 2.66 m after 1–5 s and 15.7 m after 5–30 s. That is about 13 times
+    its own σ.
+  - 156 of the 208 segments that start wrong follow a wrong FIX, which the
+    bridge inherits.
+  - Where the last FIX is correct and the gap is 5 s or less, rejecting a
+    re-acquired fix more than 0.5 m from the bridge removes 32 of 40 wrong
+    starts and 86 of 268 correct ones.
+
+As with [CLAS and the PPC IMU](ppc_clas_imu_experiments.md), the INS has no
+absolute position except the fixes it is meant to check. None of the three is
+adopted.
+
 ## In-KF component: heavy-tail front-end
 
 `--integrity-student-t-*` (IRLS Student-t / Huber / Laplacian) weights the RTK
