@@ -81,6 +81,16 @@ class PpcFuseSpreadTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             spread.parse_args(["--out-dir", "out", "--correct-3d-m", "0"])
 
+    def test_runs_outside_ppc_need_an_explicit_lever_arm(self) -> None:
+        with self.assertRaises(SystemExit):
+            spread.parse_args(["--out-dir", "out", "--runs", "urbannav/Odaiba_trimble"])
+        args = spread.parse_args(["--out-dir", "out", "--runs", "urbannav/Odaiba_trimble",
+                                  "--lever-arm", "0,0,0"])
+        self.assertEqual(args.lever_arm, (0.0, 0.0, 0.0))
+        self.assertEqual(spread.member_lever_arms(args.lever_arm)[0], "0.000,0.000,0.000")
+        with self.assertRaises(SystemExit):
+            spread.parse_args(["--out-dir", "out", "--lever-arm", "1,2"])
+
 
 if __name__ == "__main__":
     unittest.main()
