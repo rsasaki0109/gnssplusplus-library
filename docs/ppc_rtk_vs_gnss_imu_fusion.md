@@ -382,12 +382,23 @@ FIX is % of FIX at 0.5 m (mean ± SD). FIX above 3 m is the mean count per run.
     5.49% on Shinjuku.
   - FIX within 0.25 m change by −0.98 pp on Odaiba, just inside the 1 pp limit,
     and by +4.45 pp on Shinjuku.
-- **B holds a larger wrong fix on Odaiba.**
-  - FIX above 3 m rise from 11 to 65. All nine runs hold a fix about 12 m off
-    at TOW 273759–273773 for 13 s.
-  - A is also wrong in that window, but 6 to 10.5 m off and for 8 epochs.
-  - A validated but wrong AR fix is held by the KF hold. The wrong-FIX rate
-    falling does not exclude large wrong fixes.
+- **B holds a large wrong fix on Odaiba.**
+  - FIX above 3 m rise from 11 to 65. All nine runs fix at TOW
+    273759–273773, for 13 s, about 12 m off horizontally and 44 m off in
+    height.
+  - Just before, the satellites drop to 7–9 and the floats of both arms drift
+    20–47 m off, mostly in height.
+  - A has 8 wrong FIX epochs around the window, 6–10.5 m off horizontally.
+    Seven of them fall at TOW 273752.6–273757.4. Inside the window A is FLOAT
+    except for one epoch.
+  - B fixes on its already wrong float with 6 ambiguities at ratio 3.9. The KF
+    hold keeps that fix, and later AR fixes confirm it at ratios up to 141.
+  - This is the float wrong-basin failure of the
+    [Nagoya 3 root cause](ppc_nagoya3_wrong_fix_root_cause.md): AR certifies
+    a float that is already wrong.
+    - The KF hold does not create the basin, but it makes a fix inside it
+      likelier and keeps it.
+    - A lower wrong-FIX rate does not exclude such fixes.
 - **The guards stay opt-in.**
 
 ```sh
