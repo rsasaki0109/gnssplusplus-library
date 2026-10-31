@@ -427,6 +427,14 @@ class EndToEndTest(Case):
         imu_times = {line.split(",")[0] for line in (directory/"imu.csv").read_text().splitlines()[1:]}
         for t in range(100, 105): self.assertIn(f"{t}.00", imu_times)
 
+    def test_manifest_names_the_contract_of_the_run(self):
+        raw = self.make_raw()
+        deep = self.convert(raw, self.root/"deep")
+        self.assertEqual(deep["contract"], "docs/online_pva_default_switch_holdout_v2.md")
+        medium = self.convert(raw, self.root/"medium", run="HKMediumUrban1")
+        self.assertEqual(medium["contract"], "docs/navi776_kf_hold_holdout.md")
+        self.assertTrue((self.root/"medium/urbannav/HKMediumUrban1_novatel/rover.obs").is_file())
+
     def test_unsupported_run_rover_and_existing_output(self):
         raw = self.make_raw()
         with self.assertRaisesRegex(ValueError, "run must be"):
