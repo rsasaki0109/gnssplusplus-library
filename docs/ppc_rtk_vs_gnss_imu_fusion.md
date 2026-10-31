@@ -582,6 +582,9 @@ runs. The PPC column is the six-run mean.
   - At 0.25 m it goes from 62.93% to 68.35% on PPC and from 53.93% to 59.87%
     on Shinjuku. It is 0.1 pp better on Odaiba and 1.3 pp worse on HK Deep.
   - Every dataset here is development data for it.
+  - A [frozen holdout](navi776_kf_hold_holdout.md) on HK Medium-Urban-1 was
+    [inconclusive](navi776_kf_hold_holdout_results.md): the control fixes
+    only 1.49% of the epochs there. The preset is unchanged.
 - **The RTK ZUPT** ([velocity-state note](navi776_techniques.md#known-issue-the-velocity-state-2026-10-31))
   changes UrbanNav by 0.1 pp or less and loses 3 pp on HK Deep.
 - **The corrected velocity loop B** is the best arm on HK Deep (+2.9 pp, wrong
