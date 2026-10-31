@@ -377,7 +377,10 @@ error is against the reference trajectory; the fused error is 3D.
   0.229 rad/s within about 300 s and stays there, and the heading is not
   converged at the end of the run. On tokyo/run1 and tokyo/run3 the estimate also reaches
   0.16 rad/s, though there the fused p50 stays at 2.43 m and 0.09 m. The
-  other three runs are below 0.09 rad/s (fused p50 0.12–1.86 m).
+  other three runs are below 0.09 rad/s (fused p50 0.12–1.86 m). The cause
+  and the opt-in `--consider-before-heading-latch` are in
+  [the loose ESKF before the heading latch](imu_fusion.md#the-loose-eskf-before-the-heading-latch);
+  that flag is not for `--navi776-tc`, where it changes the RTK stream.
 - **Fixing the velocity makes the RTK stream worse.** Three experiment builds
   were measured:
 

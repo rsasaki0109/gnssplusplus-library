@@ -143,7 +143,8 @@ Tokyo runs, because the loose ESKF takes a wrong RTK velocity state
 ([known issue](navi776_techniques.md#known-issue-the-velocity-state-2026-10-31)).
 Without any tight-coupling flag, PPC nagoya/run1 is kilometres off too: there
 the loose ESKF's gyro bias estimate grows to 0.23 rad/s and its heading does
-not converge.
+not converge. `--consider-before-heading-latch` fixes most of that
+([below](#the-loose-eskf-before-the-heading-latch)).
 
 For repeatable runs, put defaults in a flat TOML `[gnss_fuse]` table and pass
 `--config <path>`. Keys may use `snake_case` or `kebab-case`; vector values
@@ -160,6 +161,70 @@ samples agrees within a circular-scatter tolerance (a single-epoch latch was
 shown to catch reversing vehicles ~180° wrong on PPC nagoya). The reported
 "heading converged" status requires alignment plus healthy recent
 velocity-innovation NIS.
+
+### The loose ESKF before the heading latch
+
+Until the heading latches, the yaw σ is 180°, so the error-state
+linearization about the nominal yaw is not valid. By default the GNSS, ZUPT and
+NHC updates of that phase still correct roll, pitch and both IMU biases. The
+latch then reopens only the yaw, and the tilt and biases learned before it
+stay, with a small and wrong covariance.
+
+- **What goes wrong.** On 7 of the 11 runs below, the gyro bias estimate
+  reaches 0.09–0.23 rad/s, and the heading then drifts. On tokyo/run1,
+  tokyo/run2 and nagoya/run1 the jump comes within seconds of the latch. This
+  is the mechanism found for the online PVA filter
+  ([candidate v11](online_pva_candidate_v11.md)).
+- **What the flag does.** `--consider-before-heading-latch` makes those
+  pre-latch updates Schmidt consider updates for the attitude and both biases:
+  position and velocity are corrected, the attitude and biases are left
+  unchanged, and the covariance stays consistent (Joseph form). After the
+  latch every update is the plain update. The option is the one
+  `velocity_consistency_v10` of `gnss pva-evaluate` sets; `gnss fuse` exposes
+  it as an opt-in.
+- **nagoya/run1 starts by reversing.** The car backs out of a parking space
+  for about 8 s at up to 1.2 m/s, and the course samples agree, so the
+  heading latches 180° off. The flag does not fix this wrong latch: with it,
+  nagoya/run1 still reaches 0.117 rad/s and a p90 of 72.5 m. The heading-latch direction test of
+  `velocity_consistency_v5` flips nagoya/run1 correctly but also flips the
+  correct forward latches on Odaiba and HK Deep-Urban-1, so it is not
+  exposed in `gnss fuse`.
+
+Fused `--out` 3D error, p50 / p90 (m), one run each, the same RTK flags
+(`--preset low-cost --ratio 2.4 --max-subset-ar-drop-steps 18
+--rtk-snr-weighting --no-arfilter`) and no tight coupling. The largest gyro
+bias estimate of the run is in parentheses (rad/s).
+
+| Run | Default | `--consider-before-heading-latch` |
+| --- | ---: | ---: |
+| PPC tokyo/run1 | 2.43 / 60.3 (0.161) | 0.12 / 9.4 (0.012) |
+| PPC tokyo/run2 | 0.12 / 1.6 (0.088) | 0.10 / 1.6 (0.010) |
+| PPC tokyo/run3 | 0.09 / 2.3 (0.158) | 0.08 / 2.3 (0.008) |
+| PPC nagoya/run1 | 2,044 / 13,274 (0.229) | 1.60 / 72.5 (0.117) |
+| PPC nagoya/run2 | 0.63 / 15.4 (0.025) | 0.63 / 15.2 (0.024) |
+| PPC nagoya/run3 | 1.86 / 16.7 (0.013) | 1.81 / 16.7 (0.021) |
+| UrbanNav Odaiba | 0.39 / 17.8 (0.152) | 0.27 / 17.8 (0.005) |
+| UrbanNav Shinjuku | 0.53 / 19.5 (0.097) | 0.32 / 15.5 (0.024) |
+| UrbanNav HK Deep-Urban-1 | 5.98 / 57.5 (0.101) | 3.21 / 56.4 (0.006) |
+| UrbanNav HK Harsh-Urban-1 | 66.2 / 479 (0.023) | 140.7 / 265 (0.028) |
+| UrbanNav HK Medium-Urban-1 | 4,659 / 39,329 (0.050) | 48.8 / 193 (0.038) |
+
+- The PPC runs use the FLU lever arms, UrbanNav a zero lever arm, and
+  UrbanNav Tokyo `--base-ecef -3961904.9530 3348993.7578 3698211.7553`.
+  The Hong Kong error is to the raw truth, about 0.6 m from the antenna.
+- The RTK stream (`--rtk-pos-out`) is byte-identical with and without the
+  flag on all 11 runs.
+- HK Harsh-Urban-1 is worse at p50. Its RTK stream fixes 2.5% of the
+  epochs and 92% of those fixes are wrong, so its fused output is unusable
+  either way.
+- All 11 runs are development data: PPC and UrbanNav Tokyo were used to find
+  the mechanism, and the table was measured after it. There is no holdout, so
+  the default stays off.
+- **Do not combine it with `--tc-closed-loop` or `--navi776-tc`.** The
+  closed-loop INS starts from the loose ESKF's attitude and biases, so the
+  flag changes the RTK stream. On one run per PPC run under `--navi776-tc`,
+  correct FIX fall from 68.21% to 65.10% and the wrong-FIX rate rises from
+  6.41% to 9.53%.
 
 ## Validation snapshot (PPC Tokyo/Nagoya, `--preset low-cost`)
 
