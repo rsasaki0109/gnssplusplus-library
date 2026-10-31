@@ -530,6 +530,76 @@ As with [CLAS and the PPC IMU](ppc_clas_imu_experiments.md), the INS has no
 absolute position except the fixes it is meant to check. None of the three is
 adopted.
 
+### Candidates on UrbanNav Hong Kong and Tokyo
+
+On the six PPC runs a few events decide most comparisons. The candidates of
+the last sections were therefore also run on UrbanNav, nine runs each.
+
+- **Data.**
+  - UrbanNav Tokyo Odaiba and Shinjuku: Trimble rover, as in
+    [the out-of-sample check](#urbannav-out-of-sample-check).
+  - UrbanNav Hong Kong Deep-Urban-1 and Harsh-Urban-1: NovAtel Flexpak6 rover
+    at 1 Hz, HKSC base 2.7–5.6 km away, Xsens IMU.
+    - Converted with `scripts/convert_urbannav_hk_to_ppc_layout.py`. Every
+      output matches the SHA256 recorded in
+      [holdout contract v3](online_pva_default_switch_holdout_v3.md).
+    - That contract scored them, so they are development data. `gnss fuse`
+      had not been run on them before.
+    - The baselines are longer than 1 km, so the Doppler rows and the
+      adaptive noise are off there. The lever arm is zero, as in the
+      contract.
+- **The Hong Kong truth is about 0.6 m from the antenna.**
+  - The FIX of `--navi776-tc` on Deep are offset from the truth by a constant
+    vector in the body frame: 0.56 m backwards, 0.01 m left and 0.23 m down
+    (median of the 230 FIX within 1.5 m of the truth). Without a correction
+    almost every correct FIX would score as wrong.
+  - The documented extrinsics do not reproduce it. `extrinsic.yaml` of the
+    UrbanNav repository gives a translation of (0, 0.86, −0.31) m (x right,
+    y forward, z up) for `ANTENNA_T_IMU` and 0.14 m up for `body_T_SPAN`.
+  - The measured offset is therefore added to the truth for every arm and
+    both Hong Kong runs. It was estimated with the truth, from the control
+    arm.
+- **Harsh-Urban-1 cannot separate the arms.** Every arm fixes 3.8–4.9% of
+  the epochs, and 98% of those fixes are wrong.
+
+Correct FIX (% of epochs) / wrong FIX (% of FIX) at 0.5 m, mean of nine
+runs. The PPC column is the six-run mean.
+
+| Arm | PPC | Odaiba | Shinjuku | HK Deep |
+| --- | ---: | ---: | ---: | ---: |
+| `--navi776-tc` | 68.09 / 7.08 | 64.67 / 3.60 | 64.87 / 17.63 | 17.07 / 32.2 |
+| + validated-only KF hold | **70.57 / 5.68** | 64.05 / 4.77 | **72.68 / 8.26** | 16.40 / 31.3 |
+| + RTK ZUPT (experiment) | 67.44 / 7.88 | 64.77 / 3.37 | 64.93 / 17.67 | 14.03 / 40.4 |
+| + RTK ZUPT and validated-only KF hold (experiment) | 69.29 / 7.76 | 64.11 / 4.57 | 72.68 / 8.28 | 15.00 / 37.5 |
+| B: corrected velocity loop (experiment) | 65.42 / 10.38 | 64.80 / 3.32 | 63.50 / 18.33 | **19.93 / 27.9** |
+| No high-residual FLOAT reset (experiment) | 55.57 / 11.07 | 63.38 / 5.34 | 64.59 / 18.21 | 13.93 / 40.2 |
+
+- **The validated-only KF hold is the only candidate that holds up.**
+  - It gains 2.5 pp on PPC and 7.8 pp on Shinjuku, where the wrong-FIX rate
+    halves.
+  - It loses 0.6 pp on Odaiba, where the wrong-FIX rate rises by 1.2 pp, and
+    0.7 pp on HK Deep.
+  - At 0.25 m it goes from 62.93% to 68.35% on PPC and from 53.93% to 59.87%
+    on Shinjuku. It is 0.1 pp better on Odaiba and 1.3 pp worse on HK Deep.
+  - Every dataset here is development data for it.
+- **The RTK ZUPT** ([velocity-state note](navi776_techniques.md#known-issue-the-velocity-state-2026-10-31))
+  changes UrbanNav by 0.1 pp or less and loses 3 pp on HK Deep.
+- **The corrected velocity loop B** is the best arm on HK Deep (+2.9 pp, wrong
+  FIX −4.3 pp). However, it loses on PPC and on Shinjuku.
+- **The high-residual FLOAT reset is worth keeping.**
+  - The `low-cost` preset resets every ambiguity after five FLOAT epochs whose
+    prefit residuals exceed 4 m RMS or 10 m. The prefit residuals include the
+    rows that the update then rejects (3 m outlier threshold).
+  - On the six runs it fires 636 times. The median prefit RMS there is
+    11.3 m, against 0.52 m for the rows the update keeps.
+  - After a reset every lock count starts again, and AR waits five epochs.
+    On nagoya/run1 at TOW 550943.8 that cost the stop described in the
+    velocity-state note.
+  - Even so, without it the PPC runs fall to 55.57% correct FIX, and Odaiba,
+    Shinjuku and HK Deep lose too.
+
+## In-KF component: heavy-tail front-end
+
 ## In-KF component: heavy-tail front-end
 
 `--integrity-student-t-*` (IRLS Student-t / Huber / Laplacian) weights the RTK
