@@ -141,6 +141,9 @@ With `--navi776-tc` (or `--tc-velocity-states`), use the RTK stream written by
 `--rtk-pos-out`. The fused `--out` stream can be kilometres off on the PPC
 Tokyo runs, because the loose ESKF takes a wrong RTK velocity state
 ([known issue](navi776_techniques.md#known-issue-the-velocity-state-2026-10-31)).
+Without any tight-coupling flag, PPC nagoya/run1 is kilometres off too: there
+the loose ESKF's gyro bias estimate grows to 0.23 rad/s and its heading does
+not converge.
 
 For repeatable runs, put defaults in a flat TOML `[gnss_fuse]` table and pass
 `--config <path>`. Keys may use `snake_case` or `kebab-case`; vector values

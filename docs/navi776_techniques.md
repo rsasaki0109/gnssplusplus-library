@@ -371,6 +371,13 @@ error is against the reference trajectory; the fused error is 3D.
   velocity, with its few-cm/s σ, as a velocity measurement. On Tokyo this
   puts the fused stream kilometres off. Even with `--tc-closed-loop` alone, the
   fused stream has long tails on tokyo/run1 and Nagoya.
+- **The loose ESKF also fails on its own.** Without any tight-coupling flag
+  (the same RTK flags, one run per PPC run), nagoya/run1 is kilometres off as
+  well: fused p50 2,044 m, p90 13,274 m. Its gyro bias estimate grows to
+  0.229 rad/s within about 300 s and stays there, and the heading is not
+  converged at the end of the run. On tokyo/run1 and tokyo/run3 the estimate also reaches
+  0.16 rad/s, though there the fused p50 stays at 2.43 m and 0.09 m. The
+  other three runs are below 0.09 rad/s (fused p50 0.12–1.86 m).
 - **Fixing the velocity makes the RTK stream worse.** Three experiment builds
   were measured:
 
@@ -428,7 +435,115 @@ error is against the reference trajectory; the fused error is 3D.
 - **Nothing is changed.** The preset's RTK results depend on this loop, and
   every fix tried scores worse on the six runs it was tuned on. A fix needs an
   attitude and bias correction for the closed-loop INS and an honest velocity
-  covariance, and then a new sign-off.
+  covariance, and then a new sign-off. The
+  [rework below](#closed-loop-ins-rework-2026-10-31-not-adopted) tried that.
+
+### Closed-loop INS rework (2026-10-31, not adopted)
+
+An experiment build (not merged) reworked the closed-loop INS as the previous
+section asks. Every change is switched by an environment variable; with all of
+them unset, the output is byte-identical to the preset.
+
+- **The INS keeps and corrects its own velocity.**
+  - `reanchor()` keeps the INS velocity instead of overwriting it with the RTK
+    velocity state.
+  - At every RTK epoch the INS takes an ESKF update with the epoch SPP Doppler
+    velocity, so attitude and IMU biases are corrected through the
+    covariance. The SPP velocity covariance is too large on these runs
+    (nagoya/run1: error p50 0.07 m/s, against a σ of 1.27 m/s over the
+    three axes), so it is
+    scaled by 0.01 and floored at (0.1 m/s)².
+  - After five rejected updates in a row, the velocity restarts from the SPP
+    velocity and the yaw variance is reopened to (30°)².
+  - A non-holonomic constraint (no lateral or vertical body velocity) is
+    applied at every epoch. The IMU-only ZUPT is off: with a kept velocity, a
+    false ZUPT no longer disappears at the next re-anchor.
+- **The RTK gets the INS covariance.** The INS position block is zero at the
+  anchor, so its propagated covariance is the covariance of the displacement.
+  That covariance, and the INS velocity covariance, are the RTK time-update
+  noise. The RTK velocity block is replaced, not accumulated.
+- **The INS is now right.** On one run per PPC run, against the reference
+  (25 m² floor):
+  - roll and pitch medians within 0.5° and 1.3°, with a p90 deviation from
+    the median below 0.8° (a constant mounting offset would also show here);
+  - heading median within 0.7°, p90 deviation 2.6–15.6°;
+  - velocity error p50 0.07–0.20 m/s.
+
+  Before, on nagoya/run1, the closed-loop INS heading error while moving
+  (above 3 m/s) was 59° (median, p90 152°), and its velocity error p50 was
+  0.91 m/s. It inherits the heading from the loose ESKF at the start, and
+  nothing corrected it. The Doppler updates alone leave 51°. Reopening the
+  yaw brings it to 5.6°, and the non-holonomic constraint to 2.1° (p90
+  12.7°).
+- **A float far from SPP can lock in.** This is a separate RTK issue that the
+  rework exposed.
+  - The RTK gate that rejects a FLOAT more than 150 m from SPP restores the
+    remembered state and emits SPP. Unlike the `ins_prior_min_code_rows`
+    gate, it does not make the next epoch re-seed from SPP.
+  - Under the INS time update, the filter then keeps propagating the
+    far-off float. On nagoya/run3, with the rework, that lasted 632 epochs
+    (about 130 s), 150–280 m from SPP.
+  - The preset hits this gate too. On one run per PPC run it fires in 196
+    epochs on tokyo/run1, 27 on nagoya/run2 and 7 on nagoya/run1.
+  - Making the gate re-seed from SPP is needed for the rework (nagoya/run3:
+    40.44% → 53.94% correct FIX). On the preset it changes nothing beyond the
+    lever-arm spread: 67.97% / 7.34% against 68.09% / 7.08%, nine runs per
+    PPC run.
+- **The position floor hides the broken velocity.** The RTK time update adds
+  `ins_time_update_position_q_floor_m2 = 25` (σ 5 m) at every epoch, so the
+  INS displacement carries almost no information. Lowering the floor on the
+  preset makes it worse (one run per PPC run, correct / wrong FIX):
+
+  | Floor (m²) | 25 | 1 | 0.1 |
+  | --- | ---: | ---: | ---: |
+  | `--navi776-tc` | 68.21% / 6.41% | 64.73% / 12.46% | 66.73% / 8.90% |
+
+  A lower floor needs an INS covariance that matches its errors. With the
+  default (tactical) IMU noise, the rework's velocity error is 1.8–3.9 times
+  its σ (median over the epochs of a run). On nagoya/run1 and tokyo/run2,
+  `--imu-grade consumer` lowers that from 2.6 and 3.4 to 1.5 and 2.4, but the
+  p90 stays near 9.
+
+Results, nine runs per run, correct FIX (% of epochs) / wrong FIX (% of FIX)
+at 0.5 m, and correct FIX at 0.25 m in parentheses. Both rework columns
+include the 150 m re-seed.
+
+| Set | `--navi776-tc` | Rework, floor 25 m² | Rework, final |
+| --- | ---: | ---: | ---: |
+| PPC, six runs | 68.09 / 7.08 (62.93) | 66.25 / 7.51 (60.74) | 68.02 / 6.60 (61.47) |
+| UrbanNav Odaiba | 64.67 / 3.60 (62.46) | 65.10 / 3.47 (62.81) | 65.76 / 2.61 (63.57) |
+| UrbanNav Shinjuku | 64.87 / 17.63 (53.93) | 62.20 / 18.92 (48.12) | 66.96 / 15.00 (53.70) |
+| UrbanNav HK Deep-Urban-1 | 17.07 / 32.22 (12.65) | 19.36 / 29.25 (14.03) | 19.00 / 34.99 (13.79) |
+
+- **How the final variant was chosen.** It adds `--imu-grade consumer`, a NIS
+  gate of 5 per row on the Doppler update (20 in the other column) and
+  `--tc-ins-position-q-floor 0.1`. It was chosen after about 10 variants on
+  one run per PPC run, and more on nagoya/run1 alone, so its PPC numbers are
+  in-sample. UrbanNav (Tokyo and Hong Kong) was not used to choose among the
+  variants, but the 25 m² column had been measured on it first.
+- **It does not pass the rule.** By the rule of the
+  [UrbanNav out-of-sample check](ppc_rtk_vs_gnss_imu_fusion.md#urbannav-out-of-sample-check)
+  (wrong-FIX rate lower, and correct FIX at 0.25 m not more than 1 pp lower):
+  - it passes on Odaiba and Shinjuku;
+  - it fails on PPC, where the 0.25 m correct FIX is 1.46 pp lower;
+  - it fails on HK Deep-Urban-1, where the wrong-FIX rate is higher.
+
+  HK Medium-Urban-1 fixes under 5% of its epochs in every arm, so it is not
+  counted.
+- **The lever arm no longer matters.** With the rework, the nine runs of a PPC
+  run agree: SD 0.00 pp with the 25 m² floor, against up to 2.5 pp on Tokyo
+  for the preset. For the final variant the largest SD is 0.61 pp
+  (Shinjuku).
+- **Most per-run differences are single events.** Against the preset, the
+  25 m² column loses 5.7 pp on tokyo/run2 and 6.6 pp on nagoya/run1.
+  - tokyo/run2: after a hold, at TOW 177084 the preset re-fixes with ratio
+    10–21 and the rework stays FLOAT for 76 s.
+  - nagoya/run1: at TOW 550943.8 both arms reset every ambiguity (prefit RMS
+    69 m). The rework's float then falls 15 m off and holds a wrong fix for
+    100 s while the car stands still.
+  - On nagoya/run3 the rework has 4 pp fewer wrong FIX.
+- **Nothing is changed.** Merging the rework would need a frozen holdout, and
+  no unused data with a base station is at hand.
 
 ### Tokyo2 tail and runtime diagnosis
 
