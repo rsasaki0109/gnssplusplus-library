@@ -319,6 +319,10 @@ mean includes them.
     more.
   - The single-run sign-off also showed this run's 50 cm share falling, while
     its fix rate rose.
+  - Why: while the car stands still the float drifts, and the hold-fix
+    fallback then rounds pairs into a fix about 0.9 m off. The validated-only
+    KF hold recovers the run
+    ([tokyo/run3 against M4](ppc_rtk_vs_gnss_imu_fusion.md#why-tokyorun3-loses-to-m4)).
 - **tokyo/run1 shows no difference.**
 - **Over six runs the preset adds 0.51 pp of correct FIX** (about 1.8 standard
   errors) and 0.45 pp of wrong-FIX rate. Its benefit is concentrated on

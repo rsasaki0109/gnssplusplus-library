@@ -411,6 +411,79 @@ python3 scripts/analysis/ppc_fuse_spread.py --dataset-root data/urbannav_ppc \
   --hold-kalman-update --hold-kalman-update-validated-only --min-fix-satellites 4
 ```
 
+### Why tokyo/run3 loses to M4
+
+On tokyo/run3, `--navi776-tc` has 3.1 pp less correct FIX than M4
+([nine-run re-check](navi776_techniques.md#nine-run-re-check-2026-10-30)).
+The nine runs of both arms were compared epoch by epoch.
+
+- **Two windows.** Per run, `--navi776-tc` loses 1,224 correct-FIX epochs (814
+  to FLOAT, 410 to wrong FIX) and gains 745, a net loss of 479 of 15,239.
+  - TOW 180660–180840 loses 324 net, and TOW 181680–181920 loses 267.
+  - The rest of the run gains 112.
+- **The first window depends on the lever arm.**
+  - The car stands still there for about 100 s.
+  - All nine M4 runs give the same result: 739 correct-FIX epochs.
+  - The nine `--navi776-tc` runs give 82 to 731.
+- **The mechanism**, traced on the run whose lever arm has y moved by −2 cm
+  (`0.310,-0.020,0.550`, 82 correct-FIX epochs in the window):
+  1. While the car stands, the float drifts. The subset AR fixes on it, at
+     ratio 13–28, move from 0.06 m to 0.22 m off horizontally in 1.6 s (TOW
+     180665.0–180666.6), and the full-set ratio falls from 6.8 to 1.8.
+  2. At TOW 180666.8 LAMBDA fails (ratio 1.5). The hold-fix fallback rounds the
+     6 of its 10 pairs that have no held integer, and the fix jumps 0.34 m.
+  3. At TOW 180669.2 it rounds 7 of 11 and jumps 0.76 m, to 0.91 m off.
+  4. It stays fixed for the rest of the stop, 0.79–0.99 m off (10th–90th
+     percentile, 96 s). 78% of these epochs have ratio 6.5 or less.
+  - Over the stop (TOW 180665–180765) this run has 16 correct and 485 wrong
+    FIX epochs. The same lever arm with only the Doppler rows has 498 correct
+    and none wrong, and with only the adaptive noise 501 and none.
+- **The second window ends the same way.** With the unperturbed lever arm, at
+  TOW 181887.0:
+  - LAMBDA fails (ratio 1.02).
+  - The fallback rounds 12 of 30 pairs, jumps 0.86 m and holds for 25 s.
+  - M4 keeps an AR fix there at ratio 29.
+- **Few holds turn a correct FIX wrong, but one can last a whole stop.** With
+  the unperturbed lever arm on the six runs, 35 of 3,396 hold-fix epochs turn
+  a correct FIX wrong, 13 of them with rounded pairs.
+
+Three hold guards were measured, nine runs each. Correct FIX is % of epochs
+(mean ± SD per run, ± SE for the six-run mean), and wrong FIX is % of FIX at
+0.5 m (six-run mean ± SE).
+
+| Arm | tokyo/run3, 0.5 m | tokyo/run3, 0.25 m | Six runs, 0.5 m | Six runs, 0.25 m | Wrong FIX |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| M4 | 80.13 ± 2.04 | 76.99 ± 2.00 | 67.58 ± 0.20 | 62.99 ± 0.20 | 6.63 ± 0.14 |
+| `--navi776-tc` | 76.99 ± 1.60 | 73.25 ± 2.02 | 68.09 ± 0.19 | 62.93 ± 0.28 | 7.08 ± 0.22 |
+| + no hold that rounds a pair | 74.85 ± 1.84 | 73.82 ± 1.97 | 63.53 ± 0.18 | 61.79 ± 0.19 | 4.83 ± 0.03 |
+| + no hold that rounding moves by more than 0.1 m | 74.68 ± 3.26 | 73.49 ± 3.10 | 67.64 ± 0.20 | 64.25 ± 0.21 | 5.07 ± 0.07 |
+| + KF hold, validated only | 80.78 ± 1.31 | 78.92 ± 1.11 | 70.57 ± 0.18 | 68.35 ± 0.17 | 5.68 ± 0.18 |
+
+- **"No hold that rounds a pair"** is `RTKConfig::hold_fix_unchanged_set_only`
+  (`gnss solve --hold-fix-unchanged-set`). `gnss fuse` has no flag for it, and
+  it was measured with an experiment build.
+- **"More than 0.1 m"** exists only in an experiment build.
+  - It compares the hold on all pairs with the hold on the matched pairs alone.
+  - Correct rounded holds move by a median of 0.009 m (90th percentile
+    0.063 m). The 13 that turn a correct FIX wrong move by a median of 0.16 m.
+  - The 0.1 m was chosen on these runs.
+  - A χ² test of the same move against its own covariance needs no threshold.
+    However, the KF covariance is about ten times too small for it, and it
+    rejects 63% of the correct rounded holds.
+- **Neither of these two guards recovers tokyo/run3.** Both lose more correct
+  FIX there. The rounded hold is only the last step; the cause is the float
+  drift before it. Neither guard is adopted.
+- **The validated-only KF hold does recover it**: 80.78% against M4's 80.13%
+  (78.92% against 76.99% at 0.25 m).
+  - The KF hold keeps the float on the integers of the last validated fix, so
+    it does not drift while the car stands.
+  - In the first window, seven of its nine runs have at most 11 wrong-FIX
+    epochs; the `--navi776-tc` runs have 42 to 586. Its correct FIX there
+    (403–656) stays below M4's 739.
+  - Its costs are those [above](#kf-hold-only-after-validated-fixes): it is
+    in-sample, the nagoya/run2 wrong-FIX rate is 8.35%, and on UrbanNav it
+    was measured only with `--min-fix-satellites 4`.
+
 ## In-KF component: heavy-tail front-end
 
 `--integrity-student-t-*` (IRLS Student-t / Huber / Laplacian) weights the RTK
