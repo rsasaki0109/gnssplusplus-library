@@ -513,9 +513,10 @@ with the unperturbed lever arm on the six runs.
   - The bridge copies the loose ESKF's velocity, attitude and biases at each
     FIX, anchors on that FIX, and then propagates with the IMU only.
   - Under `--navi776-tc` the loose ESKF diverges: its velocity input, the RTK
-    velocity state, is metres per second off (under investigation). The bridge
-    was therefore measured with an experiment build that feeds the loose ESKF
-    the SPP Doppler velocity.
+    velocity state, is metres per second off
+    ([known issue](navi776_techniques.md#known-issue-the-velocity-state-2026-10-31)).
+    The bridge was therefore measured with experiment build B of that note,
+    in which the loose ESKF takes the SPP Doppler velocity.
   - Its error against the truth is 0.13 m (median) less than 1 s after the
     FIX, but 2.66 m after 1–5 s and 15.7 m after 5–30 s. That is about 13 times
     its own σ.

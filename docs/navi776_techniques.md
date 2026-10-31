@@ -334,6 +334,69 @@ python3 scripts/analysis/ppc_fuse_spread.py --without-navi776-tc \
   -- --tc-closed-loop --tc-velocity-states
 ```
 
+### Known issue: the velocity state (2026-10-31)
+
+Under `--tc-velocity-states`, and so under `--navi776-tc`, the RTK velocity
+state is not a usable velocity, and the fused `--out` stream is not reliable.
+Score and use the RTK stream (`--rtk-pos-out`), as the sign-off above does.
+
+Measured with the unperturbed lever arm, one run per PPC run. The velocity
+error is against the reference trajectory; the fused error is 3D.
+
+| Run | Velocity error p50 / p90 (m/s) | Its σ, p50 (m/s) | Epochs with Doppler rows | Fused `--out` p50 / p90 (m) | `--tc-closed-loop` only: fused p50 / p90 (m) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| tokyo/run1 | 22.70 / 77.5 | 0.033 | 20% | 6,101 / 81,479 | 2.11 / 37.62 |
+| tokyo/run2 | 8.42 / 27.9 | 0.018 | 65% | 150 / 3,439 | 0.14 / 3.03 |
+| tokyo/run3 | 20.05 / 65.4 | 0.032 | 16% | 7,814 / 103,958 | 0.08 / 1.40 |
+| nagoya/run1 | 0.65 / 9.2 | 0.708 | 0% | 1.54 / 84.24 | 14.24 / 967 |
+| nagoya/run2 | 0.25 / 9.3 | 0.626 | 0% | 33.98 / 330 | 0.48 / 28.77 |
+| nagoya/run3 | 1.51 / 8.6 | 0.700 | 0% | 5.86 / 107 | 0.78 / 12.16 |
+
+- **Why the velocity state is wrong.**
+  - `TightCouplingProcessor::reanchor()` resets the closed-loop INS to the RTK
+    position and velocity at every epoch. However, its attitude and IMU
+    biases are copied from the loose ESKF only when the loop starts, and are
+    never corrected after that.
+  - The RTK time update then sets the velocity state to the INS velocity but
+    keeps the RTK velocity covariance. While Doppler rows are present, that
+    covariance shrinks to a few cm/s.
+  - On tokyo/run3, the rows switch on at TOW 179497.8 with the velocity
+    0.08 m/s off and a row RMS of 0.06 m/s. The error then grows steadily, to
+    0.83 m/s within 10 s. Beyond the 1 m/s row outlier threshold the rows are
+    rejected. 40 s after the switch-on the velocity is 16 m/s off, while the
+    car moves at about 1 m/s.
+  - The rows exist only within 1 km of the base. On the Tokyo runs that is
+    16–65% of the epochs, and on Nagoya (9.4 km) none.
+- **Why `--out` diverges.** The loose ESKF behind `--out` takes the RTK
+  velocity, with its few-cm/s σ, as a velocity measurement. On Tokyo this
+  puts the fused stream kilometres off. Even with `--tc-closed-loop` alone, the
+  fused stream has long tails on tokyo/run1 and Nagoya.
+- **Fixing the velocity makes the RTK stream worse.** Three experiment builds
+  were measured:
+
+  | Change | Velocity error p50 | Correct FIX, six runs | Wrong FIX, six runs |
+  | --- | ---: | ---: | ---: |
+  | None (`--navi776-tc`) | see above | 68.09% | 7.08% |
+  | A: loose ESKF and closed-loop INS take the SPP Doppler velocity | 0.42–0.47 m/s | 65.43% | 10.43% |
+  | B: A, and the closed-loop INS takes the loose ESKF's attitude and biases at every epoch | 0.13–0.19 m/s | 65.42% | 10.38% |
+
+  - Correct FIX are at 0.5 m, nine runs per PPC run (six-run means). The
+    velocity errors are from single tokyo/run2 and tokyo/run3 runs.
+  - With A or B, the fused stream on those two runs is 0.08–0.10 m off
+    (median).
+  - With A or B, the nine runs of each PPC run give the same correct FIX
+    within 0.1 pp, and their positions agree within 4 mm in 99% of epochs.
+    Without them, a 2–4 cm lever-arm change moves a Tokyo run by up to 5 pp
+    ([run-to-run spread](ppc_rtk_vs_gnss_imu_fusion.md#run-to-run-spread)), so
+    that spread is a symptom of this loop.
+  - C, changing only the loose ESKF's input, still changes the RTK stream: the
+    closed loop restarts from the loose ESKF after a failed re-anchor. On one
+    run per PPC run, correct FIX fall from 68.21% to 66.99%.
+- **Nothing is changed.** The preset's RTK results depend on this loop, and
+  every fix tried scores worse on the six runs it was tuned on. A fix needs an
+  attitude and bias correction for the closed-loop INS and an honest velocity
+  covariance, and then a new sign-off.
+
 ### Tokyo2 tail and runtime diagnosis
 
 Full-run ablations identified the Doppler rows as the main source of both
