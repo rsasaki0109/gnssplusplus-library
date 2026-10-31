@@ -338,7 +338,10 @@ python3 scripts/analysis/ppc_fuse_spread.py --without-navi776-tc \
 
 Under `--tc-velocity-states`, and so under `--navi776-tc`, the RTK velocity
 state is not a usable velocity, and the fused `--out` stream is not reliable.
-Score and use the RTK stream (`--rtk-pos-out`), as the sign-off above does.
+Score and use the RTK stream (`--rtk-pos-out`), as the sign-off above does, or
+add `--independent-output-filter` for `--out`
+([independent output filter](imu_fusion.md#independent-output-filter)), which
+leaves the RTK stream byte-identical.
 
 Measured with the unperturbed lever arm, one run per PPC run. The velocity
 error is against the reference trajectory; the fused error is 3D.
@@ -370,7 +373,10 @@ error is against the reference trajectory; the fused error is 3D.
 - **Why `--out` diverges.** The loose ESKF behind `--out` takes the RTK
   velocity, with its few-cm/s σ, as a velocity measurement. On Tokyo this
   puts the fused stream kilometres off. Even with `--tc-closed-loop` alone, the
-  fused stream has long tails on tokyo/run1 and Nagoya.
+  fused stream has long tails on tokyo/run1 and Nagoya. With
+  `--independent-output-filter`, a second loose ESKF that takes the SPP
+  Doppler velocity writes `--out`; on the PPC Tokyo runs its p50 is
+  0.09–0.12 m.
 - **The loose ESKF also fails on its own.** Without any tight-coupling flag
   (the same RTK flags, one run per PPC run), nagoya/run1 is kilometres off as
   well: fused p50 2,044 m, p90 13,274 m. Its gyro bias estimate grows to

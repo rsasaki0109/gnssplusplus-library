@@ -218,6 +218,51 @@ class GnssFuseCliTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("boolean false is not supported", result.stderr)
 
+    def test_independent_output_filter_is_an_rtk_only_opt_in(self) -> None:
+        result = self.run_fuse("--help")
+        self.assertNotIn("--independent-output-filter", result.stdout)
+        result = self.run_fuse("--help-advanced")
+        self.assertIn("--independent-output-filter", result.stdout)
+
+        # The filter takes the epoch SPP velocity of the RTK path.
+        result = self.run_fuse(
+            "--imu", "missing-imu.csv",
+            "--gnss-pos", "missing-solution.pos",
+            "--independent-output-filter",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("--independent-output-filter requires --base", result.stderr)
+
+        result = self.run_fuse(
+            "--imu", "missing-imu.csv",
+            "--rover", "missing-rover.obs",
+            "--base", "missing-base.obs",
+            "--nav", "missing.nav",
+            "--independent-output-filter",
+            "--library-fix-integrity-gate",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(
+            "--independent-output-filter cannot be combined with --library-fix-integrity-gate",
+            result.stderr,
+        )
+
+        with tempfile.TemporaryDirectory(prefix="gnss_fuse_config_") as temp_dir:
+            config_path = Path(temp_dir) / "fuse.toml"
+            config_path.write_text(
+                "[gnss_fuse]\n"
+                'imu = "missing-imu.csv"\n'
+                'rover = "missing-rover.obs"\n'
+                'base = "missing-base.obs"\n'
+                'nav = "missing.nav"\n'
+                "independent_output_filter = true\n",
+                encoding="utf-8",
+            )
+            result = self.run_fuse("--config", str(config_path))
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn("unknown or incomplete argument", result.stderr)
+        self.assertNotIn("requires --base", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
