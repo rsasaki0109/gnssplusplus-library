@@ -181,6 +181,43 @@ class GnssFuseCliTest(unittest.TestCase):
             result.stderr,
         )
 
+    def test_consider_before_heading_latch_is_an_advanced_opt_in(self) -> None:
+        result = self.run_fuse("--help")
+        self.assertNotIn("--consider-before-heading-latch", result.stdout)
+        result = self.run_fuse("--help-advanced")
+        self.assertIn("--consider-before-heading-latch", result.stdout)
+
+        # Parsed as a plain flag, so the run reaches the input loader.
+        result = self.run_fuse(
+            "--imu", "missing-imu.csv",
+            "--gnss-pos", "missing-solution.pos",
+            "--consider-before-heading-latch",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("failed to load IMU CSV", result.stderr)
+
+        # A TOML true maps to the flag; false is rejected like other default-off flags.
+        with tempfile.TemporaryDirectory(prefix="gnss_fuse_config_") as temp_dir:
+            config_path = Path(temp_dir) / "fuse.toml"
+            config_path.write_text(
+                "[gnss_fuse]\n"
+                'gnss_pos = "missing-solution.pos"\n'
+                'imu = "missing-imu.csv"\n'
+                "consider_before_heading_latch = true\n",
+                encoding="utf-8",
+            )
+            result = self.run_fuse("--config", str(config_path))
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("failed to load IMU CSV", result.stderr)
+
+            config_path.write_text(
+                "[gnss_fuse]\nconsider_before_heading_latch = false\n",
+                encoding="utf-8",
+            )
+            result = self.run_fuse("--config", str(config_path))
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("boolean false is not supported", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

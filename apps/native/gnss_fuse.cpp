@@ -705,6 +705,12 @@ void printAdvancedUsage(const char* program_name) {
         << "  --heading-recovery-cooldown-epochs <n>\n"
         << "                                Velocity-update epochs to wait after a recovery fires\n"
         << "                                before it can fire again. Default: 20\n"
+        << "  --consider-before-heading-latch\n"
+        << "                                Until the heading is latched, GNSS, ZUPT and NHC updates\n"
+        << "                                leave the attitude and IMU biases unchanged (Schmidt\n"
+        << "                                consider update), so the unknown yaw cannot corrupt\n"
+        << "                                them. Changes the RTK stream with --tc-closed-loop or\n"
+        << "                                --navi776-tc. Default: off\n"
         << "  --max-position-nis <v>       Reject a GNSS position update if its normalized\n"
         << "                                innovation squared per observation exceeds this (guards\n"
         << "                                against RTK float-reconvergence jumps corrupting attitude\n"
@@ -1852,6 +1858,8 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         } else if (arg == "--heading-recovery-cooldown-epochs") {
             options.fusion_config.heading_recovery_cooldown_epochs =
                 std::stoi(requireValue(arg, i, argc, argv));
+        } else if (arg == "--consider-before-heading-latch") {
+            options.fusion_config.consider_attitude_and_biases_before_heading_latch = true;
         } else {
             matched = false;
         }
