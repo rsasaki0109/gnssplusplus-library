@@ -83,8 +83,8 @@ With `--navi776-tc` on the six PPC runs, all three together cut the wrong-FIX
 rate from 7.08% to 2.00% of FIX. FIX within 0.5 m fall by 0.91 pp of epochs,
 but FIX within 0.25 m rise from 62.93% to 65.90%
 ([measurement](ppc_rtk_vs_gnss_imu_fusion.md#kf-hold-only-after-validated-fixes)).
-On UrbanNav Tokyo they also lower the wrong-FIX rate, but hold one 12 m wrong
-fix for 13 s on Odaiba
+On UrbanNav Tokyo they also lower the wrong-FIX rate. On Odaiba, however, they
+hold one wrong fix for 13 s, 12 m off horizontally and 44 m in height
 ([UrbanNav check](ppc_rtk_vs_gnss_imu_fusion.md#urbannav-out-of-sample-check)).
 
 ## Position frame contract
