@@ -53,7 +53,10 @@ def motion(t):
     return speed, accel, yaw_rate, heading
 
 
-def imr_bytes(first, last, flags=(1, 1, 2), magic=b"$IMURAW\0"):
+FRD_FROM_FLU = ((1, 0, 0), (0, -1, 0), (0, 0, -1))   # STIM300 body (README mounting 180, 0, 90) from FLU
+
+
+def imr_bytes(first, last, flags=(1, 1, 2), magic=b"$IMURAW\0", body_from_flu=FRD_FROM_FLU, name=b"STIM300"):
     head = bytearray(512)
     head[0:8] = magic
     struct.pack_into("<b", head, 8, 0)
@@ -61,16 +64,18 @@ def imr_bytes(first, last, flags=(1, 1, 2), magic=b"$IMURAW\0"):
     struct.pack_into("<ii", head, 17, flags[0], flags[1])
     struct.pack_into("<ddd", head, 25, RATE, GYRO_SCALE, ACCEL_SCALE)
     struct.pack_into("<i", head, 49, flags[2])
-    head[65:72] = b"STIM300"
+    head[65:65 + len(name)] = name
     records = bytearray()
     dt = 1/RATE
     n = int(round((last - first)*RATE))
     for k in range(n + 1):
         t = first + k*dt
         speed, accel, yaw_rate, _ = motion(t - dt/2)
-        # FRD body: x forward, y right, z down; specific force and rate.
-        gyro = (0.0, 0.0, -yaw_rate)
-        acc = (accel, -speed*math.radians(yaw_rate), -9.8)
+        # FLU specific force and rate, then the IMU body axes.
+        gyro_flu = (0.0, 0.0, yaw_rate)
+        acc_flu = (accel, speed*math.radians(yaw_rate), 9.8)
+        gyro = [sum(body_from_flu[i][j]*gyro_flu[j] for j in range(3)) for i in range(3)]
+        acc = [sum(body_from_flu[i][j]*acc_flu[j] for j in range(3)) for i in range(3)]
         records += struct.pack("<d6i", t, *(round(v*dt/GYRO_SCALE) for v in gyro),
                                *(round(v*dt/ACCEL_SCALE) for v in acc))
     return bytes(head) + bytes(records)
@@ -121,6 +126,32 @@ def make_run(root, run="Data12_20230104", imu_first=T0 - 2, imu_last=T0 + SECOND
     (folder/"brdm0040.23p").write_bytes(b"     3.04           N: GNSS NAV DATA    M (MIXED)           RINEX VERSION / TYPE\n")
     (folder/"STIM300.imr").write_bytes(imr_bytes(imu_first, imu_last))
     (folder/"Rove_03_GroundTruth.txt").write_text(truth or truth_text(T0, T0 + SECONDS), encoding="latin-1")
+    return folder
+
+
+ISA_FROM_FLU = ((0, -1, 0), (-1, 0, 0), (0, 0, -1))   # README mounting 180, 0, 0: body x right, y back, z down
+
+
+def make_generic_run(root):
+    """Data13 layout: one ROVE entry (ISA-100C), ROVE.<yy>O, ROVE_GroundTruth.txt, ISA-100C.imr."""
+    folder = Path(root)/"Data13_20211118_ISA-100C_CAR_Complex"
+    folder.mkdir(parents=True)
+    marker = conv.geodetic_to_ecef(*MASTER)
+    (folder/"README.xml").write_text(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<DataInfo>\n\t<BASE>\n"
+        f"\t\t<GNSS_BaseXYZ>{marker[0]:.4f} {marker[1]:.4f} {marker[2]:.4f}</GNSS_BaseXYZ>\n"
+        "\t\t<GNSS_AntHeight>1.401</GNSS_AntHeight>\n\t</BASE>\n"
+        "\t<ROVE><ID>01</ID><GNSS_OBSFile>ROVE.21O</GNSS_OBSFile><SINS_IMUType>ISA-100C</SINS_IMUType>"
+        "<SINS_LeverArm_GNSS>-0.512 -0.284 0.187</SINS_LeverArm_GNSS>"
+        "<SINS_RotAngle_IMU>180.000 0.000 0.000</SINS_RotAngle_IMU></ROVE>\n</DataInfo>\n", encoding="utf-8")
+    (folder/"ROVE.21O").write_bytes(obs_header() + obs_file(T0 - 5, T0 + SECONDS + 5))
+    # A header position of zeros, as Data02 has: the converter rewrites it anyway.
+    (folder/"BASE.21O").write_bytes(obs_header("        0.0000        0.0000        0.0000") +
+                                   obs_file(T0 - 100, T0 + SECONDS + 100))
+    (folder/"brdm3220.21p").write_bytes(b"     3.04           N: GNSS NAV DATA    M (MIXED)           RINEX VERSION / TYPE\n")
+    (folder/"ISA-100C.imr").write_bytes(imr_bytes(T0 - 2, T0 + SECONDS + 2, body_from_flu=ISA_FROM_FLU,
+                                                  name=b"ISA-100C"))
+    (folder/"ROVE_GroundTruth.txt").write_text(truth_text(T0, T0 + SECONDS), encoding="latin-1")
     return folder
 
 
@@ -259,7 +290,7 @@ class Conversion(unittest.TestCase):
             self.assertEqual(manifest["replay"]["lever_arm_flu_m"], [-0.282, 0.5, -0.057])
             self.assertEqual(manifest["contract"], "docs/smartpnt_fuse_output_holdout.md")
             base_lines = (target/"base.obs").read_bytes().splitlines()
-            readme = conv.read_readme(folder/"README.xml")           # the marker as the README prints it
+            readme = conv.read_readme(folder/"README.xml", "STIM300")   # the marker as the README prints it
             want = conv.base_phase_centre(readme["base_marker_ecef"], 1.401)
             self.assertEqual(base_lines[1][:42].decode(), "".join(f"{v:14.4f}" for v in want))
             reference = (target/"reference.csv").read_text().splitlines()
@@ -280,6 +311,44 @@ class Conversion(unittest.TestCase):
         self.assertEqual(manifest["stats"]["rover.obs"]["blank_lines_dropped"], 1)
         self.assertNotIn(b"\r\n", out)
         self.assertEqual(manifest["stats"]["rover.obs"]["epochs_out"], SECONDS + 1)
+
+    def test_a_rove_run_with_another_imu_uses_its_own_spec(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = make_generic_run(Path(tmp)/"raw")
+            out = Path(tmp)/"out"
+            manifest = conv.convert("Data13_20211118", folder, out)
+            readme = conv.read_readme(folder/"README.xml", "ISA-100C")
+            target = out/"smartpnt"/"Data13_20211118_rove_isa100c"
+            self.assertTrue((out/"smartpnt"/"Data13_20211118_rove_isa100c.manifest.json").is_file())
+            self.assertEqual(sorted(p.name for p in target.iterdir()),
+                             ["base.nav", "base.obs", "imu.csv", "reference.csv", "rover.obs"])
+        self.assertEqual(manifest["contract"], "docs/smartpnt_reverse_start_holdout.md")
+        self.assertEqual(manifest["raw_inputs"]["rover_obs"]["name"], "ROVE.21O")
+        self.assertEqual(manifest["raw_inputs"]["imu"]["name"], "ISA-100C.imr")
+        self.assertEqual(manifest["raw_inputs"]["reference"]["name"], "ROVE_GroundTruth.txt")
+        self.assertEqual(manifest["replay"]["lever_arm_flu_m"], [-0.284, 0.512, 0.187])
+        self.assertTrue(manifest["replay"]["note"].startswith("ISA-100C to the ROVE antenna;"))
+        self.assertEqual(manifest["stats"]["imu.csv"]["body_to_flu"], [[0, -1, 0], [-1, 0, 0], [0, 0, -1]])
+        self.assertEqual(manifest["stats"]["rover.obs"]["epochs_out"], SECONDS + 1)
+        self.assertGreater(manifest["stats"]["imu_axis_check"]["gyro_z_vs_heading_rate"], 0.99)
+        self.assertEqual(manifest["conventions"]["truth"], conv.ROVER_ANTENNA_TRUTH)
+        self.assertEqual(manifest["stats"]["base.obs"]["approx_position_ecef"], [0.0, 0.0, 0.0])
+        want = conv.base_phase_centre(readme["base_marker_ecef"], 1.401)
+        self.assertEqual(manifest["stats"]["base.obs"]["written_position_ecef"], want)
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = make_generic_run(Path(tmp)/"raw")
+            with self.assertRaises(ValueError):                    # the folder must match the run
+                conv.convert("Data14_20200828", folder, Path(tmp)/"out")
+
+    def test_the_two_fuse_output_runs_keep_their_spec(self):
+        self.assertEqual(conv.output_name("Data11_20221230"), "Data11_20221230_rove03_stim300")
+        self.assertEqual(conv.output_name("Data12_20230104"), "Data12_20230104_rove03_stim300")
+        for run in ("Data11_20221230", "Data12_20230104"):
+            spec = conv.RUNS[run]
+            self.assertEqual((spec["rover"], spec["imu"], spec["truth"], spec["contract"]),
+                             ("ROVE_03", "STIM300", "Rove_03_GroundTruth.txt", "docs/smartpnt_fuse_output_holdout.md"))
+        reverse = [run for run, spec in conv.RUNS.items() if spec["contract"] == conv.REVERSE_START_CONTRACT]
+        self.assertEqual(len(reverse), 9)
 
     def test_epochs_without_imu_are_dropped(self):
         with tempfile.TemporaryDirectory() as tmp:

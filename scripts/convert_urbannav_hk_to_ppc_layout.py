@@ -380,13 +380,15 @@ def observation_blocks(lines, path):
     return blocks
 
 
-def assemble_base(paths, dst, span):
+def assemble_base(paths, dst, span, allow_zero_approx_position=False):
     """base.obs from one or more hourly files: the header of the first file and the epoch records, byte for
     byte, whose GPS time of week lies in `span` = (first, last) inclusive; several files must continue
     strictly in time. Everything else is dropped: epochs outside the span, because the replay buffers at
     most 16 pending base epochs and reads every base epoch up to the first rover epoch before it starts;
     and event records (flag other than 0 or 1, e.g. the closing "header information follows" block of an
-    hourly file), because the replay's RINEX reader treats one as the end of the file."""
+    hourly file), because the replay's RINEX reader treats one as the end of the file. With
+    `allow_zero_approx_position`, a header APPROX POSITION XYZ of zeros is accepted (for a caller that
+    rewrites it)."""
     stats = dict(files=len(paths), epochs_in_files=0, epochs_out=0, epochs_dropped_before_span=0, epochs_dropped_after_span=0,
                  event_records_dropped=0, first_tow_out=None, last_tow_out=None, week=None, approx_position_ecef=None)
     first_lines, kept, previous = None, [], None
@@ -394,7 +396,7 @@ def assemble_base(paths, dst, span):
         lines, start, time_system, approx = parse_obs_header(read_text_file(path))
         if time_system != "GPS":
             raise ValueError(f"{path}: expected GPS time system in TIME OF FIRST OBS, got {time_system!r}")
-        if approx is None or len(approx) != 3 or not any(approx):
+        if approx is None or len(approx) != 3 or not (any(approx) or allow_zero_approx_position):
             raise ValueError(f"{path}: base header has no APPROX POSITION XYZ")
         if first_lines is None:
             first_lines, stats["approx_position_ecef"] = lines[:start], approx

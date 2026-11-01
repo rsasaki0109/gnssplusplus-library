@@ -372,8 +372,18 @@ Data11 and Data12 use the lever arm of their
   nagoya/run1 is the only reverse start among them. The first version took
   1 s intervals and decided only at the latch; it had too few intervals on
   nagoya/run1 and the PPC Tokyo and UrbanNav Tokyo runs. The 0.5 s interval
-  and the deferred decision were added after that run, on these data. The default stays off until a frozen holdout on new
-  runs that start by reversing.
+  and the deferred decision were added after that run, on these data.
+- **It failed a frozen holdout** in both modes
+  ([contract](smartpnt_reverse_start_holdout.md),
+  [results](smartpnt_reverse_start_holdout_results.md)), so the default stays
+  off.
+  - **Data14** reverses out of a parking space, and the check fixes the latch
+    in both modes: `--out` 405 / 27,223 m → 0.90 / 21.5 m and
+    0.62 / 4,301 m → 0.53 / 2.0 m.
+  - **A wrong flip in each mode.** Data15 (`--navi776-tc`) and Data13 (no
+    tight coupling) latch correctly in forward motion that follows a slow
+    reverse or a stop. The check then flips them, with slopes of about −5 from
+    intervals of both directions.
 
 ## Validation snapshot (PPC Tokyo/Nagoya, `--preset low-cost`)
 
