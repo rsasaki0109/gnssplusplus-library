@@ -191,8 +191,9 @@ stay, with a small and wrong covariance.
   nagoya/run1 still reaches 0.117 rad/s and a p90 of 72.5 m. The heading-latch direction test of
   `velocity_consistency_v5` flips nagoya/run1 correctly but also flips the
   correct forward latches on Odaiba and HK Deep-Urban-1, so it is not
-  exposed in `gnss fuse`. `--heading-latch-direction-regression` is the check
-  that does work there ([reverse starts](#reverse-starts)).
+  exposed in `gnss fuse`. A regression check fixed it on the development data
+  but failed its frozen holdout and was removed
+  ([reverse starts](#reverse-starts)).
 
 Fused `--out` 3D error, p50 / p90 (m), one run each, the same RTK flags
 (`--preset low-cost --ratio 2.4 --max-subset-ar-drop-steps 18
@@ -309,30 +310,33 @@ The heading latch takes the GNSS course, the direction of travel. When the
 vehicle starts by reversing, body +X points the other way and the latch is
 180° off. nagoya/run1 starts like that: it backs out of a parking space.
 
-`--heading-latch-direction-regression` checks the direction with a
-regression. Over each interval of at least 0.5 s since the last stop, it
-pairs two numbers:
+**Status: not fixed.** The opt-in `--heading-latch-direction-regression`
+(#697) failed its frozen holdout and was removed from `gnss fuse` and
+`LooseCouplingProcessor` (its code is at `894ccc1`). A next version would be
+rebuilt, so the option was not kept. The rest of this section records what it
+did.
+
+The check tested the direction with a regression. Over each interval of at
+least 0.5 s since the last stop, it paired two numbers:
 
 - the mean IMU body-forward kinematic acceleration;
 - the rate of change of the GNSS horizontal speed.
 
 The slope of the first on the second is about +1 moving forward and −1
 moving backward. A constant accelerometer bias or tilt error moves only the
-intercept, so it does not drift as the integrated longitudinal velocity of
+intercept, so it did not drift as the integrated longitudinal velocity of
 `velocity_consistency_v5` does. That integral reads −3.09 m/s on HK
 Deep-Urban-1 and 48 m/s on HK Medium-Urban-1 at the latch.
 
 - **The decision.** With at least 4 intervals and a speed-rate spread of at
-  least 0.05 (m/s²)², a slope below −0.5 latches course + 180°.
-  - **Deferred.** When the latch has fewer intervals than that, the decision
-    waits for the end of that motion segment (a stop) or 20 s after the latch.
-  - **Once.** It is made once; a flip turns the attitude by 180° about up,
-    resets the yaw σ to the latch σ and re-anchors the velocity.
-- **Which filter.** The option applies to the loose ESKF that writes `--out`:
+  least 0.05 (m/s²)², a slope below −0.5 latched course + 180°.
+  - **Deferred.** When the latch had fewer intervals than that, the decision
+    waited for the end of that motion segment (a stop) or 20 s after the latch.
+  - **Once.** It was made once; a flip turned the attitude by 180° about up,
+    reset the yaw σ to the latch σ and re-anchored the velocity.
+- **Which filter.** The option applied to the loose ESKF that writes `--out`:
   the independent output filter under `--navi776-tc`, the main filter
-  otherwise. In the second case the options that read the main filter
-  (`--tc-closed-loop`, `--rtk-ins-prior`, `--tight-dd-imu`) see the turned
-  heading.
+  otherwise.
 
 Slope of the decision (deferred decisions marked *d*) and fused `--out` 3D
 p50 / p90 (m), without → with the option, one run each. Flags, lever arms
@@ -375,15 +379,20 @@ Data11 and Data12 use the lever arm of their
   and the deferred decision were added after that run, on these data.
 - **It failed a frozen holdout** in both modes
   ([contract](smartpnt_reverse_start_holdout.md),
-  [results](smartpnt_reverse_start_holdout_results.md)), so the default stays
-  off.
-  - **Data14** reverses out of a parking space, and the check fixes the latch
+  [results](smartpnt_reverse_start_holdout_results.md)).
+  - **Data14** reverses out of a parking space, and the check fixed the latch
     in both modes: `--out` 405 / 27,223 m → 0.90 / 21.5 m and
     0.62 / 4,301 m → 0.53 / 2.0 m.
   - **A wrong flip in each mode.** Data15 (`--navi776-tc`) and Data13 (no
-    tight coupling) latch correctly in forward motion that follows a slow
-    reverse or a stop. The check then flips them, with slopes of about −5 from
-    intervals of both directions.
+    tight coupling) latch correctly in forward motion. The check then flipped
+    them, with slopes of about −5.
+    - **Data15:** the intervals behind the decision come from both directions
+      (a slow reverse just before).
+    - **Data13:** its IMU file had duplicate records at the start. On the
+      fixed conversion (#699) the slope is 0.74, and the run does not flip.
+- **Removed.** A next version needs different rules and its own holdout on new
+  data: accept a flip only for a slope near −1, and end a segment at a speed
+  minimum. So the option was removed rather than kept as an unused opt-in.
 
 ## Validation snapshot (PPC Tokyo/Nagoya, `--preset low-cost`)
 

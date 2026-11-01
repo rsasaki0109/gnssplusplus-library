@@ -159,41 +159,6 @@ void LooseCouplingProcessor::initializeFromStaticWindow() {
     // condition first holds (Config::heading_latch_direction_test).
     v_long_ = 0.0;
     v_long_valid_ = false;
-    // Reverse-start check: a new initialization starts a new segment.
-    clearLatchDirectionRegression();
-    regression_decision_pending_ = false;
-    regression_segment_ended_ = false;
-}
-
-void LooseCouplingProcessor::clearLatchDirectionRegression() {
-    regression_pairs_.clear();
-    regression_have_interval_start_ = false;
-    regression_accel_integral_ = 0.0;
-    regression_accel_time_s_ = 0.0;
-}
-
-LooseCouplingProcessor::RegressionSlope LooseCouplingProcessor::latchDirectionRegressionSlope() const {
-    RegressionSlope fit;
-    if (static_cast<int>(regression_pairs_.size()) < config_.heading_latch_regression_min_pairs) {
-        return fit;
-    }
-    double mean_rate = 0.0;
-    double mean_accel = 0.0;
-    for (const auto& pair : regression_pairs_) {
-        mean_rate += pair.first;
-        mean_accel += pair.second;
-    }
-    mean_rate /= static_cast<double>(regression_pairs_.size());
-    mean_accel /= static_cast<double>(regression_pairs_.size());
-    double sxy = 0.0;
-    for (const auto& pair : regression_pairs_) {
-        fit.sxx += (pair.first - mean_rate) * (pair.first - mean_rate);
-        sxy += (pair.first - mean_rate) * (pair.second - mean_accel);
-    }
-    if (fit.sxx >= config_.heading_latch_regression_min_sxx) {
-        fit.slope = sxy / fit.sxx;
-    }
-    return fit;
 }
 
 bool LooseCouplingProcessor::detectStationary() const {
@@ -528,25 +493,6 @@ void LooseCouplingProcessor::processImuSample(const ImuSample& sample_body_flu) 
             v_long_valid_ = true;
         }
     }
-    if (config_.heading_latch_direction_regression) {
-        // The same body-forward kinematic acceleration, averaged per interval
-        // between GNSS epochs. A stationary sample ends the segment: it
-        // clears the intervals, or, while a deferred decision is pending,
-        // triggers that decision at the next GNSS epoch.
-        const Eigen::Matrix3d r_bn = state_.nominal.attitude_body_to_enu.toRotationMatrix();
-        const double a_x =
-            (specific_force_body + r_bn.transpose() * Eigen::Vector3d(0.0, 0.0, -kStandardGravityMps2))
-                .x();
-        regression_accel_integral_ += a_x * dt;
-        regression_accel_time_s_ += dt;
-        if (gnssSpeedGateAllowsZupt() && detectStationary()) {
-            if (regression_decision_pending_) {
-                regression_segment_ended_ = true;
-            } else {
-                clearLatchDirectionRegression();
-            }
-        }
-    }
 
     if (config_.zupt_enable && gnssSpeedGateAllowsZupt() && detectStationary()) {
         const auto system = fusion_measurement::buildZuptUpdate(state_, config_.zupt_sigma_mps);
@@ -755,78 +701,6 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
         // branch when heading_aligned_ is still false to begin with.
         updateHeadingHealthAndMaybeRecover(velocity_result);
 
-        // Reverse-start check (Config::heading_latch_direction_regression):
-        // close the current interval, then make a pending deferred decision.
-        if (config_.heading_latch_direction_regression &&
-            (!heading_aligned_ || regression_decision_pending_)) {
-            const double speed = antenna_velocity_enu.head<2>().norm();
-            if (speed < config_.heading_latch_regression_reset_speed_mps) {
-                if (regression_decision_pending_) {
-                    regression_segment_ended_ = true;
-                } else {
-                    clearLatchDirectionRegression();
-                }
-            }
-            if (!regression_have_interval_start_) {
-                regression_interval_start_speed_mps_ = speed;
-                regression_interval_start_time_ = solution.time;
-                regression_have_interval_start_ = true;
-                regression_accel_integral_ = 0.0;
-                regression_accel_time_s_ = 0.0;
-            } else {
-                const double interval = solution.time - regression_interval_start_time_;
-                if (interval >= config_.heading_latch_regression_min_interval_s) {
-                    if (interval < 5.0 && regression_accel_time_s_ > 0.5 * interval) {
-                        regression_pairs_.emplace_back(
-                            (speed - regression_interval_start_speed_mps_) / interval,
-                            regression_accel_integral_ / regression_accel_time_s_);
-                    }
-                    regression_interval_start_speed_mps_ = speed;
-                    regression_interval_start_time_ = solution.time;
-                    regression_accel_integral_ = 0.0;
-                    regression_accel_time_s_ = 0.0;
-                }
-            }
-        }
-        if (config_.heading_latch_direction_regression && regression_decision_pending_ &&
-            heading_aligned_) {
-            const double since_latch_s = solution.time - regression_latch_time_;
-            if (regression_segment_ended_ ||
-                since_latch_s >= config_.heading_latch_regression_horizon_s) {
-                const RegressionSlope fit = latchDirectionRegressionSlope();
-                last_latch_direction_regression_slope_ = fit.slope;
-                const bool flip = std::isfinite(fit.slope) &&
-                                  fit.slope < config_.heading_latch_regression_flip_slope;
-                if (flip) {
-                    const Eigen::Quaterniond half_turn(Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitZ()));
-                    state_.nominal.attitude_body_to_enu =
-                        (half_turn * state_.nominal.attitude_body_to_enu).normalized();
-                    const int yaw = fusion_index::ATTITUDE + 2;
-                    const double yaw_sigma_rad = config_.align_heading_sigma_deg * M_PI / 180.0;
-                    state_.covariance.row(yaw).setZero();
-                    state_.covariance.col(yaw).setZero();
-                    state_.covariance(yaw, yaw) = yaw_sigma_rad * yaw_sigma_rad;
-                    if (velocity_solution_quality_ok &&
-                        reanchorVelocityFromGnssSolution(antenna_velocity_enu,
-                                                         velocity_covariance_enu)) {
-                        velocity_consecutive_gate_rejections_ = 0;
-                        last_gnss_velocity_reanchored_ = true;
-                    }
-                    ++latch_direction_regression_flip_count_;
-                }
-                if (debugHeadingEnabled()) {
-                    std::cerr << "[HEADING] DIRECTION-REGRESSION tow=" << solution.time.tow
-                              << " since_latch_s=" << since_latch_s
-                              << " segment_ended=" << (regression_segment_ended_ ? 1 : 0)
-                              << " pairs=" << regression_pairs_.size() << " sxx=" << fit.sxx
-                              << " slope=" << fit.slope << " flip=" << (flip ? 1 : 0) << "\n";
-                }
-                regression_decision_pending_ = false;
-                regression_segment_ended_ = false;
-                clearLatchDirectionRegression();
-            }
-        }
-
         heading_tracker_.addSample(solution.time, antenna_velocity_enu,
                                    config_.align_velocity_threshold_mps, config_.align_heading_window_s);
 
@@ -847,17 +721,8 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
                 // velocity_consistency_v5: the course is the direction of
                 // travel; if the integrated longitudinal velocity says the
                 // vehicle is moving backward, body +X points the other way.
-                RegressionSlope latch_fit;
-                const std::size_t latch_regression_pairs = regression_pairs_.size();
-                bool regression_flip = false;
-                if (config_.heading_latch_direction_regression) {
-                    latch_fit = latchDirectionRegressionSlope();
-                    regression_flip = std::isfinite(latch_fit.slope) &&
-                                      latch_fit.slope < config_.heading_latch_regression_flip_slope;
-                }
-                const bool flip_direction = (config_.heading_latch_direction_test &&
-                                             v_long_valid_ && v_long_ < 0.0) ||
-                                            regression_flip;
+                const bool flip_direction = config_.heading_latch_direction_test &&
+                                            v_long_valid_ && v_long_ < 0.0;
                 const double latch_course_rad =
                     flip_direction ? mean_course_rad + M_PI : mean_course_rad;
                 const Eigen::Vector3d consensus_velocity_enu(std::sin(latch_course_rad),
@@ -867,21 +732,6 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
                                                            /*min_speed_mps=*/0.5, honest_sigma_deg)) {
                     heading_aligned_ = true;
                     velocity_nis_ema_ = 0.0;
-                    if (config_.heading_latch_direction_regression) {
-                        regression_latch_time_ = solution.time;
-                        if (std::isfinite(latch_fit.slope)) {
-                            last_latch_direction_regression_slope_ = latch_fit.slope;
-                            if (regression_flip) ++latch_direction_regression_flip_count_;
-                            clearLatchDirectionRegression();
-                        } else if (config_.heading_latch_regression_horizon_s > 0.0) {
-                            regression_decision_pending_ = true;
-                            regression_segment_ended_ = false;
-                        } else {
-                            last_latch_direction_regression_slope_ =
-                                std::numeric_limits<double>::quiet_NaN();
-                            clearLatchDirectionRegression();
-                        }
-                    }
                     consecutive_bad_heading_epochs_ = 0;
                     last_latch_direction_flipped_ = flip_direction;
                     last_latch_v_long_mps_ =
@@ -904,13 +754,6 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
                                   << " mean_course_deg=" << (mean_course_rad * 180.0 / M_PI)
                                   << " scatter_deg=" << scatter_deg << " honest_sigma_deg=" << honest_sigma_deg
                                   << " nsamples=" << heading_tracker_.sampleCount();
-                        if (config_.heading_latch_direction_regression) {
-                            std::cerr << " regression_pairs=" << latch_regression_pairs
-                                      << " regression_sxx=" << latch_fit.sxx
-                                      << " regression_slope=" << latch_fit.slope
-                                      << " regression_flip=" << (regression_flip ? 1 : 0)
-                                      << " regression_deferred=" << (regression_decision_pending_ ? 1 : 0);
-                        }
                         if (config_.heading_latch_direction_test) {
                             std::cerr << " v_long_mps=" << v_long_
                                       << " v_long_valid=" << (v_long_valid_ ? 1 : 0)
