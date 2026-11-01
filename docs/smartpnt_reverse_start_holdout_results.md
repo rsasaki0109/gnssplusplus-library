@@ -76,6 +76,9 @@ byte.
     −1.27; these two gave about −5. A segment end that the filter does not
     see (GNSS speed not below 0.2 m/s, no stationary IMU sample) lets
     intervals of opposite directions into one regression.
+  - **Correction, for Data13:** its slope came from a conversion error,
+    not from a missed segment end. See
+    [the section below](#later-a-conversion-error-behind-data13).
 - **Both wrong flips are on runs whose `--out` is unusable either way.**
   Those outputs are hundreds of kilometres off in both arms (Data13 in both
   modes, Data15 under `--navi776-tc`). That is a separate problem these runs
@@ -83,6 +86,63 @@ byte.
 - **Data01 never latches.** Its rover file has no Doppler observations, so
   there is no GNSS velocity, and neither filter aligns the heading in either
   mode. The run tests nothing about the check.
+
+## Later: a conversion error behind Data13
+
+This was found after the record above, the same day. It changes neither
+decision.
+
+- **Cause.** The Data13 IMR file starts with 0.55 s in which two record
+  streams interleave 0.17 ms apart (TOW 362320.00–362320.55, the first
+  second of the run).
+  - Each record holds a full 5 ms period of increments.
+  - The converter divided each by its measured interval. So 111 rate samples
+    were about 29 times too large, at the start of the static alignment.
+- **Fix.** The converter now drops a record that is less than a quarter
+  period behind the kept one. The manifest counts these as
+  `duplicate_records_dropped`.
+  - Of the eleven runs converted for the two SmartPNT holdouts, only Data13's
+    `imu.csv` changes (111 records dropped). The other ten are byte-identical.
+  - That includes Data11 and Data12. Their raw IMR files were fetched again,
+    and the SHA256 matches the earlier record.
+  - Data04 (2 ms) and Data16 (3 ms) each have one timestamp phase shift.
+    Such a record holds a full period like any other, and it is kept as
+    before.
+- **Data13 on the fixed conversion.** Same binary (SHA256 `67b18893…a9220`),
+  same four commands. Fused `--out` 3D p50 / p90 (m):
+
+  | Mode | Arm | Holdout conversion | Fixed conversion |
+  | --- | --- | --- | --- |
+  | (a) | control | 973,382 / 28,039,416 | 0.159 / 0.79 |
+  | (a) | candidate | identical to control, 0 flips (20.3) | identical to control, 0 flips (0.73) |
+  | (b) | control | 202,006 / 1,837,462 | 0.102 / 0.66 |
+  | (b) | candidate | 250,993 / 3,505,693, 1 flip (−5.18) | identical to control, 0 flips (0.74) |
+
+  - **(b) RTK stream:** identical to the holdout's. Without tight coupling,
+    the RTK half does not use the IMU.
+  - **(a) RTK stream:** changes, 3D p50 / p90 0.110 / 3.26 m → 0.101 /
+    0.59 m.
+- **The (b) flip on Data13 came from the corrupted IMU input.** On the fixed
+  conversion the slope is 0.74 and nothing flips. The shared signature
+  above is left as written; for the wrong flips it now rests on Data15
+  alone.
+- **This does not turn (b) into a pass.**
+  - On the fixed conversion, no forward-class run of (b) would flip. So (b)
+    would meet the rule.
+  - But the fix was found by looking at the scored runs, and the eight runs
+    are development data now.
+  - The contract rules out re-scoring. Making the check a default still needs
+    its own holdout on new data.
+  - (a) fails on Data15 either way.
+- **Data15 under `--navi776-tc` stays unexplained.**
+  - Its IMR file has no short records.
+  - The car stands still for the first 539 s. Under the consider update
+    before the latch (which the output filter of (a) uses), the pitch
+    drifts during that time. In a diagnostic run without tight coupling,
+    with `--consider-before-heading-latch`, it reaches 14.8° by TOW 177900;
+    the truth is 2.0°, and the same run without the consider update gives
+    2.06°.
+  - The cause of that drift is not established.
 
 ## What follows
 
