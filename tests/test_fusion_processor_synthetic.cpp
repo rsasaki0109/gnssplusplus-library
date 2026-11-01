@@ -1396,6 +1396,179 @@ TEST(FusionProcessorSyntheticTest, HeadingLatchDirectionTestNeedsAStationarySamp
     EXPECT_EQ(h.offLatchTime(), h.onLatchTime());
 }
 
+// Reverse-start check (Config::heading_latch_direction_regression). After a
+// 3 s static window the body moves along +X (direction > 0) or -X (< 0) of
+// the filter's own pre-motion attitude R0, with a speed-change rate that
+// varies over time (0.6 +- 0.4 m/s^2, period 2 s) so the regression has
+// spread; with constant_rate the rate is fixed and it has none. GNSS fixes
+// at 10 Hz give the velocity along R0 * (direction * speed, 0, 0).
+class LatchRegressionHarness {
+public:
+    LatchRegressionHarness(double direction, bool constant_rate,
+                           void (*tune)(LooseCouplingProcessor::Config&) = nullptr)
+        : direction_(direction), constant_rate_(constant_rate) {
+        LooseCouplingProcessor::Config config;
+        config.align_static_window_s = 0.5;
+        config.lever_arm_body.setZero();
+        off_ = std::make_unique<LooseCouplingProcessor>(config);
+        config.heading_latch_direction_regression = true;
+        if (tune != nullptr) tune(config);
+        on_ = std::make_unique<LooseCouplingProcessor>(config);
+    }
+
+    double rate(double moving_s) const {
+        return constant_rate_ ? 0.6 : 0.6 + 0.4 * std::sin(2.0 * M_PI * moving_s / 2.0);
+    }
+    double speed(double moving_s) const {
+        if (constant_rate_) return 0.6 * moving_s;
+        return 0.6 * moving_s + 0.4 * (1.0 - std::cos(2.0 * M_PI * moving_s / 2.0)) * 2.0 / (2.0 * M_PI);
+    }
+
+    // Runs for duration_s of motion and records each processor's body +X
+    // course at its latch and at the end.
+    void run(double duration_s) {
+        const double t0 = 100000.0;
+        Eigen::Matrix3d r0 = Eigen::Matrix3d::Identity();
+        const int samples = static_cast<int>((3.0 + duration_s) / kDt);
+        for (int i = 0; i <= samples; ++i) {
+            const double t = i * kDt;
+            const bool moving = t > 3.0 + 1e-9;
+            const double moving_s = moving ? t - 3.0 : 0.0;
+            if (!moving && i == 300) r0 = on_->state().nominal.attitude_body_to_enu.toRotationMatrix();
+            ImuSample sample;
+            sample.time = GNSSTime(2200, t0 + t);
+            sample.accel_raw = Eigen::Vector3d(moving ? direction_ * rate(moving_s) : 0.0, 0.0, kGravity);
+            off_->processImuSample(sample);
+            on_->processImuSample(sample);
+            if (i % 10 != 0 || !on_->isInitialized()) continue;
+            const double v = moving ? speed(moving_s) : 0.0;
+            const Eigen::Vector3d velocity_enu = r0 * Eigen::Vector3d(direction_ * v, 0.0, 0.0);
+            position_enu_ += velocity_enu * 0.1;
+            PositionSolution fix;
+            fix.time = sample.time;
+            fix.status = SolutionStatus::SPP;
+            fix.num_satellites = 8;
+            // ENU -> ECEF at lat 0, lon 0: east = y, north = z, up = x.
+            fix.position_ecef =
+                Eigen::Vector3d(6378137.0 + position_enu_.z(), position_enu_.x(), position_enu_.y());
+            fix.position_covariance = Eigen::Matrix3d::Identity();
+            fix.has_velocity = true;
+            fix.velocity_ecef = Eigen::Vector3d(velocity_enu.z(), velocity_enu.x(), velocity_enu.y());
+            fix.velocity_covariance = 0.04 * Eigen::Matrix3d::Identity();
+            const bool off_before = off_->isHeadingAligned();
+            const bool on_before = on_->isHeadingAligned();
+            off_->processGnssSolution(fix);
+            on_->processGnssSolution(fix);
+            if (!off_before && off_->isHeadingAligned()) off_latch_course_deg_ = bodyXCourseDeg(*off_);
+            if (!on_before && on_->isHeadingAligned()) on_latch_course_deg_ = bodyXCourseDeg(*on_);
+        }
+        true_body_x_course_deg_ = courseDeg(r0.col(0));
+    }
+
+    static double courseDeg(const Eigen::Vector3d& enu) { return std::atan2(enu.x(), enu.y()) * 180.0 / M_PI; }
+    static double bodyXCourseDeg(const LooseCouplingProcessor& processor) {
+        return courseDeg(processor.state().nominal.attitude_body_to_enu.toRotationMatrix().col(0));
+    }
+    static double angleDiffDeg(double a, double b) { return std::remainder(a - b, 360.0); }
+
+    LooseCouplingProcessor& off() { return *off_; }
+    LooseCouplingProcessor& on() { return *on_; }
+    double offLatchCourseDeg() const { return off_latch_course_deg_; }
+    double onLatchCourseDeg() const { return on_latch_course_deg_; }
+    double trueBodyXCourseDeg() const { return true_body_x_course_deg_; }
+
+private:
+    double direction_;
+    bool constant_rate_;
+    std::unique_ptr<LooseCouplingProcessor> off_, on_;
+    Eigen::Vector3d position_enu_ = Eigen::Vector3d::Zero();
+    double off_latch_course_deg_ = std::numeric_limits<double>::quiet_NaN();
+    double on_latch_course_deg_ = std::numeric_limits<double>::quiet_NaN();
+    double true_body_x_course_deg_ = 0.0;
+};
+
+TEST(FusionProcessorSyntheticTest, HeadingLatchDirectionRegressionDefaultsOff) {
+    const LooseCouplingProcessor::Config config;
+    EXPECT_FALSE(config.heading_latch_direction_regression);
+    EXPECT_EQ(config.heading_latch_regression_min_interval_s, 0.5);
+    EXPECT_EQ(config.heading_latch_regression_min_pairs, 4);
+    EXPECT_EQ(config.heading_latch_regression_flip_slope, -0.5);
+    EXPECT_EQ(config.heading_latch_regression_horizon_s, 20.0);
+    const LooseCouplingProcessor processor{config};
+    EXPECT_EQ(processor.latchDirectionRegressionFlipCount(), 0U);
+    EXPECT_TRUE(std::isnan(processor.lastLatchDirectionRegressionSlope()));
+}
+
+TEST(FusionProcessorSyntheticTest, HeadingLatchDirectionRegressionFlipsAReverseStart) {
+    LatchRegressionHarness h(-1.0, /*constant_rate=*/false);
+    h.run(25.0);  // past the 20 s horizon of the deferred decision
+    ASSERT_TRUE(h.off().isHeadingAligned());
+    ASSERT_TRUE(h.on().isHeadingAligned());
+    // Off: the course of travel, 180 deg from the body heading.
+    EXPECT_NEAR(std::abs(LatchRegressionHarness::angleDiffDeg(LatchRegressionHarness::bodyXCourseDeg(h.off()),
+                                                              h.trueBodyXCourseDeg())),
+                180.0, 2.0);
+    // On: the body heading, after one 180 deg turn.
+    EXPECT_NEAR(LatchRegressionHarness::angleDiffDeg(LatchRegressionHarness::bodyXCourseDeg(h.on()),
+                                                     h.trueBodyXCourseDeg()),
+                0.0, 2.0);
+    EXPECT_EQ(h.on().latchDirectionRegressionFlipCount(), 1U);
+    EXPECT_LT(h.on().lastLatchDirectionRegressionSlope(), -0.5);
+    EXPECT_EQ(h.off().latchDirectionRegressionFlipCount(), 0U);
+}
+
+TEST(FusionProcessorSyntheticTest, HeadingLatchDirectionRegressionKeepsAForwardStart) {
+    LatchRegressionHarness h(1.0, /*constant_rate=*/false);
+    h.run(25.0);  // past the 20 s horizon of the deferred decision
+    ASSERT_TRUE(h.on().isHeadingAligned());
+    EXPECT_GT(h.on().lastLatchDirectionRegressionSlope(), 0.5);
+    EXPECT_EQ(h.on().latchDirectionRegressionFlipCount(), 0U);
+    EXPECT_NEAR(LatchRegressionHarness::angleDiffDeg(LatchRegressionHarness::bodyXCourseDeg(h.on()),
+                                                     h.trueBodyXCourseDeg()),
+                0.0, 2.0);
+    // With nothing flipped, the whole state is identical to the option off.
+    EXPECT_EQ(h.off().state().nominal.attitude_body_to_enu.coeffs(),
+              h.on().state().nominal.attitude_body_to_enu.coeffs());
+    EXPECT_EQ((h.off().state().covariance - h.on().state().covariance).norm(), 0.0);
+}
+
+TEST(FusionProcessorSyntheticTest, HeadingLatchDirectionRegressionDefersAndThenFlips) {
+    // Too few intervals at the latch: the decision waits until the horizon,
+    // in the same motion segment, and then turns the heading once.
+    LatchRegressionHarness h(-1.0, /*constant_rate=*/false, [](LooseCouplingProcessor::Config& c) {
+        c.heading_latch_regression_min_pairs = 12;
+        c.heading_latch_regression_horizon_s = 6.0;
+    });
+    h.run(12.0);
+    ASSERT_TRUE(h.on().isHeadingAligned());
+    // Latched on the course of travel, like the option off...
+    EXPECT_NEAR(LatchRegressionHarness::angleDiffDeg(h.onLatchCourseDeg(), h.offLatchCourseDeg()), 0.0, 1e-6);
+    // ...then turned to the body heading by the deferred decision.
+    EXPECT_EQ(h.on().latchDirectionRegressionFlipCount(), 1U);
+    EXPECT_LT(h.on().lastLatchDirectionRegressionSlope(), -0.5);
+    EXPECT_NEAR(LatchRegressionHarness::angleDiffDeg(LatchRegressionHarness::bodyXCourseDeg(h.on()),
+                                                     h.trueBodyXCourseDeg()),
+                0.0, 2.0);
+    // Only once: the yaw sigma is back at the latch sigma.
+    const int yaw = fusion_index::ATTITUDE + 2;
+    EXPECT_LT(std::sqrt(h.on().state().covariance(yaw, yaw)) * 180.0 / M_PI, 10.0);
+}
+
+TEST(FusionProcessorSyntheticTest, HeadingLatchDirectionRegressionNeedsSpeedRateSpread) {
+    // A constant speed-change rate gives no spread: no decision, no flip,
+    // even though the start is reversed.
+    LatchRegressionHarness h(-1.0, /*constant_rate=*/true, [](LooseCouplingProcessor::Config& c) {
+        c.heading_latch_regression_horizon_s = 6.0;
+    });
+    h.run(12.0);
+    ASSERT_TRUE(h.on().isHeadingAligned());
+    EXPECT_EQ(h.on().latchDirectionRegressionFlipCount(), 0U);
+    EXPECT_TRUE(std::isnan(h.on().lastLatchDirectionRegressionSlope()));
+    EXPECT_NEAR(LatchRegressionHarness::angleDiffDeg(LatchRegressionHarness::bodyXCourseDeg(h.on()),
+                                                     LatchRegressionHarness::bodyXCourseDeg(h.off())),
+                0.0, 1e-6);
+}
+
 // velocity_consistency_v10: consider_attitude_and_biases_before_heading_latch.
 // The body accelerates along its +X axis (from rest, after a 3 s static
 // window) with a constant 0.3 m/s^2 accelerometer bias along +Y that the

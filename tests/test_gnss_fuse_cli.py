@@ -292,5 +292,48 @@ class GnssFuseCliTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("--independent-output-filter requires --base", result.stderr)
 
+    def test_heading_latch_direction_regression_is_an_advanced_opt_in(self) -> None:
+        result = self.run_fuse("--help")
+        self.assertNotIn("--heading-latch-direction-regression", result.stdout)
+        result = self.run_fuse("--help-advanced")
+        self.assertIn("--heading-latch-direction-regression", result.stdout)
+
+        # A plain flag in every mode: the run reaches the input loader.
+        for extra in ((), ("--navi776-tc",), ("--independent-output-filter",)):
+            result = self.run_fuse(
+                "--imu", "missing-imu.csv",
+                "--rover", "missing-rover.obs", "--base", "missing-base.obs", "--nav", "missing.nav",
+                "--heading-latch-direction-regression", *extra,
+            )
+            self.assertEqual(result.returncode, 1, msg=extra)
+            self.assertIn("failed to load IMU CSV", result.stderr, msg=extra)
+        result = self.run_fuse(
+            "--imu", "missing-imu.csv", "--gnss-pos", "missing-solution.pos",
+            "--heading-latch-direction-regression",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("failed to load IMU CSV", result.stderr)
+
+        with tempfile.TemporaryDirectory(prefix="gnss_fuse_config_") as temp_dir:
+            config_path = Path(temp_dir) / "fuse.toml"
+            config_path.write_text(
+                "[gnss_fuse]\n"
+                'gnss_pos = "missing-solution.pos"\n'
+                'imu = "missing-imu.csv"\n'
+                "heading_latch_direction_regression = true\n",
+                encoding="utf-8",
+            )
+            result = self.run_fuse("--config", str(config_path))
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("failed to load IMU CSV", result.stderr)
+
+            config_path.write_text(
+                "[gnss_fuse]\nheading_latch_direction_regression = false\n",
+                encoding="utf-8",
+            )
+            result = self.run_fuse("--config", str(config_path))
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("boolean false is not supported", result.stderr)
+
 if __name__ == "__main__":
     unittest.main()
