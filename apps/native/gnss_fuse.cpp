@@ -267,10 +267,6 @@ struct FuseOptions {
     std::optional<bool> independent_output_filter_choice;
     bool navi776_tc = false;
     std::string independent_output_filter_reason;
-    // --heading-latch-direction-regression: the reverse-start check of the
-    // loose ESKF that writes --out (the independent output filter when it is
-    // on, the main filter otherwise). Off by default.
-    bool heading_latch_direction_regression = false;
 
     // navi.776 A2: innovation-based adaptive measurement variance, mirroring
     // gnss_solve's --rtk-adaptive-noise family. Off by default.
@@ -723,13 +719,6 @@ void printAdvancedUsage(const char* program_name) {
         << "  --heading-recovery-cooldown-epochs <n>\n"
         << "                                Velocity-update epochs to wait after a recovery fires\n"
         << "                                before it can fire again. Default: 20\n"
-        << "  --heading-latch-direction-regression\n"
-        << "                                At the heading latch, regress the IMU forward acceleration\n"
-        << "                                on the GNSS speed change since the last stop; a negative\n"
-        << "                                slope means the vehicle is reversing and the heading is\n"
-        << "                                course + 180 deg (decided later in that segment if the\n"
-        << "                                latch has too little data). Applies to the loose ESKF that\n"
-        << "                                writes --out. Default: off\n"
         << "  --consider-before-heading-latch\n"
         << "                                Until the heading is latched, GNSS, ZUPT and NHC updates\n"
         << "                                leave the attitude and IMU biases unchanged (Schmidt\n"
@@ -1895,8 +1884,6 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         } else if (arg == "--heading-recovery-cooldown-epochs") {
             options.fusion_config.heading_recovery_cooldown_epochs =
                 std::stoi(requireValue(arg, i, argc, argv));
-        } else if (arg == "--heading-latch-direction-regression") {
-            options.heading_latch_direction_regression = true;
         } else if (arg == "--consider-before-heading-latch") {
             options.fusion_config.consider_attitude_and_biases_before_heading_latch = true;
         } else if (arg == "--independent-output-filter") {
@@ -2315,16 +2302,6 @@ void printIndependentOutputFilterOffReason(const FuseOptions& options) {
     }
 }
 
-// Run-summary line for --heading-latch-direction-regression, from the filter
-// that writes --out.
-void printHeadingLatchDirectionRegression(const FuseOptions& options,
-                                          const libgnss::LooseCouplingProcessor& writer) {
-    if (!options.heading_latch_direction_regression) return;
-    std::cout << "Heading latch direction regression: on (flips: "
-              << writer.latchDirectionRegressionFlipCount()
-              << ", last slope: " << writer.lastLatchDirectionRegressionSlope() << ")\n";
-}
-
 int runSppFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                  const libgnss::ImuAxisConvention& axis_convention,
                  const libgnss::NavigationData& nav_data) {
@@ -2347,10 +2324,7 @@ int runSppFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         return 1;
     }
 
-    libgnss::LooseCouplingProcessor::Config main_filter_config = options.fusion_config;
-    main_filter_config.heading_latch_direction_regression =
-        options.heading_latch_direction_regression;
-    libgnss::LooseCouplingProcessor fusion_processor(main_filter_config);
+    libgnss::LooseCouplingProcessor fusion_processor(options.fusion_config);
     libgnss::Solution fused_solution;
     AttitudeCsvWriter attitude_writer;
     if (!attitude_writer.open(options.attitude_csv_path)) {
@@ -2416,7 +2390,6 @@ int runSppFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         std::cout << "Heading aligned: " << (fusion_processor.isHeadingAligned() ? "yes" : "no") << "\n";
         std::cout << "Heading converged: " << (fusion_processor.isHeadingConverged() ? "yes" : "no") << "\n";
         printIndependentOutputFilterOffReason(options);
-        printHeadingLatchDirectionRegression(options, fusion_processor);
         std::cout << "Output: " << options.out_path << "\n";
         if (options.write_kml) {
             std::cout << "KML: " << options.kml_path << "\n";
@@ -2440,10 +2413,7 @@ int runPositionSolutionFusion(
     }
     gnss_solution.sortByTime();
 
-    libgnss::LooseCouplingProcessor::Config main_filter_config = options.fusion_config;
-    main_filter_config.heading_latch_direction_regression =
-        options.heading_latch_direction_regression;
-    libgnss::LooseCouplingProcessor fusion_processor(main_filter_config);
+    libgnss::LooseCouplingProcessor fusion_processor(options.fusion_config);
     libgnss::Solution fused_solution;
     AttitudeCsvWriter attitude_writer;
     if (!attitude_writer.open(options.attitude_csv_path)) {
@@ -2527,7 +2497,6 @@ int runPositionSolutionFusion(
                   << "Fusion initialized: "
                   << (fusion_processor.isInitialized() ? "yes" : "no") << "\n";
         printIndependentOutputFilterOffReason(options);
-        printHeadingLatchDirectionRegression(options, fusion_processor);
         std::cout << "Output: " << options.out_path << "\n";
     }
     return 0;
@@ -2909,17 +2878,11 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             ? std::map<double, Eigen::Vector3d>{}
             : loadSeedPositions(options.rover_seed_pos_path);
 
-    // --heading-latch-direction-regression goes to the filter that writes --out.
-    libgnss::LooseCouplingProcessor::Config main_filter_config = options.fusion_config;
-    main_filter_config.heading_latch_direction_regression =
-        options.heading_latch_direction_regression && !options.independent_output_filter;
-    libgnss::LooseCouplingProcessor fusion_processor(main_filter_config);
+    libgnss::LooseCouplingProcessor fusion_processor(options.fusion_config);
     // --independent-output-filter: the loose ESKF behind --out. It never feeds
     // the RTK filter or the closed-loop INS, so the RTK stream is unchanged.
     libgnss::LooseCouplingProcessor::Config output_filter_config = options.fusion_config;
     output_filter_config.consider_attitude_and_biases_before_heading_latch = true;
-    output_filter_config.heading_latch_direction_regression =
-        options.heading_latch_direction_regression && options.independent_output_filter;
     libgnss::LooseCouplingProcessor output_filter(output_filter_config);
     libgnss::ImuPreintegrationConfig tc_preintegration_config;
     tc_preintegration_config.process_noise = options.fusion_config.process_noise;
@@ -4039,8 +4002,6 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         } else {
             printIndependentOutputFilterOffReason(options);
         }
-        printHeadingLatchDirectionRegression(
-            options, options.independent_output_filter ? output_filter : fusion_processor);
         std::cout << "Output: " << options.out_path << "\n";
         if (options.write_kml) {
             std::cout << "KML: " << options.kml_path << "\n";

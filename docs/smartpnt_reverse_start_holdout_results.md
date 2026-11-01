@@ -157,3 +157,9 @@ decision.
   - end a segment on a GNSS speed minimum, not only below 0.2 m/s.
 
   Both were chosen after seeing these runs.
+- **Later: the option was removed.** A next version would be rebuilt with
+  different rules, so `--heading-latch-direction-regression` was taken out of
+  `gnss fuse` and `LooseCouplingProcessor` instead of staying as an unused
+  opt-in. Its code is at `894ccc1`, the binary this holdout ran is the one
+  named above, and [reverse starts](imu_fusion.md#reverse-starts) keeps the
+  description.
