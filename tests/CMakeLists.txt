@@ -16,6 +16,9 @@ set_tests_properties(python_phase_audit_tests PROPERTIES LABELS core)
 add_test(NAME python_ppc_fuse_spread_tests
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_ppc_fuse_spread.py)
 set_tests_properties(python_ppc_fuse_spread_tests PROPERTIES LABELS core)
+add_test(NAME python_score_fused_output_tests
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_score_fused_output.py)
+set_tests_properties(python_score_fused_output_tests PROPERTIES LABELS core)
 
 add_test(NAME python_road_height_maps_tests
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_road_height_maps.py)
@@ -285,6 +288,7 @@ if(GTest_FOUND)
     add_test(NAME python_pva_comparison_tests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pva_comparison.py)
     add_test(NAME python_urbannav_conversion_tests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_urbannav_conversion.py)
     add_test(NAME python_urbannav_hk_conversion_tests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_urbannav_hk_conversion.py)
+    add_test(NAME python_smartpnt_conversion_tests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartpnt_conversion.py)
     set_tests_properties(online_rtk_imu_tests PROPERTIES LABELS core)
 
     add_executable(gnss_rtcm_context_tests test_rtcm_time_context.cpp)
