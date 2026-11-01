@@ -8,6 +8,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -256,8 +257,16 @@ struct FuseOptions {
     // --independent-output-filter: write --out and the attitude stream from a
     // second loose ESKF that takes the RTK position and the epoch SPP Doppler
     // velocity (consider update before the heading latch). The RTK filter and
-    // the closed-loop INS bootstrap keep using the main loose ESKF. Off by default.
+    // the closed-loop INS bootstrap keep using the main loose ESKF. Resolved
+    // after parsing: an explicit --independent-output-filter or
+    // --no-independent-output-filter (the last one given wins) decides;
+    // otherwise --navi776-tc turns it on when --base is given and
+    // --library-fix-integrity-gate is not (frozen SmartPNT-POS holdout,
+    // docs/smartpnt_fuse_output_holdout_results.md). Off otherwise.
     bool independent_output_filter = false;
+    std::optional<bool> independent_output_filter_choice;
+    bool navi776_tc = false;
+    std::string independent_output_filter_reason;
 
     // navi.776 A2: innovation-based adaptive measurement variance, mirroring
     // gnss_solve's --rtk-adaptive-noise family. Off by default.
@@ -719,9 +728,13 @@ void printAdvancedUsage(const char* program_name) {
         << "  --independent-output-filter  Write --out (and --attitude-csv) from a second loose\n"
         << "                                ESKF that takes the RTK position and the epoch SPP\n"
         << "                                Doppler velocity, with the consider update before the\n"
-        << "                                heading latch. The RTK stream is unchanged. For\n"
-        << "                                --navi776-tc, whose RTK velocity state is not a usable\n"
-        << "                                velocity (--base only; default: off)\n"
+        << "                                heading latch. The RTK stream is unchanged. --base\n"
+        << "                                only; on with --navi776-tc (with --base and without\n"
+        << "                                --library-fix-integrity-gate), off otherwise\n"
+        << "  --no-independent-output-filter\n"
+        << "                                Keep --out from the main loose ESKF under --navi776-tc,\n"
+        << "                                wherever it is given. Of the two explicit flags, the\n"
+        << "                                last one wins\n"
         << "  --max-position-nis <v>       Reject a GNSS position update if its normalized\n"
         << "                                innovation squared per observation exceeds this (guards\n"
         << "                                against RTK float-reconvergence jumps corrupting attitude\n"
@@ -827,7 +840,8 @@ void printAdvancedUsage(const char* program_name) {
         << "  --navi776-tc                 Enable the validated navi.776 short-baseline combo:\n"
         << "                                closed loop + velocity states + Doppler rows\n"
         << "                                (sigma 0.5, 1000 m gate) + gated adaptive noise\n"
-        << "                                (1000 m). Flags given after this one override it.\n"
+        << "                                (1000 m), and --independent-output-filter with --base.\n"
+        << "                                Flags given after this one override it.\n"
         << "  --imu-time-offset <s>        navi.776: constant GNSS-IMU time offset applied to\n"
         << "                                all IMU timestamps at load (positive = IMU later).\n"
         << "                                Default: 0.0 (exact no-op).\n"
@@ -1531,6 +1545,7 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         {
             {"--arfilter", "--no-arfilter"},
             {"--base-interp", "--no-base-interp"},
+            {"--independent-output-filter", "--no-independent-output-filter"},
             {"--nhc", "--no-nhc"},
             {"--navi776-tc", ""},
             {"--zupt", "--no-zupt"},
@@ -1872,7 +1887,9 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         } else if (arg == "--consider-before-heading-latch") {
             options.fusion_config.consider_attitude_and_biases_before_heading_latch = true;
         } else if (arg == "--independent-output-filter") {
-            options.independent_output_filter = true;
+            options.independent_output_filter_choice = true;
+        } else if (arg == "--no-independent-output-filter") {
+            options.independent_output_filter_choice = false;
         } else {
             matched = false;
         }
@@ -2007,6 +2024,10 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.tc_doppler_max_baseline_m = 1000.0;
             options.rtk_adaptive_noise = true;
             options.rtk_adaptive_noise_max_baseline_m = 1000.0;
+            // Also requests the independent output filter, resolved after
+            // parsing (needs --base); --no-independent-output-filter wins
+            // whatever its position.
+            options.navi776_tc = true;
         } else if (arg == "--tc-closed-loop") {
             options.tc_closed_loop = true;
         } else if (arg == "--tc-trusted-reanchor") {
@@ -2120,6 +2141,23 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             if (options.nav_path.empty()) options.nav_path = options.data_dir + "/base.nav";
         }
         if (options.imu_path.empty()) options.imu_path = options.data_dir + "/imu.csv";
+    }
+
+    if (options.independent_output_filter_choice.has_value()) {
+        options.independent_output_filter = *options.independent_output_filter_choice;
+        if (!options.independent_output_filter && options.navi776_tc) {
+            options.independent_output_filter_reason = "--no-independent-output-filter";
+        }
+    } else if (options.navi776_tc) {
+        if (options.base_path.empty()) {
+            options.independent_output_filter_reason = "--navi776-tc without --base";
+        } else if (options.library_fix_integrity_gate) {
+            options.independent_output_filter_reason =
+                "--navi776-tc with --library-fix-integrity-gate";
+        } else {
+            options.independent_output_filter = true;
+            options.independent_output_filter_reason = "--navi776-tc";
+        }
     }
 
     if (options.gnss_pos_path.empty() && options.rover_path.empty()) {
@@ -2253,6 +2291,17 @@ FuseOptions parseArguments(int argc, char* argv[]) {
 
 // SPP-only path (no --base): mirrors the original gnss_fuse behavior, used
 // as a fallback when no base station is available.
+// Run-summary line for a run where --navi776-tc asked for the independent
+// output filter but it stayed off (no --base, the integrity gate, or the
+// explicit opt-out).
+void printIndependentOutputFilterOffReason(const FuseOptions& options) {
+    if (!options.independent_output_filter &&
+        !options.independent_output_filter_reason.empty()) {
+        std::cout << "Independent output filter: off ("
+                  << options.independent_output_filter_reason << ")\n";
+    }
+}
+
 int runSppFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                  const libgnss::ImuAxisConvention& axis_convention,
                  const libgnss::NavigationData& nav_data) {
@@ -2340,6 +2389,7 @@ int runSppFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         // recent velocity-innovation NIS still corroborates that latch.
         std::cout << "Heading aligned: " << (fusion_processor.isHeadingAligned() ? "yes" : "no") << "\n";
         std::cout << "Heading converged: " << (fusion_processor.isHeadingConverged() ? "yes" : "no") << "\n";
+        printIndependentOutputFilterOffReason(options);
         std::cout << "Output: " << options.out_path << "\n";
         if (options.write_kml) {
             std::cout << "KML: " << options.kml_path << "\n";
@@ -2445,8 +2495,9 @@ int runPositionSolutionFusion(
                   << "Valid GNSS solutions: " << valid_solutions << "\n"
                   << "Fused epochs written: " << fused_solution.size() << "\n"
                   << "Fusion initialized: "
-                  << (fusion_processor.isInitialized() ? "yes" : "no") << "\n"
-                  << "Output: " << options.out_path << "\n";
+                  << (fusion_processor.isInitialized() ? "yes" : "no") << "\n";
+        printIndependentOutputFilterOffReason(options);
+        std::cout << "Output: " << options.out_path << "\n";
     }
     return 0;
 }
@@ -3948,6 +3999,8 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                       << (output_filter.isHeadingAligned() ? "yes" : "no")
                       << ", converged: " << (output_filter.isHeadingConverged() ? "yes" : "no")
                       << ")\n";
+        } else {
+            printIndependentOutputFilterOffReason(options);
         }
         std::cout << "Output: " << options.out_path << "\n";
         if (options.write_kml) {

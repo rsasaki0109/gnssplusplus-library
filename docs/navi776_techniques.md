@@ -223,8 +223,11 @@ python scripts/search_imu_time_offset.py \
 
 The public opt-in is `gnss_fuse --navi776-tc`. It enables the M4 closed
 loop, velocity states, Doppler rows at sigma 0.5, and adaptive noise; both
-Doppler and adaptive-noise paths are gated at a 1000 m baseline. It also
-enables two measured-update optimizations:
+Doppler and adaptive-noise paths are gated at a 1000 m baseline. With `--base`
+it also writes `--out` from the
+[independent output filter](imu_fusion.md#independent-output-filter), which
+passed a [frozen holdout](smartpnt_fuse_output_holdout_results.md) and leaves
+the RTK stream unchanged. It also enables two measured-update optimizations:
 
 This preset is the only navi.776 control shown in the default
 `gnss_fuse --help`. The component controls remain accepted for reproducible
@@ -337,11 +340,11 @@ python3 scripts/analysis/ppc_fuse_spread.py --without-navi776-tc \
 ### Known issue: the velocity state (2026-10-31)
 
 Under `--tc-velocity-states`, and so under `--navi776-tc`, the RTK velocity
-state is not a usable velocity, and the fused `--out` stream is not reliable.
-Score and use the RTK stream (`--rtk-pos-out`), as the sign-off above does, or
-add `--independent-output-filter` for `--out`
-([independent output filter](imu_fusion.md#independent-output-filter)), which
-leaves the RTK stream byte-identical.
+state is not a usable velocity, and the main loose ESKF's `--out` stream is not
+reliable. Since 2026-11-01 `--navi776-tc` writes `--out` from the
+[independent output filter](imu_fusion.md#independent-output-filter) instead,
+which leaves the RTK stream byte-identical. The fused columns below are the
+main filter's (now `--no-independent-output-filter`).
 
 Measured with the unperturbed lever arm, one run per PPC run. The velocity
 error is against the reference trajectory; the fused error is 3D.

@@ -137,13 +137,13 @@ presets. The accepted tuning and research flags remain backward-compatible
 and are listed under `gnss fuse --help-advanced`. Prefer `--navi776-tc`
 instead of spelling out its component tight-coupling flags.
 
-With `--navi776-tc` (or `--tc-velocity-states`), add
-`--independent-output-filter` if you use `--out`, or use the RTK stream
-written by `--rtk-pos-out`. Without the flag the fused `--out` stream can be
-kilometres off on the PPC Tokyo runs, because the loose ESKF takes a wrong RTK
-velocity state
-([known issue](navi776_techniques.md#known-issue-the-velocity-state-2026-10-31);
-[the flag](#independent-output-filter)).
+With `--base`, `--navi776-tc` writes `--out` from the
+[independent output filter](#independent-output-filter). With
+`--tc-velocity-states` set by hand, add `--independent-output-filter` if you
+use `--out`, or use the RTK stream written by `--rtk-pos-out`. Without that
+filter the fused `--out` stream can be kilometres off on the PPC Tokyo runs,
+because the main loose ESKF takes a wrong RTK velocity state
+([known issue](navi776_techniques.md#known-issue-the-velocity-state-2026-10-31)).
 Without any tight-coupling flag, PPC nagoya/run1 is kilometres off too: there
 the loose ESKF's gyro bias estimate grows to 0.23 rad/s and its heading does
 not converge. `--consider-before-heading-latch` fixes most of that
@@ -232,7 +232,8 @@ bias estimate of the run is in parentheses (rad/s).
   closed-loop INS starts from the loose ESKF's attitude and biases, so the
   flag changes the RTK stream. On one run per PPC run under `--navi776-tc`,
   correct FIX fall from 68.21% to 65.10% and the wrong-FIX rate rises from
-  6.41% to 9.53%. Use `--independent-output-filter` there instead.
+  6.41% to 9.53%. `--navi776-tc` uses the independent output filter instead,
+  which makes the consider update without touching the RTK stream.
 
 ### Independent output filter
 
@@ -253,13 +254,17 @@ for reference; each stream is scored on the epochs it outputs.
 
 It is meant for `--navi776-tc`. There the RTK velocity state is not a usable
 velocity, and the main filter, which takes it, drifts kilometres away.
+`--navi776-tc` turns the filter on when `--base` is given and
+`--library-fix-integrity-gate` is not. `--no-independent-output-filter`, given
+anywhere, keeps `--out` from the main filter. Under `--navi776-tc` the run
+summary says whether the filter is on and, if not, why.
 
 Fused `--out` 3D error, p50 / p90 (m), one run each, `--preset low-cost
 --ratio 2.4 --max-subset-ar-drop-steps 18 --rtk-snr-weighting --no-arfilter
 --navi776-tc`. Lever arms and the UrbanNav Tokyo `--base-ecef` are as in the
 previous table.
 
-| Run | Default `--out` | `--independent-output-filter` | RTK stream |
+| Run | Main loose ESKF | `--independent-output-filter` | RTK stream |
 | --- | ---: | ---: | ---: |
 | PPC tokyo/run1 | 6,156 / 81,696 | 0.12 / 12.0 | 0.05 / 10.7 |
 | PPC tokyo/run2 | 154 / 3,447 | 0.09 / 2.6 | 0.04 / 2.3 |
@@ -294,7 +299,7 @@ previous table.
   - Data12: 93.7 / 1,542 m → 0.15 / 10.2 m;
   - the RTK stream identical on both.
 
-  `--navi776-tc` does not turn it on yet; that is for a separate PR.
+  `--navi776-tc` has turned it on since then (2026-11-01).
 
 ## Validation snapshot (PPC Tokyo/Nagoya, `--preset low-cost`)
 
