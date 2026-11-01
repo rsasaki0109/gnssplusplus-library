@@ -221,8 +221,13 @@ bias estimate of the run is in parentheses (rad/s).
   epochs and 92% of those fixes are wrong, so its fused output is unusable
   either way.
 - All 11 runs are development data: PPC and UrbanNav Tokyo were used to find
-  the mechanism, and the table was measured after it. There is no holdout, so
-  the default stays off.
+  the mechanism, and the table was measured after it.
+- **It failed a frozen holdout**
+  ([contract](smartpnt_fuse_output_holdout.md),
+  [results](smartpnt_fuse_output_holdout_results.md)), so the default stays
+  off. On SmartPNT-POS Data11 the fused p90 rose from 4.80 m to 33.6 m: after
+  a 630 s stand-still the heading did not converge for about 2,000 s after
+  the latch. Data12 was unchanged.
 - **Do not combine it with `--tc-closed-loop` or `--navi776-tc`.** The
   closed-loop INS starts from the loose ESKF's attitude and biases, so the
   flag changes the RTK stream. On one run per PPC run under `--navi776-tc`,
@@ -281,9 +286,15 @@ previous table.
     coasts for long stretches, and both outputs are unusable.
 - **nagoya/run1** still starts with the reverse-out-of-parking latch 180° off
   ([above](#the-loose-eskf-before-the-heading-latch)).
-- **Development data only.** These 11 runs are development data, so
-  `--navi776-tc` does not turn the flag on. Changing that needs a frozen
-  holdout.
+- **Development data, then a frozen holdout.** These 11 runs are development
+  data. The flag then passed a frozen holdout on SmartPNT-POS Data11 and
+  Data12 ([contract](smartpnt_fuse_output_holdout.md),
+  [results](smartpnt_fuse_output_holdout_results.md)):
+  - Data11: 181 / 790 m → 0.79 / 4.42 m;
+  - Data12: 93.7 / 1,542 m → 0.15 / 10.2 m;
+  - the RTK stream identical on both.
+
+  `--navi776-tc` does not turn it on yet; that is for a separate PR.
 
 ## Validation snapshot (PPC Tokyo/Nagoya, `--preset low-cost`)
 
