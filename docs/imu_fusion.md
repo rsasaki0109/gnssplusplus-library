@@ -191,7 +191,8 @@ stay, with a small and wrong covariance.
   nagoya/run1 still reaches 0.117 rad/s and a p90 of 72.5 m. The heading-latch direction test of
   `velocity_consistency_v5` flips nagoya/run1 correctly but also flips the
   correct forward latches on Odaiba and HK Deep-Urban-1, so it is not
-  exposed in `gnss fuse`.
+  exposed in `gnss fuse`. `--heading-latch-direction-regression` is the check
+  that does work there ([reverse starts](#reverse-starts)).
 
 Fused `--out` 3D error, p50 / p90 (m), one run each, the same RTK flags
 (`--preset low-cost --ratio 2.4 --max-subset-ar-drop-steps 18
@@ -290,7 +291,8 @@ previous table.
   - On HK Medium-Urban-1 the RTK stream has few valid epochs, the filter
     coasts for long stretches, and both outputs are unusable.
 - **nagoya/run1** still starts with the reverse-out-of-parking latch 180° off
-  ([above](#the-loose-eskf-before-the-heading-latch)).
+  ([above](#the-loose-eskf-before-the-heading-latch)); see
+  [reverse starts](#reverse-starts).
 - **Development data, then a frozen holdout.** These 11 runs are development
   data. The flag then passed a frozen holdout on SmartPNT-POS Data11 and
   Data12 ([contract](smartpnt_fuse_output_holdout.md),
@@ -300,6 +302,78 @@ previous table.
   - the RTK stream identical on both.
 
   `--navi776-tc` has turned it on since then (2026-11-01).
+
+### Reverse starts
+
+The heading latch takes the GNSS course, the direction of travel. When the
+vehicle starts by reversing, body +X points the other way and the latch is
+180° off. nagoya/run1 starts like that: it backs out of a parking space.
+
+`--heading-latch-direction-regression` checks the direction with a
+regression. Over each interval of at least 0.5 s since the last stop, it
+pairs two numbers:
+
+- the mean IMU body-forward kinematic acceleration;
+- the rate of change of the GNSS horizontal speed.
+
+The slope of the first on the second is about +1 moving forward and −1
+moving backward. A constant accelerometer bias or tilt error moves only the
+intercept, so it does not drift as the integrated longitudinal velocity of
+`velocity_consistency_v5` does. That integral reads −3.09 m/s on HK
+Deep-Urban-1 and 48 m/s on HK Medium-Urban-1 at the latch.
+
+- **The decision.** With at least 4 intervals and a speed-rate spread of at
+  least 0.05 (m/s²)², a slope below −0.5 latches course + 180°.
+  - **Deferred.** When the latch has fewer intervals than that, the decision
+    waits for the end of that motion segment (a stop) or 20 s after the latch.
+  - **Once.** It is made once; a flip turns the attitude by 180° about up,
+    resets the yaw σ to the latch σ and re-anchors the velocity.
+- **Which filter.** The option applies to the loose ESKF that writes `--out`:
+  the independent output filter under `--navi776-tc`, the main filter
+  otherwise. In the second case the options that read the main filter
+  (`--tc-closed-loop`, `--rtk-ins-prior`, `--tight-dd-imu`) see the turned
+  heading.
+
+Slope of the decision (deferred decisions marked *d*) and fused `--out` 3D
+p50 / p90 (m), without → with the option, one run each. Flags, lever arms
+and the UrbanNav Tokyo `--base-ecef` are as in the tables above. SmartPNT-POS
+Data11 and Data12 use the lever arm of their
+[holdout](smartpnt_fuse_output_holdout.md).
+
+| Run | `--navi776-tc`: slope | `--navi776-tc`: `--out` | No tight coupling: slope | No tight coupling: `--out` |
+| --- | ---: | --- | ---: | --- |
+| PPC tokyo/run1 | 1.02 *d* | unchanged | 0.79 *d* | unchanged |
+| PPC tokyo/run2 | 1.04 *d* | unchanged | 1.12 *d* | unchanged |
+| PPC tokyo/run3 | 0.99 *d* | unchanged | 0.87 | unchanged |
+| PPC nagoya/run1 | **−0.88** | **1.46 / 52.6 → 0.21 / 13.8** | **−0.81** | **2,044 / 13,274 → 0.23 / 20.2** |
+| PPC nagoya/run2 | 0.84 | unchanged | 0.87 | unchanged |
+| PPC nagoya/run3 | 0.67 | unchanged | 0.82 | unchanged |
+| UrbanNav Odaiba | 0.63 *d* | unchanged | 0.49 *d* | unchanged |
+| UrbanNav Shinjuku | 0.73 *d* | unchanged | 0.82 *d* | unchanged |
+| UrbanNav HK Deep-Urban-1 | 1.10 | unchanged | 2.49 | unchanged |
+| UrbanNav HK Harsh-Urban-1 | 0.81 | unchanged | 0.88 | unchanged |
+| UrbanNav HK Medium-Urban-1 | 0.98 | unchanged | 0.95 | unchanged |
+| SmartPNT-POS Data11 | 1.01 | unchanged | 0.98 | unchanged |
+| SmartPNT-POS Data12 | 0.90 *d* | unchanged | 0.92 *d* | unchanged |
+
+- **Unchanged means byte-identical.** The `--out` streams are byte-identical
+  without and with the option, and the RTK stream is byte-identical on all 26
+  runs.
+- **nagoya/run1 flips at the latch** in both modes. With the lever arm moved by
+  2–4 cm (the nine members of the
+  [spread script](navi776_techniques.md#nine-run-re-check-2026-10-30)) it
+  flips on every member with the same slope. `--out` is 0.21 / 13.8 m on every
+  member, against 1.46 / 50.9–53.0 m without the option.
+- **A backward-velocity vote does not work.** The alternative was to flip
+  once, within 120 s of the latch, after the GNSS velocity points backward in
+  the body frame for 5 s at 2 m/s or more. On nagoya/run1 it flips 18 s after
+  the latch and makes `--out` worse: 21.1 / 4,206 m.
+- **Development data only.** All 13 runs are development data, and
+  nagoya/run1 is the only reverse start among them. The first version took
+  1 s intervals and decided only at the latch; it had too few intervals on
+  nagoya/run1 and the PPC Tokyo and UrbanNav Tokyo runs. The 0.5 s interval
+  and the deferred decision were added after that run, on these data. The default stays off until a frozen holdout on new
+  runs that start by reversing.
 
 ## Validation snapshot (PPC Tokyo/Nagoya, `--preset low-cost`)
 

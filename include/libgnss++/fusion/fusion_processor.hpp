@@ -4,6 +4,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -281,6 +282,35 @@ public:
         // Updates after the latch are unchanged. False keeps the previous
         // behavior bit-for-bit.
         bool consider_attitude_and_biases_before_heading_latch = false;
+
+        // Reverse-start check (docs/imu_fusion.md#reverse-starts). The latch
+        // takes the GNSS course, which is the body heading only when the
+        // vehicle moves forward. When true, the filter regresses the IMU
+        // body-forward kinematic acceleration (as for v_long above; roll and
+        // pitch enter, the yaw does not) averaged over each interval of at
+        // least heading_latch_regression_min_interval_s, on the rate of change
+        // of the GNSS horizontal speed over the same interval. It uses the
+        // intervals since the last stationary sample or GNSS speed below
+        // heading_latch_regression_reset_speed_mps. The slope is about +1
+        // moving forward and -1 moving backward; a constant accelerometer bias
+        // or tilt error moves only the intercept. With at least
+        // heading_latch_regression_min_pairs intervals and a speed-rate spread
+        // (sum of squared deviations, (m/s^2)^2) of at least
+        // heading_latch_regression_min_sxx, a slope below
+        // heading_latch_regression_flip_slope latches course + 180 deg. With
+        // too little of either at the latch, the decision waits for the end
+        // of that motion segment (a stop) or for
+        // heading_latch_regression_horizon_s after the latch, and is made
+        // once: a flip then turns the attitude by 180 deg about up, resets the
+        // yaw sigma to align_heading_sigma_deg and re-anchors the velocity.
+        // False keeps the previous behavior bit-for-bit.
+        bool heading_latch_direction_regression = false;
+        double heading_latch_regression_min_interval_s = 0.5;
+        int heading_latch_regression_min_pairs = 4;
+        double heading_latch_regression_min_sxx = 0.05;
+        double heading_latch_regression_flip_slope = -0.5;
+        double heading_latch_regression_horizon_s = 20.0;
+        double heading_latch_regression_reset_speed_mps = 0.2;
     };
 
     explicit LooseCouplingProcessor(const Config& config);
@@ -433,6 +463,15 @@ public:
     /** v_long at the most recent heading latch (NaN before any latch or when
      * the option is off / v_long was not valid). */
     double lastLatchLongitudinalVelocityMps() const { return last_latch_v_long_mps_; }
+    /** Reverse-start check: 180 deg turns it made, at a latch or deferred. */
+    std::size_t latchDirectionRegressionFlipCount() const {
+        return latch_direction_regression_flip_count_;
+    }
+    /** Reverse-start check: slope of its most recent decision (NaN before
+     * one, or when the decision had too few intervals or too little spread). */
+    double lastLatchDirectionRegressionSlope() const {
+        return last_latch_direction_regression_slope_;
+    }
 
 private:
     Config config_;
@@ -466,6 +505,25 @@ private:
     bool last_latch_direction_flipped_ = false;
     std::size_t latch_direction_flip_count_ = 0;
     double last_latch_v_long_mps_ = std::numeric_limits<double>::quiet_NaN();
+
+    // Reverse-start check (Config::heading_latch_direction_regression).
+    struct RegressionSlope {
+        double slope = std::numeric_limits<double>::quiet_NaN();
+        double sxx = 0.0;
+    };
+    RegressionSlope latchDirectionRegressionSlope() const;
+    void clearLatchDirectionRegression();
+    double regression_accel_integral_ = 0.0;
+    double regression_accel_time_s_ = 0.0;
+    bool regression_have_interval_start_ = false;
+    double regression_interval_start_speed_mps_ = 0.0;
+    GNSSTime regression_interval_start_time_;
+    std::vector<std::pair<double, double>> regression_pairs_;  // (speed rate, mean a_x)
+    bool regression_decision_pending_ = false;
+    bool regression_segment_ended_ = false;
+    GNSSTime regression_latch_time_;
+    std::size_t latch_direction_regression_flip_count_ = 0;
+    double last_latch_direction_regression_slope_ = std::numeric_limits<double>::quiet_NaN();
 
     int position_consecutive_gate_rejections_ = 0;
     int velocity_consecutive_gate_rejections_ = 0;
