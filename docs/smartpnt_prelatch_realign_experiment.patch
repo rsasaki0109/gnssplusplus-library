@@ -1,0 +1,86 @@
+diff --git a/apps/native/gnss_fuse.cpp b/apps/native/gnss_fuse.cpp
+index 8d402d8..922bfc7 100644
+--- a/apps/native/gnss_fuse.cpp
++++ b/apps/native/gnss_fuse.cpp
+@@ -3956,6 +3956,10 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
+         std::cout << "\n";
+         std::cout << "Exact base epochs: " << exact_base_epochs << "\n";
+         std::cout << "Interpolated base epochs: " << interpolated_base_epochs << "\n";
++        if (std::getenv("GNSS_EXP_PRELATCH_REALIGN")) {
++            std::cout << "EXP pre-latch realigns: main=" << fusion_processor.expRealignCount()
++                      << " output=" << output_filter.expRealignCount() << "\n";
++        }
+         std::cout << "Skipped rover epochs (no aligned base): " << skipped_rover_epochs << "\n";
+         std::cout << "Derived FIXED-to-FIXED velocity updates: " << derived_velocity_updates << "\n";
+         if (options.tightly_coupled_dd_imu) {
+diff --git a/include/libgnss++/fusion/fusion_processor.hpp b/include/libgnss++/fusion/fusion_processor.hpp
+index 5f852fa..7eb9c61 100644
+--- a/include/libgnss++/fusion/fusion_processor.hpp
++++ b/include/libgnss++/fusion/fusion_processor.hpp
+@@ -449,6 +449,16 @@ private:
+ 
+     std::vector<ImuSample> static_window_;
+     std::deque<ImuSample> zupt_window_;
++    // EXP (not for merge): pre-latch re-alignment over the current stand-still.
++    Eigen::Vector3d exp_still_gyro_sum_ = Eigen::Vector3d::Zero();
++    Eigen::Vector3d exp_still_accel_sum_ = Eigen::Vector3d::Zero();
++    double exp_still_count_ = 0.0;
++    double exp_still_start_tow_ = 0.0;
++    double exp_last_realign_tow_ = 0.0;
++    std::size_t exp_realign_count_ = 0;
++public:
++    std::size_t expRealignCount() const { return exp_realign_count_; }
++private:
+     Eigen::Vector3d last_angular_rate_body_ = Eigen::Vector3d::Zero();
+     bool has_gnss_velocity_ = false;
+     double last_gnss_velocity_speed_mps_ = 0.0;
+diff --git a/src/fusion/fusion_processor.cpp b/src/fusion/fusion_processor.cpp
+index 5d26646..079b3eb 100644
+--- a/src/fusion/fusion_processor.cpp
++++ b/src/fusion/fusion_processor.cpp
+@@ -494,6 +494,45 @@ void LooseCouplingProcessor::processImuSample(const ImuSample& sample_body_flu)
+         }
+     }
+ 
++    // EXP (not for merge): with the consider update before the latch, nothing corrects the tilt or the
++    // gyro bias while the vehicle stands still, so a static-alignment window that caught an IMU start-up
++    // transient integrates into the tilt. Re-align over the whole current stand-still instead (yaw kept).
++    static const bool exp_realign = std::getenv("GNSS_EXP_PRELATCH_REALIGN") != nullptr;
++    if (exp_realign && config_.consider_attitude_and_biases_before_heading_latch && !heading_aligned_) {
++        if (gnssSpeedGateAllowsZupt() && detectStationary()) {
++            if (exp_still_count_ == 0.0) exp_still_start_tow_ = sample_body_flu.time.tow;
++            exp_still_gyro_sum_ += sample_body_flu.gyro_raw_radps;
++            exp_still_accel_sum_ += sample_body_flu.accel_raw;
++            exp_still_count_ += 1.0;
++            const double tow = sample_body_flu.time.tow;
++            if (tow - exp_still_start_tow_ >= 2.0 && tow - exp_last_realign_tow_ >= 1.0) {
++                const Eigen::Vector3d gyro_mean = exp_still_gyro_sum_ / exp_still_count_;
++                const Eigen::Vector3d accel_mean = exp_still_accel_sum_ / exp_still_count_;
++                const double norm = accel_mean.norm();
++                if (norm > 1e-9 && gyro_mean.allFinite()) {
++                    const Eigen::Vector3d up_body = accel_mean / norm;
++                    Eigen::Quaterniond level =
++                        Eigen::Quaterniond::FromTwoVectors(up_body, Eigen::Vector3d::UnitZ()).normalized();
++                    // Keep the current yaw: the heading of body +X in ENU.
++                    const Eigen::Matrix3d r_now = state_.nominal.attitude_body_to_enu.toRotationMatrix();
++                    const Eigen::Matrix3d r_lvl = level.toRotationMatrix();
++                    const double yaw_now = std::atan2(r_now(1, 0), r_now(0, 0));
++                    const double yaw_lvl = std::atan2(r_lvl(1, 0), r_lvl(0, 0));
++                    const Eigen::Quaterniond turn(Eigen::AngleAxisd(yaw_now - yaw_lvl, Eigen::Vector3d::UnitZ()));
++                    state_.nominal.attitude_body_to_enu = (turn * level).normalized();
++                    state_.nominal.gyro_bias = gyro_mean;
++                    state_.nominal.accel_bias = accel_mean - kStandardGravityMps2 * up_body;
++                    exp_last_realign_tow_ = tow;
++                    ++exp_realign_count_;
++                }
++            }
++        } else {
++            exp_still_gyro_sum_.setZero();
++            exp_still_accel_sum_.setZero();
++            exp_still_count_ = 0.0;
++        }
++    }
++
+     if (config_.zupt_enable && gnssSpeedGateAllowsZupt() && detectStationary()) {
+         const auto system = fusion_measurement::buildZuptUpdate(state_, config_.zupt_sigma_mps);
+         int unused_rejections = 0;  // ZUPT is always ungated (max_nis=0.0), never rejected.

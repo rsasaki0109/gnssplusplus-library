@@ -9,6 +9,7 @@ import struct
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/"scripts"))
@@ -349,6 +350,29 @@ class Conversion(unittest.TestCase):
         self.assertNotIn(b"\r\n", out)
         self.assertEqual(manifest["stats"]["rover.obs"]["epochs_out"], SECONDS + 1)
 
+    def test_repeated_rover_epochs_are_dropped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = make_run(Path(tmp)/"raw")
+            rover = folder/"ROVE_03.23O"
+            data = rover.read_bytes()
+            epoch = obs_file(T0 + 10, T0 + 10)            # the epoch at T0 + 10 once more, after T0 + 10
+            marker = obs_file(T0 + 11, T0 + 11)
+            rover.write_bytes(data.replace(marker, epoch + marker, 1))
+            manifest = conv.convert("Data12_20230104", folder, Path(tmp)/"out")
+        self.assertEqual(manifest["stats"]["rover.obs"]["non_increasing_epochs_dropped"], 1)
+        self.assertEqual(manifest["stats"]["rover.obs"]["epochs_out"], SECONDS + 1)
+
+    def test_the_truth_point_must_be_the_antenna_within_the_run_tolerance(self):
+        offset_lever = "x=-0.512, y=-0.254, z=0.187"          # 3 cm from the antenna lever arm
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = make_run(Path(tmp)/"raw", truth=truth_text(T0, T0 + SECONDS, sensor_lever=offset_lever))
+            with self.assertRaisesRegex(ValueError, "not exported at the GNSS antenna"):
+                conv.convert("Data12_20230104", folder, Path(tmp)/"out")
+            spec = dict(conv.RUNS["Data12_20230104"], truth_point_tolerance_m=0.05)
+            with mock.patch.dict(conv.RUNS, {"Data12_20230104": spec}):
+                manifest = conv.convert("Data12_20230104", folder, Path(tmp)/"out2")
+        self.assertAlmostEqual(manifest["stats"]["reference.csv"]["export_point_offset_from_antenna_m"], 0.03)
+
     def test_a_rove_run_with_another_imu_uses_its_own_spec(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = make_generic_run(Path(tmp)/"raw")
@@ -385,7 +409,12 @@ class Conversion(unittest.TestCase):
             self.assertEqual((spec["rover"], spec["imu"], spec["truth"], spec["contract"]),
                              ("ROVE_03", "STIM300", "Rove_03_GroundTruth.txt", "docs/smartpnt_fuse_output_holdout.md"))
         reverse = [run for run, spec in conv.RUNS.items() if spec["contract"] == conv.REVERSE_START_CONTRACT]
-        self.assertEqual(len(reverse), 9)
+        self.assertEqual(len(reverse), 8)     # Data04, excluded there before any conversion, moved to the next
+        realign = sorted(run for run, spec in conv.RUNS.items() if spec["contract"] == conv.PRELATCH_REALIGN_CONTRACT)
+        self.assertEqual(realign, ["Data03_20150722", "Data04_20220315", "Data05_20201128", "Data17_20200617",
+                                   "Data18_20200618"])
+        self.assertEqual(conv.RUNS["Data03_20150722"]["truth_point_tolerance_m"], 0.05)
+        self.assertEqual(sum(spec["truth_point_tolerance_m"] > 0 for spec in conv.RUNS.values()), 1)
 
     def test_epochs_without_imu_are_dropped(self):
         with tempfile.TemporaryDirectory() as tmp:

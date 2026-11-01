@@ -267,6 +267,19 @@ class ObservationTest(Case):
         with self.assertRaisesRegex(ValueError, "event record"):
             conv.filter_rover_obs(self.write("d.obs", OBS_HEADER + epoch_line(100, flag=3) + obs_epoch(101)), self.root/"o4", set(), set())
 
+    def test_repeated_rover_epochs_can_be_dropped(self):
+        # As SmartPNT-POS Data04 and Data18: stale records repeated under a time already used.
+        source = self.write("r.obs", OBS_HEADER + obs_epoch(100) + obs_epoch(101) + obs_epoch(101, nsat=1) +
+                            obs_epoch(100, nsat=1) + obs_epoch(102))
+        keep = {Fraction(100), Fraction(101), Fraction(102)}
+        with self.assertRaisesRegex(ValueError, "non-monotonic"):
+            conv.filter_rover_obs(source, self.root/"o1.obs", keep, keep)
+        stats, kept = conv.filter_rover_obs(source, self.root/"o2.obs", keep, keep, drop_non_increasing_epochs=True)
+        self.assertEqual(kept, [100, 101, 102])
+        self.assertEqual(stats["non_increasing_epochs_dropped"], 2)
+        self.assertEqual((stats["epochs_in"], stats["epochs_out"]), (3, 3))
+        self.assertEqual((self.root/"o2.obs").read_bytes(), OBS_HEADER + obs_epoch(100) + obs_epoch(101) + obs_epoch(102))
+
     def test_base_keeps_the_epoch_records_inside_the_span_byte_for_byte(self):
         epochs = (360, 361, 362, 363)
         data = BASE_HEADER + b"".join(obs_epoch(t, crlf=False) for t in epochs) + base_event()

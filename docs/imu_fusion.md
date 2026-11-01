@@ -303,6 +303,20 @@ previous table.
   - the RTK stream identical on both.
 
   `--navi776-tc` has turned it on since then (2026-11-01).
+- **Known issue: a start-up transient before the latch.**
+  - **Where it comes from.** The filter takes its gyro bias and tilt from the
+    first 2 s of IMU data. Before the latch, the consider update keeps both
+    out of every measurement update.
+  - **What it does.** An IMU start-up transient in that window integrates
+    into the tilt for the whole stand-still.
+    - SmartPNT Data15: 46° of pitch by the first motion, and `--out`
+      hundreds of kilometres off.
+    - UrbanNav HK Harsh-Urban-1: 27°.
+  - **The candidate fix.** Re-aligning over the current stand-still before
+    the latch passed a frozen holdout
+    ([contract](smartpnt_prelatch_realign_holdout.md),
+    [results](smartpnt_prelatch_realign_holdout_results.md)) with a small
+    effect, and is not in the code yet.
 
 ### Reverse starts
 
