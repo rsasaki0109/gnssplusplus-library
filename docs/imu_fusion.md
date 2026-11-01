@@ -137,10 +137,13 @@ presets. The accepted tuning and research flags remain backward-compatible
 and are listed under `gnss fuse --help-advanced`. Prefer `--navi776-tc`
 instead of spelling out its component tight-coupling flags.
 
-With `--navi776-tc` (or `--tc-velocity-states`), use the RTK stream written by
-`--rtk-pos-out`. The fused `--out` stream can be kilometres off on the PPC
-Tokyo runs, because the loose ESKF takes a wrong RTK velocity state
-([known issue](navi776_techniques.md#known-issue-the-velocity-state-2026-10-31)).
+With `--navi776-tc` (or `--tc-velocity-states`), add
+`--independent-output-filter` if you use `--out`, or use the RTK stream
+written by `--rtk-pos-out`. Without the flag the fused `--out` stream can be
+kilometres off on the PPC Tokyo runs, because the loose ESKF takes a wrong RTK
+velocity state
+([known issue](navi776_techniques.md#known-issue-the-velocity-state-2026-10-31);
+[the flag](#independent-output-filter)).
 Without any tight-coupling flag, PPC nagoya/run1 is kilometres off too: there
 the loose ESKF's gyro bias estimate grows to 0.23 rad/s and its heading does
 not converge. `--consider-before-heading-latch` fixes most of that
@@ -224,7 +227,63 @@ bias estimate of the run is in parentheses (rad/s).
   closed-loop INS starts from the loose ESKF's attitude and biases, so the
   flag changes the RTK stream. On one run per PPC run under `--navi776-tc`,
   correct FIX fall from 68.21% to 65.10% and the wrong-FIX rate rises from
-  6.41% to 9.53%.
+  6.41% to 9.53%. Use `--independent-output-filter` there instead.
+
+### Independent output filter
+
+`--independent-output-filter` (with `--base`) writes `--out` and
+`--attitude-csv` from a second loose ESKF. That filter gets the same IMU
+samples and the RTK position, but two things differ:
+
+- its velocity input is the epoch SPP Doppler velocity, not the RTK solution's
+  velocity;
+- it always makes the pre-latch updates consider updates, as
+  `--consider-before-heading-latch` does.
+
+The main loose ESKF is unchanged. It still bootstraps the closed-loop INS and
+serves the options that read it (`--rtk-ins-prior`, `--tight-dd-imu`). So the
+RTK stream (`--rtk-pos-out`) is byte-identical with and without the flag; that
+holds on all 11 runs below. The last column is the RTK stream's own error,
+for reference; each stream is scored on the epochs it outputs.
+
+It is meant for `--navi776-tc`. There the RTK velocity state is not a usable
+velocity, and the main filter, which takes it, drifts kilometres away.
+
+Fused `--out` 3D error, p50 / p90 (m), one run each, `--preset low-cost
+--ratio 2.4 --max-subset-ar-drop-steps 18 --rtk-snr-weighting --no-arfilter
+--navi776-tc`. Lever arms and the UrbanNav Tokyo `--base-ecef` are as in the
+previous table.
+
+| Run | Default `--out` | `--independent-output-filter` | RTK stream |
+| --- | ---: | ---: | ---: |
+| PPC tokyo/run1 | 6,156 / 81,696 | 0.12 / 12.0 | 0.05 / 10.7 |
+| PPC tokyo/run2 | 154 / 3,447 | 0.09 / 2.6 | 0.04 / 2.3 |
+| PPC tokyo/run3 | 7,919 / 104,223 | 0.09 / 1.4 | 0.04 / 2.9 |
+| PPC nagoya/run1 | 1.56 / 84.5 | 1.46 / 52.6 | 0.13 / 2.6 |
+| PPC nagoya/run2 | 34.4 / 330 | 0.49 / 19.0 | 0.44 / 34.4 |
+| PPC nagoya/run3 | 6.76 / 108 | 0.45 / 8.8 | 0.20 / 61.5 |
+| UrbanNav Odaiba | 30.3 / 135 | 0.28 / 8.7 | 0.08 / 16.4 |
+| UrbanNav Shinjuku | 40.7 / 548 | 0.39 / 14.6 | 0.16 / 8.8 |
+| UrbanNav HK Deep-Urban-1 | 73,048 / 210,610 | 28.1 / 126 | 2.21 / 22.7 |
+| UrbanNav HK Harsh-Urban-1 | 65.2 / 444 | 27.2 / 252 | 8.53 / 65.8 |
+| UrbanNav HK Medium-Urban-1 | 1,153 / 2,289 | 908 / 25,565 | 4.82 / 12.4 |
+
+- **The SPP velocity is what matters.** Giving the second filter the RTK
+  velocity instead (with the consider update) leaves Tokyo hundreds to
+  thousands of metres off: tokyo/run1 p50 611 m.
+- **Hong Kong stays poor.**
+  - The RTK filter reports every FLOAT with the same small covariance
+    (σ 0.17 m over the three axes). On HK Deep-Urban-1 the FLOAT error is 13–17
+    times that (median), so both filters trust FLOAT positions that are metres
+    off.
+  - Without tight coupling the same output filter gets 2.94 m on that run.
+  - On HK Medium-Urban-1 the RTK stream has few valid epochs, the filter
+    coasts for long stretches, and both outputs are unusable.
+- **nagoya/run1** still starts with the reverse-out-of-parking latch 180° off
+  ([above](#the-loose-eskf-before-the-heading-latch)).
+- **Development data only.** These 11 runs are development data, so
+  `--navi776-tc` does not turn the flag on. Changing that needs a frozen
+  holdout.
 
 ## Validation snapshot (PPC Tokyo/Nagoya, `--preset low-cost`)
 

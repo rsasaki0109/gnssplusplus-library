@@ -253,6 +253,11 @@ struct FuseOptions {
     bool hold_kalman_update = false;
     bool hold_kalman_update_validated_only = false;
     int min_fix_satellites = 0;
+    // --independent-output-filter: write --out and the attitude stream from a
+    // second loose ESKF that takes the RTK position and the epoch SPP Doppler
+    // velocity (consider update before the heading latch). The RTK filter and
+    // the closed-loop INS bootstrap keep using the main loose ESKF. Off by default.
+    bool independent_output_filter = false;
 
     // navi.776 A2: innovation-based adaptive measurement variance, mirroring
     // gnss_solve's --rtk-adaptive-noise family. Off by default.
@@ -711,6 +716,12 @@ void printAdvancedUsage(const char* program_name) {
         << "                                consider update), so the unknown yaw cannot corrupt\n"
         << "                                them. Changes the RTK stream with --tc-closed-loop or\n"
         << "                                --navi776-tc. Default: off\n"
+        << "  --independent-output-filter  Write --out (and --attitude-csv) from a second loose\n"
+        << "                                ESKF that takes the RTK position and the epoch SPP\n"
+        << "                                Doppler velocity, with the consider update before the\n"
+        << "                                heading latch. The RTK stream is unchanged. For\n"
+        << "                                --navi776-tc, whose RTK velocity state is not a usable\n"
+        << "                                velocity (--base only; default: off)\n"
         << "  --max-position-nis <v>       Reject a GNSS position update if its normalized\n"
         << "                                innovation squared per observation exceeds this (guards\n"
         << "                                against RTK float-reconvergence jumps corrupting attitude\n"
@@ -1860,6 +1871,8 @@ FuseOptions parseArguments(int argc, char* argv[]) {
                 std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--consider-before-heading-latch") {
             options.fusion_config.consider_attitude_and_biases_before_heading_latch = true;
+        } else if (arg == "--independent-output-filter") {
+            options.independent_output_filter = true;
         } else {
             matched = false;
         }
@@ -2128,6 +2141,14 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     if (options.hold_kalman_update_validated_only && !options.hold_kalman_update) {
         argumentError("--hold-kalman-update-validated-only requires --hold-kalman-update",
                       argv[0]);
+    }
+    if (options.independent_output_filter && options.base_path.empty()) {
+        argumentError("--independent-output-filter requires --base", argv[0]);
+    }
+    if (options.independent_output_filter && options.library_fix_integrity_gate) {
+        argumentError(
+            "--independent-output-filter cannot be combined with --library-fix-integrity-gate",
+            argv[0]);
     }
     if (options.library_fix_integrity_gate &&
         options.base_path.empty()) {
@@ -2807,6 +2828,11 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             : loadSeedPositions(options.rover_seed_pos_path);
 
     libgnss::LooseCouplingProcessor fusion_processor(options.fusion_config);
+    // --independent-output-filter: the loose ESKF behind --out. It never feeds
+    // the RTK filter or the closed-loop INS, so the RTK stream is unchanged.
+    libgnss::LooseCouplingProcessor::Config output_filter_config = options.fusion_config;
+    output_filter_config.consider_attitude_and_biases_before_heading_latch = true;
+    libgnss::LooseCouplingProcessor output_filter(output_filter_config);
     libgnss::ImuPreintegrationConfig tc_preintegration_config;
     tc_preintegration_config.process_noise = options.fusion_config.process_noise;
     tc_preintegration_config.max_sample_gap_s = options.tc_ins_max_sample_gap_s;
@@ -3034,6 +3060,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             libgnss::ImuSample sample = imu_series.samples[imu_cursor];
             transformImuSample(sample, options, axis_convention);
             fusion_processor.processImuSample(sample);
+            if (options.independent_output_filter) output_filter.processImuSample(sample);
             if (options.tc_ins_time_update && tc_preintegrator.initialized()) {
                 const auto status = tc_preintegrator.integrate(sample);
                 if (status != libgnss::PreintegrationStatus::ACCEPTED &&
@@ -3464,6 +3491,19 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                 }
             }
 
+            if (options.independent_output_filter) {
+                // The epoch SPP Doppler velocity, not the RTK velocity state
+                // (docs/imu_fusion.md, "Independent output filter").
+                libgnss::PositionSolution output_input = fusion_solution;
+                const auto& spp = rtk_processor.currentSpp();
+                output_input.has_velocity = spp.has_velocity && spp.velocity_ecef.allFinite() &&
+                                            spp.velocity_covariance.allFinite();
+                if (output_input.has_velocity) {
+                    output_input.velocity_ecef = spp.velocity_ecef;
+                    output_input.velocity_covariance = spp.velocity_covariance;
+                }
+                output_filter.processGnssSolution(output_input);
+            }
             fusion_processor.processGnssSolution(fusion_solution);
             if (fusion_solution.isFixed()) {
                 previous_fixed_solution = fusion_solution;
@@ -3671,13 +3711,20 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             // The authoritative integrity product must preserve the library
             // solution denominator even during the IMU alignment prefix.
             fused_solution.addSolution(pos_solution);
-        } else if (fusion_processor.isOriginSet()) {
-            fused_solution.addSolution(
-                fusion_processor.toAntennaPositionSolution());
+        } else {
+            const auto& output_source =
+                options.independent_output_filter ? output_filter : fusion_processor;
+            if (output_source.isOriginSet()) {
+                fused_solution.addSolution(output_source.toAntennaPositionSolution());
+            }
         }
-        if (fusion_processor.isOriginSet()) {
-            attitude_writer.write(fusion_processor.state().nominal.time,
-                                  fusion_processor.state().nominal.attitude_body_to_enu);
+        {
+            const auto& output_source =
+                options.independent_output_filter ? output_filter : fusion_processor;
+            if (output_source.isOriginSet()) {
+                attitude_writer.write(output_source.state().nominal.time,
+                                      output_source.state().nominal.attitude_body_to_enu);
+            }
         }
 
         if (options.verbose && (valid_solutions <= 5 || valid_solutions % 200 == 0)) {
@@ -3896,6 +3943,12 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         // recent velocity-innovation NIS still corroborates that latch.
         std::cout << "Heading aligned: " << (fusion_processor.isHeadingAligned() ? "yes" : "no") << "\n";
         std::cout << "Heading converged: " << (fusion_processor.isHeadingConverged() ? "yes" : "no") << "\n";
+        if (options.independent_output_filter) {
+            std::cout << "Independent output filter: on (heading aligned: "
+                      << (output_filter.isHeadingAligned() ? "yes" : "no")
+                      << ", converged: " << (output_filter.isHeadingConverged() ? "yes" : "no")
+                      << ")\n";
+        }
         std::cout << "Output: " << options.out_path << "\n";
         if (options.write_kml) {
             std::cout << "KML: " << options.kml_path << "\n";
