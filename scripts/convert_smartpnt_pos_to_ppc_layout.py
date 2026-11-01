@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""Convert a SmartPNT-POS car run (Wuhan) to the PPC run layout.
+"""Convert a SmartPNT-POS vehicle run (Wuhan) to the PPC run layout.
 
-Implements the "Conversion" section of docs/smartpnt_fuse_output_holdout.md. Pure standard library.
+Implements the "Conversion" sections of docs/smartpnt_fuse_output_holdout.md (Data11, Data12) and
+docs/smartpnt_reverse_start_holdout.md (the other runs of RUNS). Pure standard library.
 The raw files are read as data only; nothing from them is executed.
 
-Input: --run-dir, the run folder of the Kaggle dataset fengzhusgg/smartpnt-pos
-(Dataset/Data11_20221230_ISA-100C_CAR_Complex or Dataset/Data12_20230104_ISA-100C_CAR_Complex), with
+Input: --run-dir, the run folder of the Kaggle dataset fengzhusgg/smartpnt-pos named in RUNS, with
     README.xml               base marker position, antenna height, IMU lever arms and mounting angles
-    ROVE_03.<yy>O            Septentrio mosaic-X5 rover, RINEX 3.04, 1 Hz (the GNSS receiver used here)
-    BASE.<yy>O / Base.<yy>O  Trimble Alloy base, RINEX 3.04, 1 Hz
-    brdm<doy>0.<yy>p         merged broadcast navigation, RINEX 3.04
-    STIM300.imr              STIM300 IMU, Inertial Explorer IMR, 200 Hz delta-theta/delta-v, GPS time
-    Rove_03_GroundTruth.txt  Inertial Explorer smoothed GNSS/INS solution at the ROVE_01/ROVE_03 antenna
+    <rover>.<yy>O            the run's rover (ROVE_03 for Data11/12, ROVE otherwise), RINEX 3, 1 Hz
+    BASE.<yy>O / Base.<yy>O  base station, RINEX 3, 1 Hz
+    brdm<doy>0.<yy>p         merged broadcast navigation, RINEX 3
+    <imu>.imr                the run's IMU, Inertial Explorer IMR, delta-theta/delta-v, GPS time
+    <truth>                  Inertial Explorer smoothed GNSS/INS solution at the rover antenna
 
-Output: <output-root>/smartpnt/<run>_rove03_stim300/{rover.obs,base.obs,base.nav,imu.csv,reference.csv}
-plus <run>_rove03_stim300.manifest.json beside that directory (SHA256 of every raw input and output).
+Output: <output-root>/smartpnt/<run>_<rover>_<imu>/{rover.obs,base.obs,base.nav,imu.csv,reference.csv}
+(e.g. Data11_20221230_rove03_stim300) plus <name>.manifest.json beside that directory (SHA256 of every
+raw input and output).
 """
 import argparse
 from fractions import Fraction
@@ -32,13 +33,44 @@ from convert_urbannav_to_ppc_layout import PPC_IMU_HEADER, pin  # noqa: E402
 from convert_urbannav_hk_to_ppc_layout import (  # noqa: E402  shared, unchanged helpers of the HK converter
     REFERENCE_HEADER, assemble_base, filter_rover_obs, format_tow, velocity_text, verify_converted)
 
-# Each run and the contract that governs its use, recorded in the manifest.
+FUSE_OUTPUT_CONTRACT = "docs/smartpnt_fuse_output_holdout.md"
+REVERSE_START_CONTRACT = "docs/smartpnt_reverse_start_holdout.md"
+PRIMARY_ANTENNA_TRUTH = ("Inertial Explorer smoothed GNSS/INS solution exported at the primary antenna (ROVE_01/ROVE_03 "
+                         "share it); latitude, longitude, height, ECEF and ENU velocity as exported; heading is the "
+                         "azimuth clockwise from north, roll and pitch as exported")
+ROVER_ANTENNA_TRUTH = ("Inertial Explorer smoothed GNSS/INS solution exported at the ROVE antenna; latitude, "
+                       "longitude, height, ECEF and ENU velocity as exported; heading is the azimuth clockwise from "
+                       "north, roll and pitch as exported")
+
+
+def _run(folder, rover, imu, truth, truth_note, contract):
+    return dict(folder=folder, rover=rover, imu=imu, truth=truth, truth_note=truth_note, contract=contract)
+
+
+# Each run: its folder, rover, IMU (the one the folder is named after, except Data11/12), truth file, and the
+# contract that governs its use, recorded in the manifest.
 RUNS = {
-    "Data11_20221230": "docs/smartpnt_fuse_output_holdout.md",
-    "Data12_20230104": "docs/smartpnt_fuse_output_holdout.md",
+    "Data11_20221230": _run("Data11_20221230_ISA-100C_CAR_Complex", "ROVE_03", "STIM300", "Rove_03_GroundTruth.txt",
+                            PRIMARY_ANTENNA_TRUTH, FUSE_OUTPUT_CONTRACT),
+    "Data12_20230104": _run("Data12_20230104_ISA-100C_CAR_Complex", "ROVE_03", "STIM300", "Rove_03_GroundTruth.txt",
+                            PRIMARY_ANTENNA_TRUTH, FUSE_OUTPUT_CONTRACT),
+    **{run: _run(folder, "ROVE", imu, "ROVE_GroundTruth.txt", ROVER_ANTENNA_TRUTH, REVERSE_START_CONTRACT)
+       for run, folder, imu in (
+           ("Data01_20230102", "Data01_20230102_ISA-100C_Vehicle_Complex", "ISA-100C"),
+           ("Data02_20220309", "Data02_20220309_ISA-100C_Vehicle_Complex", "ISA-100C"),
+           ("Data04_20220315", "Data04_20220315_FSAS_Vehicle_Complex", "FSAS"),
+           ("Data13_20211118", "Data13_20211118_ISA-100C_CAR_Complex", "ISA-100C"),
+           ("Data14_20200828", "Data14_20200828_FSAS_CAR_Complex", "FSAS"),
+           ("Data15_20200922", "Data15_20200922_FSAS_CAR_Complex", "FSAS"),
+           ("Data16_20211118", "Data16_20211118_FSAS_CAR_Complex", "FSAS"),
+           ("Data19_20201214", "Data19_20201214_HG4930_CAR_Opensky", "HG4930"),
+           ("Data20_20210115", "Data20_20210115_HG4930_CAR_Opensky", "HG4930"))},
 }
-RUN_FOLDER_SUFFIX = "_ISA-100C_CAR_Complex"
-IMU_TYPE = "STIM300"
+
+
+def output_name(run):
+    spec = RUNS[run]
+    return f"{run}_{spec['rover'].lower().replace('_', '')}_{spec['imu'].lower().replace('-', '')}"
 
 GRID_CS = 1                          # 100 Hz grid in centiseconds of GPS time of week, as the PPC imu.csv
 MAX_PAIR_GAP_S = 0.1                 # raw samples further apart than this are not bridged (as the other converters)
@@ -106,7 +138,7 @@ def body_to_flu_matrix(mounting_deg):
     r_bv = [[r_vb[j][i] for j in range(3)] for i in range(3)]
     vehicle_to_flu = [[0, 1, 0], [-1, 0, 0], [0, 0, 1]]
     m = [[sum(vehicle_to_flu[i][k]*r_bv[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
-    # The STIM300 angles give a signed permutation; round away the 1e-16 cosine residue.
+    # Right-angle mounting angles give a signed permutation; round away the 1e-16 cosine residue.
     return [[float(round(v)) if abs(v - round(v)) < 1e-12 else v for v in row] for row in m]
 
 
@@ -114,21 +146,21 @@ def body_to_flu_matrix(mounting_deg):
 # README.xml
 
 
-def read_readme(path):
-    """Base marker ECEF, antenna height, and the STIM300 lever arm (vehicle frame) and mounting angles."""
+def read_readme(path, imu_type):
+    """Base marker ECEF, antenna height, and the lever arm (vehicle frame) and mounting angles of imu_type."""
     root = ElementTree.parse(path).getroot()
     base = root.find("BASE")
     marker = [float(v) for v in base.findtext("GNSS_BaseXYZ").split()]
     antenna_height = float(base.findtext("GNSS_AntHeight"))
-    rovers = [r for r in root.findall("ROVE") if r.findtext("SINS_IMUType", "").strip() == IMU_TYPE]
+    rovers = [r for r in root.findall("ROVE") if r.findtext("SINS_IMUType", "").strip() == imu_type]
     if len(rovers) != 1:
-        raise ValueError(f"{path}: expected exactly one ROVE entry with SINS_IMUType {IMU_TYPE}")
+        raise ValueError(f"{path}: expected exactly one ROVE entry with SINS_IMUType {imu_type}")
     lever = [float(v) for v in rovers[0].findtext("SINS_LeverArm_GNSS").split()]
     mounting = [float(v) for v in rovers[0].findtext("SINS_RotAngle_IMU").split()]
     if len(marker) != 3 or len(lever) != 3 or len(mounting) != 3:
         raise ValueError(f"{path}: malformed base position, lever arm or mounting angles")
     return dict(base_marker_ecef=marker, base_antenna_height_m=antenna_height,
-                stim300_lever_arm_vehicle_m=lever, stim300_mounting_deg=mounting)
+                imu_lever_arm_vehicle_m=lever, imu_mounting_deg=mounting)
 
 
 def base_phase_centre(marker, antenna_height):
@@ -233,7 +265,7 @@ def read_imr_header(data):
 
 
 def convert_imu(src, dst, week, mounting_deg):
-    """STIM300 increments -> rates at the interval midpoints, IMU body -> FLU, linear resample onto the 100 Hz grid.
+    """IMR increments -> rates at the interval midpoints, IMU body -> FLU, linear resample onto the 100 Hz grid.
 
     An IMR record at time t holds the increments of (t_previous, t]; the rate is their quotient by the
     measured interval and is placed at its midpoint. Returns (stats, grid, one_second_means) where
@@ -380,21 +412,24 @@ def find_one(directory, pattern):
 def convert(run, run_dir, output_root):
     if run not in RUNS:
         raise ValueError(f"run must be one of {tuple(RUNS)}")
+    spec = RUNS[run]
     run_dir = Path(run_dir)
-    if run_dir.name != run + RUN_FOLDER_SUFFIX:
-        raise ValueError(f"run folder must be named {run + RUN_FOLDER_SUFFIX}")
+    if run_dir.name != spec["folder"]:
+        raise ValueError(f"run folder must be named {spec['folder']}")
     yy = run[9:11]
-    inputs = dict(readme=find_one(run_dir, r"README\.xml"), rover_obs=find_one(run_dir, rf"ROVE_03\.{yy}O"),
+    inputs = dict(readme=find_one(run_dir, r"README\.xml"),
+                  rover_obs=find_one(run_dir, rf"{re.escape(spec['rover'])}\.{yy}O"),
                   base_obs=find_one(run_dir, rf"BASE\.{yy}O"), nav=find_one(run_dir, rf"brdm\d{{4}}\.{yy}p"),
-                  imu=find_one(run_dir, r"STIM300\.imr"), reference=find_one(run_dir, r"Rove_03_GroundTruth\.txt"))
-    target = Path(output_root)/"smartpnt"/f"{run}_rove03_stim300"
+                  imu=find_one(run_dir, rf"{re.escape(spec['imu'])}\.imr"),
+                  reference=find_one(run_dir, re.escape(spec["truth"])))
+    target = Path(output_root)/"smartpnt"/output_name(run)
     manifest_path = target.with_name(target.name + ".manifest.json")
     if target.exists() or manifest_path.exists():
         raise ValueError(f"output already exists: {target}")
 
-    readme = read_readme(inputs["readme"])
+    readme = read_readme(inputs["readme"], spec["imu"])
     truth_header, truth = parse_truth(inputs["reference"])
-    # The truth must be at the primary antenna (the one ROVE_03 uses) and computed from the README base.
+    # The truth must be at the rover antenna and computed from the README base.
     if truth_header["antenna_lever_arm"] is None or truth_header["sensor_lever_arm"] != truth_header["antenna_lever_arm"]:
         raise ValueError(f"truth is not exported at the GNSS antenna: {truth_header}")
     master = geodetic_to_ecef(*truth_header["master_lat_lon_height"])
@@ -405,7 +440,7 @@ def convert(run, run_dir, output_root):
 
     target.mkdir(parents=True)
     stats = {}
-    stats["imu.csv"], grid, means = convert_imu(inputs["imu"], target/"imu.csv", week, readme["stim300_mounting_deg"])
+    stats["imu.csv"], grid, means = convert_imu(inputs["imu"], target/"imu.csv", week, readme["imu_mounting_deg"])
     # A rover epoch is kept iff it has an exact truth row and an exact IMU grid sample (then base, below).
     truth_times = {row["tow"] for row in truth}
     keep = {t for t in truth_times if (t*100).denominator == 1 and int(t*100) in grid}
@@ -415,7 +450,8 @@ def convert(run, run_dir, output_root):
         raise ValueError("no rover epoch has both a truth row and an IMU sample")
     if stats["rover.obs"]["week"] != week:
         raise ValueError("rover and truth are in different GPS weeks")
-    stats["base.obs"], base_times = assemble_base([inputs["base_obs"]], target/"base.obs", (kept[0], kept[-1]))
+    stats["base.obs"], base_times = assemble_base([inputs["base_obs"]], target/"base.obs", (kept[0], kept[-1]),
+                                                  allow_zero_approx_position=True)   # rewritten below; Data02 has 0
     base_xyz = base_phase_centre(readme["base_marker_ecef"], readme["base_antenna_height_m"])
     rewrite_base_position(target/"base.obs", base_xyz)
     stats["base.obs"]["written_position_ecef"] = base_xyz
@@ -426,24 +462,23 @@ def convert(run, run_dir, output_root):
     stats["verification"] = verify_converted(target)
     if (stats["verification"]["rover_epochs_without_truth_row"] or stats["verification"]["rover_epochs_without_imu_sample"]):
         raise ValueError(f"converted rover epochs lack truth or IMU samples: {stats['verification']}")
-    lever = readme["stim300_lever_arm_vehicle_m"]
+    lever = readme["imu_lever_arm_vehicle_m"]
     names = ("rover.obs", "base.obs", "base.nav", "imu.csv", "reference.csv")
     manifest = dict(
-        schema="libgnsspp.smartpnt_pos_ppc_conversion.v1", contract=RUNS[run], run=run, converter=pin(__file__),
+        schema="libgnsspp.smartpnt_pos_ppc_conversion.v1", contract=spec["contract"], run=run, converter=pin(__file__),
         raw_inputs={key: pin(path) for key, path in inputs.items()},
         outputs={name: pin(target/name) for name in names},
         replay=dict(lever_arm_flu_m=[lever[1], -lever[0], lever[2]],
-                    note="STIM300 to the ROVE_03 antenna; README vehicle frame (x right, y forward, z up) -> FLU"),
+                    note=f"{spec['imu']} to the {spec['rover']} antenna; README vehicle frame (x right, y forward, "
+                         "z up) -> FLU"),
         conventions=dict(
             time="GPST throughout (IMR time type 2, RINEX GPS, truth GPS week and seconds); no offset applied",
-            imu_axes=f"README mounting {readme['stim300_mounting_deg']} deg (Z-X-Y, vehicle to body) gives the "
+            imu_axes=f"README mounting {readme['imu_mounting_deg']} deg (Z-X-Y, vehicle to body) gives the "
                      f"body-to-FLU matrix {stats['imu.csv']['body_to_flu']}; checked against the truth heading rate "
                      "and speed change (imu_axis_check)",
             imu_units="IMR increments times the scale factor over the measured interval: deg/s and m/s^2, "
                       "placed at the interval midpoint and linearly resampled onto the 100 Hz grid",
-            truth="Inertial Explorer smoothed GNSS/INS solution exported at the primary antenna (ROVE_01/ROVE_03 "
-                  "share it); latitude, longitude, height, ECEF and ENU velocity as exported; heading is the "
-                  "azimuth clockwise from north, roll and pitch as exported",
+            truth=spec["truth_note"],
             base_position="README base marker plus the antenna height along the ellipsoidal up, i.e. the L1 phase "
                           "centre the truth used; written to APPROX POSITION XYZ with ANTENNA: DELTA H/E/N zeroed",
             navigation="brdm file copied unchanged"),
