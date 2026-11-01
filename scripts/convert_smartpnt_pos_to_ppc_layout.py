@@ -35,6 +35,7 @@ from convert_urbannav_hk_to_ppc_layout import (  # noqa: E402  shared, unchanged
 
 FUSE_OUTPUT_CONTRACT = "docs/smartpnt_fuse_output_holdout.md"
 REVERSE_START_CONTRACT = "docs/smartpnt_reverse_start_holdout.md"
+PRELATCH_REALIGN_CONTRACT = "docs/smartpnt_prelatch_realign_holdout.md"
 PRIMARY_ANTENNA_TRUTH = ("Inertial Explorer smoothed GNSS/INS solution exported at the primary antenna (ROVE_01/ROVE_03 "
                          "share it); latitude, longitude, height, ECEF and ENU velocity as exported; heading is the "
                          "azimuth clockwise from north, roll and pitch as exported")
@@ -43,8 +44,9 @@ ROVER_ANTENNA_TRUTH = ("Inertial Explorer smoothed GNSS/INS solution exported at
                        "north, roll and pitch as exported")
 
 
-def _run(folder, rover, imu, truth, truth_note, contract):
-    return dict(folder=folder, rover=rover, imu=imu, truth=truth, truth_note=truth_note, contract=contract)
+def _run(folder, rover, imu, truth, truth_note, contract, truth_point_tolerance_m=0.0):
+    return dict(folder=folder, rover=rover, imu=imu, truth=truth, truth_note=truth_note, contract=contract,
+                truth_point_tolerance_m=truth_point_tolerance_m)
 
 
 # Each run: its folder, rover, IMU (the one the folder is named after, except Data11/12), truth file, and the
@@ -58,13 +60,21 @@ RUNS = {
        for run, folder, imu in (
            ("Data01_20230102", "Data01_20230102_ISA-100C_Vehicle_Complex", "ISA-100C"),
            ("Data02_20220309", "Data02_20220309_ISA-100C_Vehicle_Complex", "ISA-100C"),
-           ("Data04_20220315", "Data04_20220315_FSAS_Vehicle_Complex", "FSAS"),
            ("Data13_20211118", "Data13_20211118_ISA-100C_CAR_Complex", "ISA-100C"),
            ("Data14_20200828", "Data14_20200828_FSAS_CAR_Complex", "FSAS"),
            ("Data15_20200922", "Data15_20200922_FSAS_CAR_Complex", "FSAS"),
            ("Data16_20211118", "Data16_20211118_FSAS_CAR_Complex", "FSAS"),
            ("Data19_20201214", "Data19_20201214_HG4930_CAR_Opensky", "HG4930"),
            ("Data20_20210115", "Data20_20210115_HG4930_CAR_Opensky", "HG4930"))},
+    **{run: _run(folder, "ROVE", imu, "ROVE_GroundTruth.txt", ROVER_ANTENNA_TRUTH, PRELATCH_REALIGN_CONTRACT)
+       for run, folder, imu in (
+           ("Data05_20201128", "Data05_20201128_HG4930_Vehicle_Opensky", "HG4930"),
+           ("Data17_20200617", "Data17_20200617_HG4930_CAR_Complex", "HG4930"),
+           ("Data18_20200618", "Data18_20200618_HG4930_CAR_Complex", "HG4930"),
+           ("Data04_20220315", "Data04_20220315_FSAS_Vehicle_Complex", "FSAS"))},
+    # Its truth is exported 3.2 cm from the antenna (IMU x of the export point -0.016 against +0.016 m).
+    "Data03_20150722": _run("Data03_20150722_FSAS_Vehicle_Opensky", "ROVE", "FSAS", "ROVE_GroundTruth.txt",
+                            ROVER_ANTENNA_TRUTH, PRELATCH_REALIGN_CONTRACT, truth_point_tolerance_m=0.05),
 }
 
 
@@ -440,8 +450,11 @@ def convert(run, run_dir, output_root):
 
     readme = read_readme(inputs["readme"], spec["imu"])
     truth_header, truth = parse_truth(inputs["reference"])
-    # The truth must be at the rover antenna and computed from the README base.
-    if truth_header["antenna_lever_arm"] is None or truth_header["sensor_lever_arm"] != truth_header["antenna_lever_arm"]:
+    # The truth must be at the rover antenna (within the run's tolerance) and computed from the README base.
+    if truth_header["antenna_lever_arm"] is None or truth_header["sensor_lever_arm"] is None:
+        raise ValueError(f"truth is not exported at the GNSS antenna: {truth_header}")
+    truth_point_offset = math.dist(truth_header["sensor_lever_arm"], truth_header["antenna_lever_arm"])
+    if truth_point_offset > spec["truth_point_tolerance_m"]:
         raise ValueError(f"truth is not exported at the GNSS antenna: {truth_header}")
     master = geodetic_to_ecef(*truth_header["master_lat_lon_height"])
     marker_offset = math.dist(master, readme["base_marker_ecef"])
@@ -456,7 +469,8 @@ def convert(run, run_dir, output_root):
     truth_times = {row["tow"] for row in truth}
     keep = {t for t in truth_times if (t*100).denominator == 1 and int(t*100) in grid}
     stats["rover.obs"], kept = filter_rover_obs(inputs["rover_obs"], target/"rover.obs", keep, truth_times,
-                                              drop_blank_lines_before_first_epoch=True)   # Data11 has one
+                                              drop_blank_lines_before_first_epoch=True,   # Data11 has one
+                                              drop_non_increasing_epochs=True)   # Data04, Data18 repeat epochs
     if not kept:
         raise ValueError("no rover epoch has both a truth row and an IMU sample")
     if stats["rover.obs"]["week"] != week:
@@ -468,6 +482,7 @@ def convert(run, run_dir, output_root):
     stats["base.obs"]["written_position_ecef"] = base_xyz
     kept_set = set(kept)
     stats["reference.csv"] = write_reference(truth, kept_set, target/"reference.csv")
+    stats["reference.csv"]["export_point_offset_from_antenna_m"] = round(truth_point_offset, 4)
     shutil.copyfile(inputs["nav"], target/"base.nav")
     stats["imu_axis_check"] = check_imu_axes(means, truth, kept_set)
     stats["verification"] = verify_converted(target)

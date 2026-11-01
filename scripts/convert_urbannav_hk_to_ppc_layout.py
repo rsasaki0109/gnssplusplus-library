@@ -281,12 +281,15 @@ def epoch_flag(line):
     return int(line[1:].split()[6])
 
 
-def filter_rover_obs(src, dst, keep, truth_times, drop_blank_lines_before_first_epoch=False):
+def filter_rover_obs(src, dst, keep, truth_times, drop_blank_lines_before_first_epoch=False,
+                     drop_non_increasing_epochs=False):
     """Copy the epochs whose GPS time of week is in `keep`; header and records byte-preserved.
 
     `truth_times` only attributes dropped epochs to a reason. Returns (stats, kept) with kept the
     list of kept epoch times in order. With `drop_blank_lines_before_first_epoch`, blank lines between
-    the header and the first epoch line are dropped (and counted) instead of rejected.
+    the header and the first epoch line are dropped (and counted) instead of rejected. With
+    `drop_non_increasing_epochs`, an epoch whose time is not after the previous one is dropped with its
+    records (and counted) instead of rejected; the first epoch of a time is the one kept.
     """
     stats = dict(epochs_in=0, epochs_out=0, epochs_dropped=0, epochs_without_truth_row=0,
                  epochs_with_truth_row_without_imu_sample=0, first_tow_in=None, last_tow_in=None,
@@ -304,7 +307,11 @@ def filter_rover_obs(src, dst, keep, truth_times, drop_blank_lines_before_first_
                 if epoch_flag(line) not in (0, 1):
                     raise ValueError(f"event record in the rover observations at week {week} tow {float(tow)}")
                 if previous is not None and (week, tow) <= previous:
-                    raise ValueError(f"non-monotonic observation epoch at week {week} tow {float(tow)}")
+                    if not drop_non_increasing_epochs:
+                        raise ValueError(f"non-monotonic observation epoch at week {week} tow {float(tow)}")
+                    stats["non_increasing_epochs_dropped"] = stats.get("non_increasing_epochs_dropped", 0) + 1
+                    keeping = False
+                    continue
                 previous = (week, tow)
                 if stats["week"] is None:
                     stats["week"] = week
