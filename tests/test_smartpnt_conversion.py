@@ -213,6 +213,43 @@ class Imu(unittest.TestCase):
         self.assertEqual(stats["pairs_over_gap"], 1)
         self.assertNotIn((T0 + 1)*100 + 25, grid)
 
+    def test_a_duplicate_record_stream_is_dropped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            clean = imr_bytes(T0, T0 + 2)
+            head, body = clean[:512], clean[512:]
+            # As at the start of Data13: records 100-110 each have a twin 0.17 ms later with the same full-period
+            # increments.
+            mixed = bytearray(head)
+            for k in range(len(body)//32):
+                record = body[32*k:32*(k + 1)]
+                mixed += record
+                if 100 <= k <= 110:
+                    t, *increments = conv.IMR_RECORD.unpack(record)
+                    mixed += conv.IMR_RECORD.pack(t + 0.00017, *increments)
+            (Path(tmp)/"clean.imr").write_bytes(clean)
+            (Path(tmp)/"twins.imr").write_bytes(bytes(mixed))
+            stats, _, _ = conv.convert_imu(Path(tmp)/"clean.imr", Path(tmp)/"clean.csv", WEEK, (180.0, 0.0, 90.0))
+            twins, _, _ = conv.convert_imu(Path(tmp)/"twins.imr", Path(tmp)/"twins.csv", WEEK, (180.0, 0.0, 90.0))
+            self.assertEqual(stats["duplicate_records_dropped"], 0)
+            self.assertEqual(twins["duplicate_records_dropped"], 11)
+            self.assertEqual(twins["raw_records"], stats["raw_records"] + 11)
+            self.assertEqual(twins["rate_samples"], stats["rate_samples"])
+            self.assertEqual((Path(tmp)/"twins.csv").read_text(), (Path(tmp)/"clean.csv").read_text())
+
+    def test_a_timestamp_phase_shift_is_kept(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = bytearray(imr_bytes(T0, T0 + 2))
+            # As in Data04: from record 201 on, the stamps are 3 ms earlier, so record 201 follows 200 by 2 ms.
+            for k in range(201, (len(data) - 512)//32):
+                t, = struct.unpack_from("<d", data, 512 + 32*k)
+                struct.pack_into("<d", data, 512 + 32*k, t - 0.003)
+            src = Path(tmp)/"STIM300.imr"
+            src.write_bytes(bytes(data))
+            stats, _, _ = conv.convert_imu(src, Path(tmp)/"imu.csv", WEEK, (180.0, 0.0, 90.0))
+        self.assertEqual(stats["duplicate_records_dropped"], 0)
+        self.assertEqual(stats["rate_samples"], stats["raw_records"] - 1)
+        self.assertAlmostEqual(stats["max_raw_dt_s"], 0.005, places=6)
+
 
 class Truth(unittest.TestCase):
     def test_header_facts_and_rows_by_the_date_token(self):

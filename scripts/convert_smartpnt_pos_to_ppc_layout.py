@@ -74,6 +74,7 @@ def output_name(run):
 
 GRID_CS = 1                          # 100 Hz grid in centiseconds of GPS time of week, as the PPC imu.csv
 MAX_PAIR_GAP_S = 0.1                 # raw samples further apart than this are not bridged (as the other converters)
+DUPLICATE_RECORD_FRACTION = 0.25     # a record closer than this share of the period behind the kept one repeats it
 IMR_HEADER_BYTES = 512
 IMR_RECORD = struct.Struct("<d6i")   # time of week, then gx gy gz ax ay az increments
 MIN_AXIS_CORRELATION = 0.9           # gyro z against the truth heading rate, see check_imu_axes()
@@ -268,7 +269,8 @@ def convert_imu(src, dst, week, mounting_deg):
     """IMR increments -> rates at the interval midpoints, IMU body -> FLU, linear resample onto the 100 Hz grid.
 
     An IMR record at time t holds the increments of (t_previous, t]; the rate is their quotient by the
-    measured interval and is placed at its midpoint. Returns (stats, grid, one_second_means) where
+    measured interval and is placed at its midpoint. A record less than DUPLICATE_RECORD_FRACTION of the
+    nominal period behind the kept one repeats that period and is dropped. Returns (stats, grid, one_second_means) where
     one_second_means maps an integer second to the mean FLU (ax, ay, az, gx, gy, gz) of its grid samples.
     """
     rotation = body_to_flu_matrix(mounting_deg)
@@ -278,7 +280,9 @@ def convert_imu(src, dst, week, mounting_deg):
     if len(body) % IMR_RECORD.size:
         raise ValueError("IMR body is not a whole number of records")
     gscale, ascale = header["gyro_scale_deg"], header["accel_scale_mps"]
+    nominal_dt = 1.0/header["rate_hz"]
     stats = dict(header, raw_records=len(body)//IMR_RECORD.size, rate_samples=0, grid_samples=0, pairs_over_gap=0,
+                 duplicate_records_dropped=0,
                  first_raw_tow=None, last_raw_tow=None, first_grid_tow=None, last_grid_tow=None, max_raw_dt_s=0.0,
                  body_to_flu=rotation)
     grid, sums = set(), {}
@@ -295,6 +299,13 @@ def convert_imu(src, dst, week, mounting_deg):
             dt = t - t_prev
             if dt <= 0:
                 raise ValueError(f"IMU time is not strictly increasing at {t}")
+            if dt < DUPLICATE_RECORD_FRACTION*nominal_dt:
+                # A record this close behind the kept one repeats its period: Data13 starts with 0.55 s in which
+                # two record streams interleave 0.17 ms apart, each record holding a full period of increments.
+                # Dividing those by 0.17 ms would make rates 29 times too large, so the later record is dropped.
+                # A single timestamp phase shift (Data04 2 ms, Data16 3 ms) is longer and is kept as before.
+                stats["duplicate_records_dropped"] += 1
+                continue
             stats["max_raw_dt_s"] = max(stats["max_raw_dt_s"], dt)
             if dt > MAX_PAIR_GAP_S:
                 # The increments of a record that ends a gap cover the whole gap: no usable rate, no bridge.
@@ -477,7 +488,9 @@ def convert(run, run_dir, output_root):
                      f"body-to-FLU matrix {stats['imu.csv']['body_to_flu']}; checked against the truth heading rate "
                      "and speed change (imu_axis_check)",
             imu_units="IMR increments times the scale factor over the measured interval: deg/s and m/s^2, "
-                      "placed at the interval midpoint and linearly resampled onto the 100 Hz grid",
+                      "placed at the interval midpoint and linearly resampled onto the 100 Hz grid; a record less "
+                      "than a quarter period behind the kept one repeats its period and is dropped "
+                      "(duplicate_records_dropped)",
             truth=spec["truth_note"],
             base_position="README base marker plus the antenna height along the ellipsoidal up, i.e. the L1 phase "
                           "centre the truth used; written to APPROX POSITION XYZ with ANTENNA: DELTA H/E/N zeroed",
