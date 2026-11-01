@@ -62,8 +62,21 @@ Ephemeris nextEphemeris(const Ephemeris& eph, double dt) {
     return next;
 }
 
+// Broadcast satellite clock [s] at the transmit time of an epoch received at
+// `time`, with the same fixed travel time as the modeled range below.
+double satelliteClock(const NavigationData& nav, const SatelliteId& sat, const GNSSTime& time) {
+    Vector3d pos, vel;
+    double clock = 0.0, drift = 0.0;
+    GNSSTime tx = time - 0.075;
+    if (!nav.calculateSatelliteState(sat, tx, pos, vel, clock, drift)) return 0.0;
+    tx = tx - clock;
+    if (!nav.calculateSatelliteState(sat, tx, pos, vel, clock, drift)) return 0.0;
+    return clock;
+}
+
 // A base epoch built from the shared model (fixed travel time so it does not
-// depend on the held pseudorange): only satellites visible at both times are kept.
+// depend on the held pseudorange), with the satellite clock in the observables
+// as a receiver measures it: only satellites visible at both times are kept.
 ObservationData generate(const NavigationData& nav, const GNSSTime& time,
                          const GNSSTime& other_time, std::size_t* count = nullptr) {
     ObservationData epoch(time);
@@ -73,6 +86,7 @@ ObservationData generate(const NavigationData& nav, const GNSSTime& time,
         if (!align::calculateModeledBaseRange(sat, time, 0.0, kBase, nav, here) ||
             !align::calculateModeledBaseRange(sat, other_time, 0.0, kBase, nav, there))
             continue;
+        here -= constants::SPEED_OF_LIGHT * satelliteClock(nav, sat, time);
         Observation obs(sat, SignalType::GPS_L1CA);
         obs.pseudorange = here + kCodeResidual + 0.1 * prn;
         obs.has_pseudorange = true;
@@ -126,6 +140,43 @@ TEST(RtkBaseAlignmentTest, HoldReproducesObservationsGeneratedAtTargetTime) {
             motion = std::max(motion,
                 std::abs(held.observations[i].pseudorange - base.observations[i].pseudorange));
         EXPECT_GT(motion, 10.0 * age) << "age " << age;
+    }
+}
+
+// The residual a hold keeps contains the satellite clock of the base epoch.
+// With a drifting clock (af1 = +-1e-10 s/s, 3 cm/s) the hold has to move it
+// to the target time, as an interpolation does through its residual.
+TEST(RtkBaseAlignmentTest, HoldCarriesTheSatelliteClock) {
+    NavigationData nav;
+    for (uint8_t prn = 1; prn <= 32; ++prn) {
+        Ephemeris eph = makeEphemeris(prn);
+        eph.af0 = 1e-4 * (prn % 5);
+        eph.af1 = (prn % 2 ? 1.0 : -1.0) * 1e-10;
+        nav.addEphemeris(eph);
+    }
+    for (const double age : {0.6, 1.0, 1.8}) {
+        const GNSSTime target = kBaseTime + age;
+        std::size_t n = 0;
+        const ObservationData base = generate(nav, kBaseTime, target, &n);
+        ASSERT_GE(n, 4U);
+        const ObservationData truth = generate(nav, target, kBaseTime);
+        ObservationData held;
+        ASSERT_TRUE(align::holdBaseEpoch(base, target, kBase, nav, 2.0, held));
+        ASSERT_EQ(held.observations.size(), truth.observations.size());
+        double worst_code = 0.0, worst_phase = 0.0, clock_change = 0.0;
+        for (std::size_t i = 0; i < held.observations.size(); ++i) {
+            const auto& h = held.observations[i];
+            const auto& t = truth.observations[i];
+            ASSERT_EQ(h.satellite.prn, t.satellite.prn);
+            worst_code = std::max(worst_code, std::abs(h.pseudorange - t.pseudorange));
+            worst_phase = std::max(worst_phase, std::abs((h.carrier_phase - t.carrier_phase) * kLambda));
+            clock_change = std::max(clock_change, constants::SPEED_OF_LIGHT *
+                std::abs(satelliteClock(nav, h.satellite, target) - satelliteClock(nav, h.satellite, kBaseTime)));
+        }
+        EXPECT_LT(worst_code, 2e-3) << "age " << age;
+        EXPECT_LT(worst_phase, 2e-3) << "age " << age;
+        // Without the clock in the model the error would be the clock change.
+        EXPECT_GT(clock_change, 0.015 * age) << "age " << age;
     }
 }
 

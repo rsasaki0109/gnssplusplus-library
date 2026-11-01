@@ -81,3 +81,34 @@ reuse the batch product's RTK configuration (preset, guards, ambiguity
 validation) and verify that its RTK velocity output is sane at full cadence.
 After that, base alignment should be re-evaluated under a new contract. These
 runs are now development data for that work.
+
+## Later: the hold left out the satellite clock
+
+Found on 2026-11-01, after this decision; it changes nothing above.
+
+- **What was missing.** `rtk_base_alignment::holdBaseEpoch` modeled the
+  satellite motion but not the satellite clock.
+  - A hold keeps the residual of the base epoch, and that residual contains
+    the satellite clock at the base time.
+  - The held code and carrier were therefore off by the clock change,
+    c × drift × age. An interpolation does not have this problem, because it
+    follows the clock through the residual it interpolates.
+- **Size on PPC.** One-second holds of each base epoch were compared with the
+  next real epoch, with the per-epoch median removed (the base receiver
+  clock). Carrier RMS per satellite, nagoya/run3 / tokyo/run3:
+
+  | System | Before | With the satellite clock |
+  | --- | --- | --- |
+  | GPS | 3.8 / 4.8 mm | 2.3 / 2.9 mm |
+  | BeiDou | 8.0 / 5.5 mm | 2.4 / 2.2 mm |
+  | Galileo | 8.9 / 15.2 mm | 7.4 / 7.2 mm |
+
+  - The median 3D error of correct FIX at a 0.8 s hold on tokyo/run3 fell
+    from 0.057 m to 0.038 m. Interpolation gives 0.032 m there.
+- **Fix.** The hold now models the broadcast satellite clock at the
+  transmit time, so the clock moves to the target time with the satellite.
+  `calculateModeledBaseRange` itself is unchanged.
+- **Which runs change.** Only paths that use the hold: the online processor
+  with `base_extrapolation_max_age_s > 0`, which is off by default, and the
+  `gnss_pva_replay` candidates that set it. The results above were produced
+  with the earlier model.

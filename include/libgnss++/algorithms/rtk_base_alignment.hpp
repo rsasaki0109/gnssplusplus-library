@@ -12,9 +12,13 @@
  * carries only a past base epoch forward, so it needs no future base epoch.
  *
  *   modeled(t)  = |sat(t - tau) - base| + Saastamoinen(base, el)
- *   P_target    = modeled(t_target) + (P_base - modeled(t_base))
- *   L_target*l  = modeled(t_target) + (L_base*l - modeled(t_base))
+ *   held(t)     = modeled(t) - c * dts(t - tau)    (broadcast satellite clock)
+ *   P_target    = held(t_target) + (P_base - held(t_base))
+ *   L_target*l  = held(t_target) + (L_base*l - held(t_base))
  *                 (only without LLI bit 0 and without loss of lock)
+ *
+ * An interpolation follows the satellite clock through the residual it
+ * interpolates; a hold keeps the residual of t_base, so it models the clock.
  *
  * See docs/online_rtk_base_extrapolation_v1.md.
  */
@@ -47,7 +51,10 @@ bool calculateModeledBaseRange(const SatelliteId& satellite, const GNSSTime& tim
  * Hold `base` (a past epoch) to `target_time` >= base.time. Returns false (and
  * leaves `held` unspecified) when the age target_time - base.time is outside
  * [0, max_age_s] (1e-6 s tolerance on the upper bound) or when no signal
- * survives. Satellites whose modeled range fails are omitted. Doppler, SNR,
+ * survives. Code and carrier keep their residual to a model of the modeled
+ * base range minus the broadcast satellite clock (c * dts at the transmit
+ * time), so the satellite motion and the satellite clock both move to
+ * target_time. Satellites whose modeled range fails are omitted. Doppler, SNR,
  * LLI, code and the remaining observation fields are copied from `base`.
  */
 bool holdBaseEpoch(const ObservationData& base, const GNSSTime& target_time,

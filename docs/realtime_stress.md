@@ -562,6 +562,11 @@ Found by the harness, deliberately not changed here (each needs a design decisio
    * Holding a base forward over a sub-second gap is therefore not safe enough on this data to ship, even opt-in.
    * A follow-up, such as a shorter maximum age or never declaring FIXED on a held base, needs check runs that have not
      been seen. These PPC runs now have been.
+   * Later (2026-11-01): `holdBaseEpoch` left out the satellite clock, which put a c × drift × age error on every
+     held observation (about 2–3 cm in the 3D error of correct FIX at a 0.8 s hold on PPC Tokyo run3). It now models
+     the clock ([details](online_rtk_base_extrapolation_v1_results.md#later-the-hold-left-out-the-satellite-clock)).
+     The check above ran with the earlier model, so this may explain part of its wrong-FIX increase. It is not
+     re-scored here.
 3. **TCP reads have a watchdog only when asked for.** A silent but connected `tcp://` source blocks in `read()` with no
    timeout, so a dead peer that never sends a FIN blocks `gnss live`; the `base_blackhole` / `rover_blackhole` faults
    reproduce it. Opt-in fix: `gnss live --stall-timeout-ms <ms>` (with `--reconnect`, see

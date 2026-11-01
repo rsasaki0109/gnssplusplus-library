@@ -74,9 +74,13 @@ double signalWavelength(const SatelliteId& satellite, SignalType signal,
     return frequency <= 0.0 ? 0.0 : constants::SPEED_OF_LIGHT / frequency;
 }
 
-bool calculateModeledBaseRange(const SatelliteId& satellite, const GNSSTime& time,
-                               double approx_pseudorange, const Vector3d& base_position,
-                               const NavigationData& nav, double& modeled_range) {
+namespace {
+// Modeled geometric range plus troposphere, and the broadcast satellite clock
+// [s] at the transmit time.
+bool modelBaseRange(const SatelliteId& satellite, const GNSSTime& time,
+                    double approx_pseudorange, const Vector3d& base_position,
+                    const NavigationData& nav, double& modeled_range,
+                    double& satellite_clock_s) {
     // Mirrors apps/native/rtk_base_epoch_align.hpp calculateModeledBaseRange().
     Vector3d sat_pos, sat_vel;
     double sat_clk = 0.0, sat_clk_drift = 0.0;
@@ -92,7 +96,17 @@ bool calculateModeledBaseRange(const SatelliteId& satellite, const GNSSTime& tim
     if (geom.elevation <= kMinModeledElevationRad) return false;
     modeled_range = geodist(sat_pos, base_position) +
         models::tropDelaySaastamoinen(base_position, geom.elevation);
-    return std::isfinite(modeled_range);
+    satellite_clock_s = sat_clk;
+    return std::isfinite(modeled_range) && std::isfinite(satellite_clock_s);
+}
+} // namespace
+
+bool calculateModeledBaseRange(const SatelliteId& satellite, const GNSSTime& time,
+                               double approx_pseudorange, const Vector3d& base_position,
+                               const NavigationData& nav, double& modeled_range) {
+    double satellite_clock_s = 0.0;
+    return modelBaseRange(satellite, time, approx_pseudorange, base_position, nav,
+                          modeled_range, satellite_clock_s);
 }
 
 bool holdBaseEpoch(const ObservationData& base, const GNSSTime& target_time,
@@ -109,6 +123,9 @@ bool holdBaseEpoch(const ObservationData& base, const GNSSTime& target_time,
 
     // Modeled ranges are per satellite, evaluated once from the first
     // pseudorange-bearing signal (same caching rule as interpolateBaseEpoch).
+    // Unlike an interpolation, which follows the satellite clock through the
+    // residual it interpolates, a hold keeps the residual of base.time; so the
+    // broadcast satellite clock is part of the model and moves to target_time.
     std::map<SatelliteId, ModeledRangePair> cache;
     for (const auto& observation : base.observations) {
         if (!observation.has_pseudorange) continue;
@@ -119,11 +136,14 @@ bool holdBaseEpoch(const ObservationData& base, const GNSSTime& target_time,
         auto found = cache.find(observation.satellite);
         if (found == cache.end()) {
             ModeledRangePair pair;
+            double base_clock_s = 0.0, target_clock_s = 0.0;
             pair.valid =
-                calculateModeledBaseRange(observation.satellite, base.time, observation.pseudorange,
-                                          base_position, nav, pair.base_m) &&
-                calculateModeledBaseRange(observation.satellite, target_time, observation.pseudorange,
-                                          base_position, nav, pair.target_m);
+                modelBaseRange(observation.satellite, base.time, observation.pseudorange,
+                               base_position, nav, pair.base_m, base_clock_s) &&
+                modelBaseRange(observation.satellite, target_time, observation.pseudorange,
+                               base_position, nav, pair.target_m, target_clock_s);
+            pair.base_m -= constants::SPEED_OF_LIGHT * base_clock_s;
+            pair.target_m -= constants::SPEED_OF_LIGHT * target_clock_s;
             found = cache.emplace(observation.satellite, pair).first;
         }
         const ModeledRangePair& modeled = found->second;
