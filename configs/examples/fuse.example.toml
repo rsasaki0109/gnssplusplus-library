@@ -9,6 +9,9 @@ rtk_pos_out = "output/rtk_solution.pos"
 # Validated high-level choices. Prefer these over individual research flags.
 preset = "low-cost"
 navi776_tc = true
+# With a base station, navi776_tc also writes `out` from the independent
+# output filter; independent_output_filter = false keeps the main loose
+# ESKF's output instead.
 
 # Tokyo PPC IMU-to-antenna lever arm in body FLU (x forward, y left, z up),
 # meters. data/PPC-Dataset/README.md lists it in FRD as [0.31, 0.0, -0.55].

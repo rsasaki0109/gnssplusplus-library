@@ -218,13 +218,15 @@ class GnssFuseCliTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("boolean false is not supported", result.stderr)
 
-    def test_independent_output_filter_is_an_rtk_only_opt_in(self) -> None:
+    def test_independent_output_filter_comes_with_navi776_tc_and_has_an_opt_out(self) -> None:
         result = self.run_fuse("--help")
         self.assertNotIn("--independent-output-filter", result.stdout)
         result = self.run_fuse("--help-advanced")
         self.assertIn("--independent-output-filter", result.stdout)
+        self.assertIn("--no-independent-output-filter", result.stdout)
+        self.assertIn("and --independent-output-filter with --base", result.stdout)
 
-        # The filter takes the epoch SPP velocity of the RTK path.
+        # The explicit flag still needs the epoch SPP velocity of the RTK path.
         result = self.run_fuse(
             "--imu", "missing-imu.csv",
             "--gnss-pos", "missing-solution.pos",
@@ -233,36 +235,62 @@ class GnssFuseCliTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("--independent-output-filter requires --base", result.stderr)
 
-        result = self.run_fuse(
-            "--imu", "missing-imu.csv",
-            "--rover", "missing-rover.obs",
-            "--base", "missing-base.obs",
-            "--nav", "missing.nav",
-            "--independent-output-filter",
-            "--library-fix-integrity-gate",
-        )
+        rtk_inputs = ("--imu", "missing-imu.csv", "--rover", "missing-rover.obs",
+                      "--base", "missing-base.obs", "--nav", "missing.nav")
+        result = self.run_fuse(*rtk_inputs, "--independent-output-filter",
+                               "--library-fix-integrity-gate")
         self.assertEqual(result.returncode, 1)
         self.assertIn(
             "--independent-output-filter cannot be combined with --library-fix-integrity-gate",
             result.stderr,
         )
 
+        # The preset only asks for it: without --base, or with the integrity
+        # gate, it stays off instead of failing, so those runs still reach the
+        # input loader.
+        for arguments in (
+            ("--imu", "missing-imu.csv", "--gnss-pos", "missing-solution.pos", "--navi776-tc"),
+            (*rtk_inputs, "--navi776-tc", "--library-fix-integrity-gate"),
+            (*rtk_inputs, "--navi776-tc"),
+            (*rtk_inputs, "--no-independent-output-filter", "--navi776-tc"),
+            (*rtk_inputs, "--independent-output-filter", "--no-independent-output-filter",
+             "--library-fix-integrity-gate"),
+        ):
+            result = self.run_fuse(*arguments)
+            self.assertEqual(result.returncode, 1, msg=arguments)
+            self.assertIn("failed to load", result.stderr, msg=arguments)
+            self.assertNotIn("independent-output-filter", result.stderr, msg=arguments)
+
         with tempfile.TemporaryDirectory(prefix="gnss_fuse_config_") as temp_dir:
             config_path = Path(temp_dir) / "fuse.toml"
+            for value in ("true", "false"):
+                config_path.write_text(
+                    "[gnss_fuse]\n"
+                    'imu = "missing-imu.csv"\n'
+                    'rover = "missing-rover.obs"\n'
+                    'base = "missing-base.obs"\n'
+                    'nav = "missing.nav"\n'
+                    "navi776_tc = true\n"
+                    f"independent_output_filter = {value}\n",
+                    encoding="utf-8",
+                )
+                result = self.run_fuse("--config", str(config_path))
+                self.assertEqual(result.returncode, 1, msg=value)
+                self.assertNotIn("unknown or incomplete argument", result.stderr, msg=value)
+                self.assertNotIn("boolean false is not supported", result.stderr, msg=value)
+                self.assertNotIn("requires --base", result.stderr, msg=value)
+
+            # A config false is overridden by the command line, as for every option.
             config_path.write_text(
                 "[gnss_fuse]\n"
                 'imu = "missing-imu.csv"\n'
-                'rover = "missing-rover.obs"\n'
-                'base = "missing-base.obs"\n'
-                'nav = "missing.nav"\n'
-                "independent_output_filter = true\n",
+                'gnss_pos = "missing-solution.pos"\n'
+                "independent_output_filter = false\n",
                 encoding="utf-8",
             )
-            result = self.run_fuse("--config", str(config_path))
-        self.assertEqual(result.returncode, 1)
-        self.assertNotIn("unknown or incomplete argument", result.stderr)
-        self.assertNotIn("requires --base", result.stderr)
-
+            result = self.run_fuse("--config", str(config_path), "--independent-output-filter")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("--independent-output-filter requires --base", result.stderr)
 
 if __name__ == "__main__":
     unittest.main()
