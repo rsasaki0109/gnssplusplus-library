@@ -34,14 +34,8 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
     const ObservationData& rover_obs, const ObservationData& base_obs, const NavigationData& nav) {
     std::map<SatelliteId, SatelliteData> result;
     std::map<SatelliteId, std::vector<const Observation*>> rover_l1, rover_l2, base_l1, base_l2;
-    // L5 may also be collected for the shadow-only L1/L5 WL->NL diagnostic.
-    // In that mode L5 remains available as independent evidence but is not
-    // added to the production filter's states or measurement blocks.
     std::map<SatelliteId, std::vector<const Observation*>> rover_l5, base_l5;
-    const bool l5_collection_enabled =
-        rtk_config_.enable_l5 ||
-        rtk_config_.lambda_l1_l5_wlnl_shadow ||
-        rtk_config_.lambda_l2_l5_wlnl_shadow;
+    const bool l5_collection_enabled = rtk_config_.enable_l5;
     for (const auto& obs : rover_obs.observations) {
         if (!isEnabledRTKSystem(rtk_config_, obs.satellite.system)) continue;
         if (!isUsableRTKSatellite(obs.satellite)) continue;

@@ -650,43 +650,6 @@ public:
         /// changes a FIX decision or filter state.
         int lambda_candidate_shadow_count = 0;
 
-        /// Optional success-rate-criterion partial-AR shadow. A threshold of
-        /// 0 (default) disables it. Positive values select the largest trailing
-        /// decorrelated subset meeting the covariance-only success rate. This
-        /// diagnostic never changes a FIX decision or filter state.
-        double lambda_src_par_shadow_success_rate = 0.0;
-        double lambda_src_par_shadow_covariance_scale = 1.0;
-
-        /// Shadow-only satellite-group sequential PAR. A positive value drops
-        /// at most this many worst-ranked satellites (all frequency legs
-        /// together), stopping at the first subset that passes covariance-
-        /// scaled FFRT. 0 (default) is output-identical to the legacy path.
-        int lambda_satellite_par_shadow_max_drop_steps = 0;
-        double lambda_satellite_par_shadow_covariance_scale = 16.0;
-        bool lambda_satellite_par_shadow_quality_diverse = false;
-        bool lambda_satellite_par_persistent_subset = false;
-        bool lambda_satellite_par_only_after_full_ffrt_failure = false;
-
-        /// Shadow-only two-stage L1/L5 ambiguity diagnostic. L5 observations
-        /// are collected without adding L5 states or measurements to the
-        /// production filter. Wide-lane and subsequent L1 narrow-lane
-        /// searches must each pass covariance-scale-16 FFRT. The result never
-        /// changes a FIX decision, filter state, or PositionSolution.
-        bool lambda_l1_l5_wlnl_shadow = false;
-        bool lambda_l1_l2_wlnl_shadow = false;
-        bool lambda_l2_l5_wlnl_shadow = false;
-        double lambda_l1_l5_wlnl_shadow_covariance_scale = 16.0;
-        bool lambda_l1_l5_wlnl_causal_arc_smoothing = false;
-        causal_ambiguity_arc::Config
-            lambda_l1_l5_wlnl_causal_arc_config;
-        bool lambda_causal_arc_readiness_shadow = false;
-        causal_ambiguity_arc::Config
-            lambda_causal_arc_readiness_config;
-        double lambda_causal_arc_readiness_covariance_scale = 16.0;
-        bool lambda_causal_arc_smoothed_search = false;
-        int lambda_causal_arc_smoothed_max_pairs = 0;
-
-
         /// Optional FLOAT-only continuity for short observation outages.
         /// Disabled by default, never declares FIX, and fails closed without
         /// a finite trusted anchor and recent bounded Doppler velocity.
@@ -1198,170 +1161,6 @@ public:
             std::numeric_limits<double>::quiet_NaN();
         double lambda_shadow_position_spread_max_m =
             std::numeric_limits<double>::quiet_NaN();
-        bool lambda_src_par_shadow_attempted = false;
-        bool lambda_src_par_shadow_solved = false;
-        int lambda_src_par_shadow_subset_size = 0;
-        double lambda_src_par_shadow_bsr =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_src_par_shadow_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_src_par_shadow_ffrt_min_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        bool lambda_src_par_shadow_ffrt_passed = false;
-        double lambda_src_par_shadow_best_ecef_x =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_src_par_shadow_best_ecef_y =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_src_par_shadow_best_ecef_z =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_src_par_shadow_best_correction_x =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_src_par_shadow_best_correction_y =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_src_par_shadow_best_correction_z =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_src_par_shadow_second_position_delta_m =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_src_par_shadow_runtime_ms =
-            std::numeric_limits<double>::quiet_NaN();
-        bool lambda_satellite_par_shadow_attempted = false;
-        int lambda_satellite_par_shadow_subsets_evaluated = 0;
-        bool lambda_satellite_par_shadow_solved = false;
-        int lambda_satellite_par_shadow_subset_size = 0;
-        int lambda_satellite_par_shadow_dropped_satellites = 0;
-        double lambda_satellite_par_shadow_bsr =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_satellite_par_shadow_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_satellite_par_shadow_ffrt_min_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        bool lambda_satellite_par_shadow_ffrt_passed = false;
-        double lambda_satellite_par_shadow_best_ecef_x =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_satellite_par_shadow_best_ecef_y =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_satellite_par_shadow_best_ecef_z =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_satellite_par_shadow_best_correction_x =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_satellite_par_shadow_best_correction_y =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_satellite_par_shadow_best_correction_z =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_satellite_par_shadow_second_position_delta_m =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_satellite_par_shadow_runtime_ms =
-            std::numeric_limits<double>::quiet_NaN();
-        bool lambda_satellite_par_persistent_subset_attempted = false;
-        bool lambda_satellite_par_persistent_subset_used = false;
-        bool lambda_l1_l5_wlnl_shadow_attempted = false;
-        int lambda_l1_l5_wlnl_shadow_pair_count = 0;
-        double lambda_l1_l5_wlnl_shadow_wl_bsr =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l1_l5_wlnl_shadow_wl_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l1_l5_wlnl_shadow_wl_ffrt_min_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        bool lambda_l1_l5_wlnl_shadow_wl_ffrt_passed = false;
-        int lambda_l1_l5_wlnl_shadow_mw_disagreements = 0;
-        int lambda_l1_l5_wlnl_shadow_raw_mw_disagreements = 0;
-        int lambda_l1_l5_wlnl_shadow_causal_arc_ready_pairs = 0;
-        int lambda_l1_l5_wlnl_shadow_causal_arc_resets = 0;
-        double lambda_l1_l5_wlnl_shadow_nl_bsr =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l1_l5_wlnl_shadow_nl_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l1_l5_wlnl_shadow_nl_ffrt_min_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        bool lambda_l1_l5_wlnl_shadow_nl_ffrt_passed = false;
-        double lambda_l1_l5_wlnl_shadow_best_ecef_x =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l1_l5_wlnl_shadow_best_ecef_y =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l1_l5_wlnl_shadow_best_ecef_z =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l1_l5_wlnl_shadow_runtime_ms =
-            std::numeric_limits<double>::quiet_NaN();
-        int lambda_l1_l5_wlnl_shadow_candidate_pair_count = 0;
-        bool lambda_l1_l2_wlnl_shadow_attempted = false;
-        int lambda_l1_l2_wlnl_shadow_pair_count = 0;
-        double lambda_l1_l2_wlnl_shadow_wl_bsr =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l1_l2_wlnl_shadow_wl_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l1_l2_wlnl_shadow_wl_ffrt_min_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        bool lambda_l1_l2_wlnl_shadow_wl_ffrt_passed = false;
-        int lambda_l1_l2_wlnl_shadow_mw_disagreements = 0;
-        int lambda_l1_l2_wlnl_shadow_raw_mw_disagreements = 0;
-        int lambda_l1_l2_wlnl_shadow_causal_arc_ready_pairs = 0;
-        int lambda_l1_l2_wlnl_shadow_causal_arc_resets = 0;
-        double lambda_l1_l2_wlnl_shadow_nl_bsr =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l1_l2_wlnl_shadow_nl_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l1_l2_wlnl_shadow_nl_ffrt_min_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        bool lambda_l1_l2_wlnl_shadow_nl_ffrt_passed = false;
-        double lambda_l1_l2_wlnl_shadow_best_ecef_x =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l1_l2_wlnl_shadow_best_ecef_y =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l1_l2_wlnl_shadow_best_ecef_z =
-            std::numeric_limits<double>::quiet_NaN();
-        int lambda_l1_l2_wlnl_shadow_candidate_pair_count = 0;
-        bool lambda_l2_l5_wlnl_shadow_attempted = false;
-        int lambda_l2_l5_wlnl_shadow_pair_count = 0;
-        double lambda_l2_l5_wlnl_shadow_wl_bsr =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l2_l5_wlnl_shadow_wl_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l2_l5_wlnl_shadow_wl_ffrt_min_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        bool lambda_l2_l5_wlnl_shadow_wl_ffrt_passed = false;
-        int lambda_l2_l5_wlnl_shadow_mw_disagreements = 0;
-        int lambda_l2_l5_wlnl_shadow_raw_mw_disagreements = 0;
-        int lambda_l2_l5_wlnl_shadow_causal_arc_ready_pairs = 0;
-        int lambda_l2_l5_wlnl_shadow_causal_arc_resets = 0;
-        double lambda_l2_l5_wlnl_shadow_nl_bsr =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l2_l5_wlnl_shadow_nl_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l2_l5_wlnl_shadow_nl_ffrt_min_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        bool lambda_l2_l5_wlnl_shadow_nl_ffrt_passed = false;
-        double lambda_l2_l5_wlnl_shadow_best_ecef_x =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l2_l5_wlnl_shadow_best_ecef_y =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_l2_l5_wlnl_shadow_best_ecef_z =
-            std::numeric_limits<double>::quiet_NaN();
-        int lambda_l2_l5_wlnl_shadow_candidate_pair_count = 0;
-        bool lambda_causal_arc_readiness_attempted = false;
-        int lambda_causal_arc_ready_pairs = 0;
-        int lambda_causal_arc_resets = 0;
-        int lambda_causal_arc_total_pairs = 0;
-        int lambda_causal_arc_subset_pair_count = 0;
-        bool lambda_causal_arc_subset_solved = false;
-        double lambda_causal_arc_subset_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_causal_arc_subset_bsr =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_causal_arc_subset_variance_min =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_causal_arc_subset_variance_max =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_causal_arc_subset_ffrt_min_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        bool lambda_causal_arc_subset_ffrt_passed = false;
-        double lambda_causal_arc_subset_best_ecef_x =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_causal_arc_subset_best_ecef_y =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_causal_arc_subset_best_ecef_z =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_causal_arc_subset_second_position_delta_m =
-            std::numeric_limits<double>::quiet_NaN();
         bool safe_float_continuity_attempted = false;
         bool safe_float_continuity_used = false;
         bool safe_float_continuity_solver_gap_anchor = false;
@@ -1693,7 +1492,6 @@ private:
     RTKConfig rtk_config_;
     SPPProcessor spp_processor_;
     EpochDebugTelemetry debug_telemetry_;
-    std::set<SatelliteId> satellite_par_persistent_satellites_;
     double doppler_velocity_sigma_mps_ = 0.5;
     Vector3d last_doppler_velocity_ecef_ = Vector3d::Zero();
     GNSSTime last_doppler_velocity_time_;
@@ -2105,10 +1903,8 @@ private:
     std::set<SatelliteId> current_epoch_slips_l1_;
     std::set<SatelliteId> current_epoch_slips_l2_;
     std::set<SatelliteId> current_epoch_slips_l5_;
-    causal_ambiguity_arc::Bank l1_l5_mw_arc_bank_;
     // Per-satellite L1/L2 MW arcs for the opt-in smoothed WL AR pre-step.
     causal_ambiguity_arc::Bank wide_lane_mw_arc_bank_;
-    causal_ambiguity_arc::Bank ambiguity_arc_bank_;
 
     struct TdcpHistory {
         double phase_m = 0.0;
