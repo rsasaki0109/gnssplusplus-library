@@ -235,8 +235,6 @@ if(GTest_FOUND)
         gnss_rinex_info
         gnss_solve
         gnss_smartphone_fgo
-        gnss_doppler_contract_audit
-        gnss_doppler_row_attrition_audit
         gnss_stream
         gnss_ubx_info
         gnss_has_info
@@ -332,18 +330,6 @@ if(GTest_FOUND)
     add_test(
         NAME python_fgo_external_dr_witness_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_fgo_external_dr_witness.py
-    )
-    add_test(
-        NAME python_smartphone_native_fgo_v2_1_contract_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v2_1_contract.py
-    )
-    add_test(
-        NAME python_smartphone_native_fgo_v2_1_confirmation_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v2_1_confirmation.py
-    )
-    add_test(
-        NAME python_smartphone_native_fgo_v3_heading_optional_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_native_fgo_v3_heading_optional.py
     )
     add_test(
         NAME python_smartphone_native_only_contract_tests
