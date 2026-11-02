@@ -1039,24 +1039,6 @@ public:
               << "lambda_l1_l5_wlnl_shadow_best_ecef_y,"
               << "lambda_l1_l5_wlnl_shadow_best_ecef_z,"
               << "lambda_l1_l5_wlnl_shadow_runtime_ms,"
-              << "safe_fix_shadow_enabled,safe_fix_shadow_state,"
-              << "safe_fix_shadow_declared_fixed,"
-              << "safe_fix_shadow_candidate_accepted,"
-              << "safe_fix_shadow_held,safe_fix_shadow_revoked,"
-              << "safe_fix_shadow_strong_acquisition,"
-              << "safe_fix_shadow_change_point_acquisition,"
-              << "safe_fix_shadow_acquisition_streak,"
-              << "safe_fix_shadow_hold_epochs,"
-              << "safe_fix_shadow_independent_consensus_delta_m,"
-              << "safe_fix_shadow_independent_source_families,"
-              << "safe_fix_shadow_joint_failure_probability,"
-              << "safe_fix_shadow_failure_budget_passed,"
-              << "inertial_fix_evidence_available,"
-              << "inertial_fix_evidence_healthy_anchor,"
-              << "inertial_fix_evidence_passed,"
-              << "inertial_fix_evidence_time_error_s,"
-              << "inertial_fix_evidence_position_delta_m,"
-              << "inertial_fix_evidence_nis_per_dimension,"
               << "safe_float_continuity_attempted,"
               << "safe_float_continuity_used,"
               << "safe_float_continuity_solver_gap_anchor,"
@@ -1082,12 +1064,6 @@ public:
               << "final_fixed_applied,hold_fix_attempted,hold_fix_applied,"
               << "hold_fix_candidate_pairs,hold_fix_matched_pairs,hold_fix_jump_m,"
               << "hold_fix_float_divergence_m,hold_fix_reject_reason,"
-              << "library_fixed_quality_gate_enabled,"
-              << "library_fixed_quality_gate_passed,"
-              << "library_fixed_quality_gate_safe_shadow_branch,"
-              << "library_fixed_quality_gate_covariance_branch,"
-              << "library_fixed_quality_gate_strong_innovation_branch,"
-              << "library_fixed_quality_gate_demoted,"
               << "reject_reason,ar_skip_reason,"
               << "float_update_observation_count,float_update_prefit_residual_rms_m,"
               << "float_update_post_suppression_residual_rms_m,"
@@ -1322,43 +1298,6 @@ public:
         writeNumber(telemetry.lambda_l1_l5_wlnl_shadow_best_ecef_z);
         file_ << ",";
         writeNumber(telemetry.lambda_l1_l5_wlnl_shadow_runtime_ms);
-        file_ << ","
-              << telemetry.safe_fix_shadow_enabled << ","
-              << telemetry.safe_fix_shadow_state << ","
-              << telemetry.safe_fix_shadow_declared_fixed << ","
-              << telemetry.safe_fix_shadow_candidate_accepted << ","
-              << telemetry.safe_fix_shadow_held << ","
-              << telemetry.safe_fix_shadow_revoked << ","
-              << telemetry.safe_fix_shadow_strong_acquisition << ","
-              << telemetry.safe_fix_shadow_change_point_acquisition
-              << ","
-              << telemetry.safe_fix_shadow_acquisition_streak << ","
-              << telemetry.safe_fix_shadow_hold_epochs << ",";
-        writeNumber(
-            telemetry
-                .safe_fix_shadow_independent_consensus_delta_m);
-        file_ << ","
-              << telemetry
-                     .safe_fix_shadow_independent_source_families
-              << ",";
-        writeNumber(
-            telemetry.safe_fix_shadow_joint_failure_probability);
-        file_ << ","
-              << telemetry.safe_fix_shadow_failure_budget_passed
-              << ","
-              << telemetry.inertial_fix_evidence_available
-              << ","
-              << telemetry.inertial_fix_evidence_healthy_anchor
-              << ","
-              << telemetry.inertial_fix_evidence_passed
-              << ",";
-        writeNumber(telemetry.inertial_fix_evidence_time_error_s);
-        file_ << ",";
-        writeNumber(
-            telemetry.inertial_fix_evidence_position_delta_m);
-        file_ << ",";
-        writeNumber(
-            telemetry.inertial_fix_evidence_nis_per_dimension);
         file_
               << ","
               << telemetry.safe_float_continuity_attempted << ","
@@ -1433,17 +1372,6 @@ public:
         writeNumber(telemetry.hold_fix_float_divergence_m);
         file_ << ","
               << telemetry.hold_fix_reject_reason << ","
-              << telemetry.library_fixed_quality_gate_enabled << ","
-              << telemetry.library_fixed_quality_gate_passed << ","
-              << telemetry
-                     .library_fixed_quality_gate_safe_shadow_branch
-              << ","
-              << telemetry.library_fixed_quality_gate_covariance_branch
-              << ","
-              << telemetry
-                     .library_fixed_quality_gate_strong_innovation_branch
-              << ","
-              << telemetry.library_fixed_quality_gate_demoted << ","
               << telemetry.reject_reason << ","
               << libgnss::RTKProcessor::arSkipReasonToString(telemetry.ar_skip_reason) << ","
               << telemetry.float_update_observation_count << ",";
@@ -4625,7 +4553,6 @@ int main(int argc, char* argv[]) {
             }
 
             const auto feedback_solution = pos_solution;
-            rtk_processor.applyLibraryFixedQualityGate(pos_solution);
             if (shouldDemoteFixedStatus(config, pos_solution)) {
                 pos_solution.status = libgnss::SolutionStatus::FLOAT;
             }

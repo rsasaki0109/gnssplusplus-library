@@ -1,8 +1,6 @@
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/rtk_ar_evaluation.hpp>
 #include <libgnss++/algorithms/rtk_ar_selection.hpp>
-#include <libgnss++/algorithms/disjoint_satellite_fix_evidence.hpp>
-#include <libgnss++/algorithms/fix_failure_budget.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/rtk_cp_pr_gate.hpp>
 #include <libgnss++/algorithms/rtk_ddpr_anchor.hpp>
@@ -1752,28 +1750,6 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                             debug_telemetry_
                                 .lambda_causal_arc_subset_best_ecef_z =
                                 arc_best_ecef.z();
-                            const auto& external_disjoint =
-                                external_disjoint_satellite_fix_evidence_;
-                            if (external_disjoint
-                                    .partition_a_candidate_ecef
-                                    .allFinite()) {
-                                debug_telemetry_
-                                    .lambda_causal_arc_subset_partition_a_separation_m =
-                                    (arc_best_ecef -
-                                     external_disjoint
-                                         .partition_a_candidate_ecef)
-                                        .norm();
-                            }
-                            if (external_disjoint
-                                    .partition_b_candidate_ecef
-                                    .allFinite()) {
-                                debug_telemetry_
-                                    .lambda_causal_arc_subset_partition_b_separation_m =
-                                    (arc_best_ecef -
-                                     external_disjoint
-                                         .partition_b_candidate_ecef)
-                                        .norm();
-                            }
                         }
                         if (arc_best_solved && arc_second_solved &&
                             arc_best_head.size() >= 3 &&

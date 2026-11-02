@@ -11,8 +11,6 @@
 #include "rtk_carrier_prior.hpp"
 #include "rtk_float_stabilizer.hpp"
 #include "rtk_cmc_reference.hpp"
-#include "fixed_quality_gate.hpp"
-#include "inertial_fix_evidence.hpp"
 #include "causal_ambiguity_arc.hpp"
 #include "rtk_measurement.hpp"
 #include "rtk_selection.hpp"
@@ -20,7 +18,6 @@
 #include "rtk_update.hpp"
 #include "rtk_validation.hpp"
 #include "safe_float_continuity.hpp"
-#include "safe_fix_state_machine.hpp"
 #include "spp.hpp"
 #include <libgnss++/fusion/dd_imu_bridge.hpp>
 #include <Eigen/Dense>
@@ -689,52 +686,6 @@ public:
         bool lambda_causal_arc_smoothed_search = false;
         int lambda_causal_arc_smoothed_max_pairs = 0;
 
-        /// Runtime shadow-only FIX/hold/revoke state machine. Disabled by
-        /// default and never changes PositionSolution or filter state.
-        safe_fix::Config safe_fix_shadow_state_machine;
-        /// Separate causal certificate for the closest-pair consensus of
-        /// primary and two disjoint-satellite validators. Default-off.
-        safe_fix::Config disjoint_consensus_state_machine;
-        safe_fix::Config causal_arc_consensus_state_machine;
-        bool causal_arc_consensus_promotion = false;
-        safe_fix::Config satellite_par_consensus_state_machine;
-        bool satellite_par_consensus_promotion = false;
-        safe_fix::Config src_par_consensus_state_machine;
-        bool src_par_consensus_promotion = false;
-        safe_fix::Config inertial_referenced_consensus_state_machine;
-        bool inertial_referenced_consensus_promotion = false;
-        safe_fix::Config multifrequency_consensus_state_machine;
-        bool multifrequency_consensus_promotion = false;
-        bool disjoint_consensus_use_selected_pair_ratio = false;
-        fixed_quality_gate::Config library_fixed_quality_gate;
-        int safe_fix_shadow_covariance_scale = 16;
-        int safe_fix_shadow_minimum_pairs = 16;
-        double safe_fix_shadow_maximum_second_position_delta_m = 0.05;
-        double safe_fix_shadow_maximum_nis_per_observation = 3.0;
-        double safe_fix_shadow_maximum_prefit_residual_rms_m = 50.0;
-        // Optional causal INS solution-separation source.  Evidence is
-        // supplied before processRTKEpoch(), must be propagated to the
-        // current epoch without that epoch's GNSS position update, and is
-        // accepted only when it descends from a prior independently-budgeted
-        // FIX anchor.
-        double inertial_fix_evidence_max_time_error_s = 0.05;
-        double inertial_fix_evidence_covariance_scale = 16.0;
-        // chi-square(3 dof, 0.999) / 3 = 5.422. The absolute bound is only
-        // a gross-corruption guard; statistical acceptance is governed by
-        // the covariance-normalized threshold.
-        double inertial_fix_evidence_max_nis_per_dimension = 5.422;
-        double inertial_fix_evidence_max_position_delta_m = 2.0;
-        double inertial_fix_evidence_failure_probability = 0.001;
-        // Optional pair of independently propagated RTK solutions built
-        // from disjoint GNSS-system partitions. Both partitions must pass
-        // their own FFRT and agree with each other and the primary
-        // declaration-time candidate.
-        double disjoint_satellite_fix_max_partition_separation_m = 0.25;
-        double disjoint_satellite_fix_max_primary_separation_m = 0.25;
-        double disjoint_satellite_fix_covariance_scale = 16.0;
-        double disjoint_satellite_fix_max_nis_per_dimension = 5.422;
-        double disjoint_satellite_fix_max_statistical_separation_m = 2.0;
-        double disjoint_satellite_fix_failure_probability = 0.001;
 
         /// Optional FLOAT-only continuity for short observation outages.
         /// Disabled by default, never declares FIX, and fails closed without
@@ -1411,92 +1362,6 @@ public:
             std::numeric_limits<double>::quiet_NaN();
         double lambda_causal_arc_subset_second_position_delta_m =
             std::numeric_limits<double>::quiet_NaN();
-        double lambda_causal_arc_subset_partition_a_separation_m =
-            std::numeric_limits<double>::quiet_NaN();
-        double lambda_causal_arc_subset_partition_b_separation_m =
-            std::numeric_limits<double>::quiet_NaN();
-        bool safe_fix_shadow_enabled = false;
-        int safe_fix_shadow_state = 0;
-        bool safe_fix_shadow_declared_fixed = false;
-        bool safe_fix_shadow_candidate_accepted = false;
-        bool safe_fix_shadow_held = false;
-        bool safe_fix_shadow_revoked = false;
-        bool safe_fix_shadow_strong_acquisition = false;
-        bool safe_fix_shadow_change_point_acquisition = false;
-        int safe_fix_shadow_acquisition_streak = 0;
-        int safe_fix_shadow_hold_epochs = 0;
-        bool disjoint_consensus_declared_fixed = false;
-        int disjoint_consensus_state = 0;
-        int disjoint_consensus_acquisition_streak = 0;
-        int disjoint_consensus_selected_pair = 0;
-        double disjoint_consensus_selected_pair_min_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        bool causal_arc_consensus_declared_fixed = false;
-        int causal_arc_consensus_state = 0;
-        int causal_arc_consensus_acquisition_streak = 0;
-        bool causal_arc_disjoint_evidence_passed = false;
-        bool satellite_par_disjoint_evidence_passed = false;
-        bool satellite_par_consensus_declared_fixed = false;
-        int satellite_par_consensus_state = 0;
-        int satellite_par_consensus_acquisition_streak = 0;
-        bool src_par_disjoint_evidence_passed = false;
-        double src_par_partition_a_separation_m =
-            std::numeric_limits<double>::quiet_NaN();
-        double src_par_partition_b_separation_m =
-            std::numeric_limits<double>::quiet_NaN();
-        bool src_par_consensus_declared_fixed = false;
-        int src_par_consensus_state = 0;
-        int src_par_consensus_acquisition_streak = 0;
-        bool inertial_referenced_consensus_declared_fixed = false;
-        int inertial_referenced_consensus_state = 0;
-        int inertial_referenced_consensus_acquisition_streak = 0;
-        double inertial_referenced_correction_x =
-            std::numeric_limits<double>::quiet_NaN();
-        double inertial_referenced_correction_y =
-            std::numeric_limits<double>::quiet_NaN();
-        double inertial_referenced_correction_z =
-            std::numeric_limits<double>::quiet_NaN();
-        bool multifrequency_disjoint_evidence_passed = false;
-        bool multifrequency_consensus_declared_fixed = false;
-        int multifrequency_consensus_state = 0;
-        int multifrequency_consensus_acquisition_streak = 0;
-        bool l1_l2_multifrequency_disjoint_evidence_passed = false;
-        bool l1_l2_multifrequency_consensus_declared_fixed = false;
-        int l1_l2_multifrequency_consensus_state = 0;
-        int l1_l2_multifrequency_consensus_acquisition_streak = 0;
-        double safe_fix_shadow_independent_consensus_delta_m =
-            std::numeric_limits<double>::quiet_NaN();
-        int safe_fix_shadow_independent_source_families = 0;
-        double safe_fix_shadow_joint_failure_probability = 1.0;
-        bool safe_fix_shadow_failure_budget_passed = false;
-        bool inertial_fix_evidence_available = false;
-        bool inertial_fix_evidence_healthy_anchor = false;
-        bool inertial_fix_evidence_passed = false;
-        double inertial_fix_evidence_time_error_s =
-            std::numeric_limits<double>::quiet_NaN();
-        double inertial_fix_evidence_position_delta_m =
-            std::numeric_limits<double>::quiet_NaN();
-        double inertial_fix_evidence_nis_per_dimension =
-            std::numeric_limits<double>::quiet_NaN();
-        bool disjoint_satellite_fix_evidence_available = false;
-        bool disjoint_satellite_fix_inputs_verified = false;
-        bool disjoint_satellite_fix_partition_a_ffrt_passed = false;
-        bool disjoint_satellite_fix_partition_b_ffrt_passed = false;
-        bool disjoint_satellite_fix_evidence_passed = false;
-        double disjoint_satellite_fix_partition_separation_m =
-            std::numeric_limits<double>::quiet_NaN();
-        double disjoint_satellite_fix_partition_a_primary_separation_m =
-            std::numeric_limits<double>::quiet_NaN();
-        double disjoint_satellite_fix_partition_b_primary_separation_m =
-            std::numeric_limits<double>::quiet_NaN();
-        bool disjoint_satellite_fix_hard_separation_passed = false;
-        bool disjoint_satellite_fix_statistical_separation_passed = false;
-        double disjoint_satellite_fix_partition_nis_per_dimension =
-            std::numeric_limits<double>::quiet_NaN();
-        double disjoint_satellite_fix_partition_a_primary_nis_per_dimension =
-            std::numeric_limits<double>::quiet_NaN();
-        double disjoint_satellite_fix_partition_b_primary_nis_per_dimension =
-            std::numeric_limits<double>::quiet_NaN();
         bool safe_float_continuity_attempted = false;
         bool safe_float_continuity_used = false;
         bool safe_float_continuity_solver_gap_anchor = false;
@@ -1582,30 +1447,6 @@ public:
         int tdcp_rejected_invalid = 0;
         double tdcp_residual_rms_m = std::numeric_limits<double>::quiet_NaN();
         double tdcp_residual_max_abs_m = std::numeric_limits<double>::quiet_NaN();
-        bool library_fixed_quality_gate_enabled = false;
-        int library_fixed_quality_gate_original_status = 0;
-        double library_fixed_quality_gate_original_ecef_x =
-            std::numeric_limits<double>::quiet_NaN();
-        double library_fixed_quality_gate_original_ecef_y =
-            std::numeric_limits<double>::quiet_NaN();
-        double library_fixed_quality_gate_original_ecef_z =
-            std::numeric_limits<double>::quiet_NaN();
-        double library_fixed_quality_gate_original_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        bool library_fixed_quality_gate_passed = false;
-        bool library_fixed_quality_gate_safe_shadow_branch = false;
-        bool library_fixed_quality_gate_covariance_branch = false;
-        bool library_fixed_quality_gate_strong_innovation_branch = false;
-        bool library_fixed_quality_gate_promoted = false;
-        bool library_fixed_quality_gate_disjoint_consensus_promoted = false;
-        bool library_fixed_quality_gate_causal_arc_promoted = false;
-        bool library_fixed_quality_gate_satellite_par_promoted = false;
-        bool library_fixed_quality_gate_src_par_promoted = false;
-        bool library_fixed_quality_gate_inertial_referenced_promoted =
-            false;
-        bool library_fixed_quality_gate_multifrequency_promoted = false;
-        bool library_fixed_quality_gate_raw_partition_conflict = false;
-        bool library_fixed_quality_gate_demoted = false;
         std::string reject_reason;
         ARSkipReason ar_skip_reason{ARSkipReason::NONE};
 
@@ -1661,56 +1502,6 @@ public:
     PositionSolution processRTKEpoch(const ObservationData& rover_obs,
                                    const ObservationData& base_obs,
                                    const NavigationData& nav);
-
-    struct ExternalInertialFixEvidence {
-        bool available = false;
-        bool healthy_independent_anchor = false;
-        GNSSTime time;
-        Vector3d position_ecef = Vector3d::Zero();
-        Matrix3d position_covariance_ecef = Matrix3d::Zero();
-    };
-
-    struct ExternalDisjointSatelliteFixEvidence {
-        bool available = false;
-        bool inputs_verified_disjoint = false;
-        bool partition_a_ffrt_passed = false;
-        bool partition_b_ffrt_passed = false;
-        double partition_a_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        double partition_b_ratio =
-            std::numeric_limits<double>::quiet_NaN();
-        Vector3d partition_a_candidate_ecef =
-            Vector3d::Constant(
-                std::numeric_limits<double>::quiet_NaN());
-        Vector3d partition_b_candidate_ecef =
-            Vector3d::Constant(
-                std::numeric_limits<double>::quiet_NaN());
-        Matrix3d partition_a_covariance_ecef =
-            Matrix3d::Constant(
-                std::numeric_limits<double>::quiet_NaN());
-        Matrix3d partition_b_covariance_ecef =
-            Matrix3d::Constant(
-                std::numeric_limits<double>::quiet_NaN());
-    };
-
-    /// Install a one-epoch, pre-GNSS-update INS prediction. It is consumed by
-    /// the next processRTKEpoch() call and then cleared.
-    void setExternalInertialFixEvidence(
-        const ExternalInertialFixEvidence& evidence) {
-        external_inertial_fix_evidence_ = evidence;
-    }
-
-    /// Install one-epoch candidates from RTK processors whose input
-    /// satellite sets were verified disjoint by the caller.
-    void setExternalDisjointSatelliteFixEvidence(
-        const ExternalDisjointSatelliteFixEvidence& evidence) {
-        external_disjoint_satellite_fix_evidence_ = evidence;
-    }
-
-    /// Apply the default-off FIX quality policy to the exported solution.
-    /// With the independent-budget option enabled, the same policy is also
-    /// enforced before ambiguity/hold state is committed.
-    void applyLibraryFixedQualityGate(PositionSolution& solution);
 
     /**
      * @brief Doppler observation sigma (1-sigma, m/s at zenith) used by the
@@ -1902,19 +1693,7 @@ private:
     RTKConfig rtk_config_;
     SPPProcessor spp_processor_;
     EpochDebugTelemetry debug_telemetry_;
-    safe_fix::StateMachine safe_fix_shadow_state_machine_;
-    safe_fix::StateMachine disjoint_consensus_state_machine_;
-    safe_fix::StateMachine causal_arc_consensus_state_machine_;
-    safe_fix::StateMachine satellite_par_consensus_state_machine_;
-    safe_fix::StateMachine src_par_consensus_state_machine_;
-    safe_fix::StateMachine inertial_referenced_consensus_state_machine_;
-    safe_fix::StateMachine multifrequency_consensus_state_machine_;
-    safe_fix::StateMachine l1_l2_multifrequency_consensus_state_machine_;
     std::set<SatelliteId> satellite_par_persistent_satellites_;
-    bool independent_failure_budget_evaluated_this_epoch_ = false;
-    ExternalInertialFixEvidence external_inertial_fix_evidence_;
-    ExternalDisjointSatelliteFixEvidence
-        external_disjoint_satellite_fix_evidence_;
     double doppler_velocity_sigma_mps_ = 0.5;
     Vector3d last_doppler_velocity_ecef_ = Vector3d::Zero();
     GNSSTime last_doppler_velocity_time_;
@@ -1936,8 +1715,6 @@ private:
     PositionSolution processRTKEpochInternal(const ObservationData& rover_obs,
                                              const ObservationData& base_obs,
                                              const NavigationData& nav);
-    void updateIndependentFailureBudgetTelemetry();
-    void updateSafeFixShadowStateMachine(const GNSSTime& time);
 
     Vector3d base_position_;
     bool base_position_known_ = false;

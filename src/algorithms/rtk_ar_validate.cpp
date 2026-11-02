@@ -1,8 +1,6 @@
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/rtk_ar_evaluation.hpp>
 #include <libgnss++/algorithms/rtk_ar_selection.hpp>
-#include <libgnss++/algorithms/disjoint_satellite_fix_evidence.hpp>
-#include <libgnss++/algorithms/fix_failure_budget.hpp>
 #include <libgnss++/algorithms/kalman.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/rtk_cp_pr_gate.hpp>

@@ -1,8 +1,6 @@
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/rtk_ar_evaluation.hpp>
 #include <libgnss++/algorithms/rtk_ar_selection.hpp>
-#include <libgnss++/algorithms/disjoint_satellite_fix_evidence.hpp>
-#include <libgnss++/algorithms/fix_failure_budget.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/rtk_cp_pr_gate.hpp>
 #include <libgnss++/algorithms/rtk_ddpr_anchor.hpp>
@@ -48,8 +46,6 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
         }
     }
     PositionSolution solution = processRTKEpochInternal(rover_obs, base_obs, nav);
-    updateSafeFixShadowStateMachine(rover_obs.time);
-    applyLibraryFixedQualityGate(solution);
 
     // Doppler-derived velocity: SPPProcessor now populates has_velocity on
     // its own solutions (spp.cpp), so the fallback-to-SPP paths inside
@@ -107,23 +103,15 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
         auto continuity = makeSafeFloatContinuity(rover_obs.time);
         if (continuity.isValid()) {
             recordFallbackEpoch(rover_obs, nav);
-            external_inertial_fix_evidence_ =
-                ExternalInertialFixEvidence{};
-            external_disjoint_satellite_fix_evidence_ =
-                ExternalDisjointSatelliteFixEvidence{};
             return continuity;
         }
     }
-    external_inertial_fix_evidence_ = ExternalInertialFixEvidence{};
-    external_disjoint_satellite_fix_evidence_ =
-        ExternalDisjointSatelliteFixEvidence{};
     return solution;
 }
 
 PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& rover_obs,
     const ObservationData& base_obs, const NavigationData& nav) {
     debug_telemetry_ = EpochDebugTelemetry{};
-    independent_failure_budget_evaluated_this_epoch_ = false;
     epoch_spp_valid_ = false;
     current_spp_solution_ = PositionSolution{};
     has_first_pass_covariance_ = false;
@@ -544,9 +532,6 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 std::vector<DDPair> dd_pairs;
                 std::vector<int> best_subset;
                 VectorXd dd_fixed;
-                bool independent_failure_budget_passed = false;
-                int independent_source_families = 0;
-                double joint_failure_probability = 1.0;
             };
 
             auto capture_candidate = [&]() {
@@ -561,15 +546,6 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 candidate.dd_pairs = last_dd_pairs_;
                 candidate.best_subset = last_best_subset_;
                 candidate.dd_fixed = last_dd_fixed_;
-                candidate.independent_failure_budget_passed =
-                    debug_telemetry_
-                        .safe_fix_shadow_failure_budget_passed;
-                candidate.independent_source_families =
-                    debug_telemetry_
-                        .safe_fix_shadow_independent_source_families;
-                candidate.joint_failure_probability =
-                    debug_telemetry_
-                        .safe_fix_shadow_joint_failure_probability;
                 return candidate;
             };
 
@@ -581,15 +557,6 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 last_dd_pairs_ = candidate.dd_pairs;
                 last_best_subset_ = candidate.best_subset;
                 last_dd_fixed_ = candidate.dd_fixed;
-                debug_telemetry_
-                    .safe_fix_shadow_failure_budget_passed =
-                    candidate.independent_failure_budget_passed;
-                debug_telemetry_
-                    .safe_fix_shadow_independent_source_families =
-                    candidate.independent_source_families;
-                debug_telemetry_
-                    .safe_fix_shadow_joint_failure_probability =
-                    candidate.joint_failure_probability;
             };
 
             const int min_lock = std::max(1, rtk_config_.min_lock_count);
@@ -618,7 +585,6 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                         .count();
                 ARCandidate candidate;
                 if (resolved) {
-                    updateIndependentFailureBudgetTelemetry();
                     candidate = capture_candidate();
                 }
                 rtk_config_.glonass_ar_mode = saved_mode;
@@ -681,30 +647,6 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                         .count();
                 if (resolved) {
                     have_fix_candidate = true;
-                }
-            }
-
-            // A declaration-time independent-budget gate must run before
-            // validate/apply/hold mutates any trusted-FIX state.  A later
-            // output-only demotion would still let a rejected integer
-            // candidate seed hold ambiguities and future trusted positions.
-            const bool require_independent_budget =
-                rtk_config_.library_fixed_quality_gate.enabled &&
-                rtk_config_.library_fixed_quality_gate
-                    .require_independent_failure_budget;
-            if (require_independent_budget) {
-                if (rtk_config_.glonass_ar_mode !=
-                    RTKConfig::GlonassARMode::AUTOCAL) {
-                    updateIndependentFailureBudgetTelemetry();
-                }
-                if (!debug_telemetry_
-                         .safe_fix_shadow_failure_budget_passed) {
-                    have_fix_candidate = false;
-                    has_fixed_solution_ = false;
-                    if (debug_telemetry_.reject_reason.empty()) {
-                        debug_telemetry_.reject_reason =
-                            "independent_failure_budget";
-                    }
                 }
             }
 
@@ -798,9 +740,6 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 !applied_fix_solution &&
                 !forced_fixed_reacquisition_reset &&
                 !fixed_prefit_quarantine &&
-                (!require_independent_budget ||
-                 debug_telemetry_
-                     .safe_fix_shadow_failure_budget_passed) &&
                 rtk_config_.ar_policy != RTKConfig::ARPolicy::DEMO5_CONTINUOUS &&
                 rtk_validation::canAttemptHoldFix(holdEligibleFixCount(),
                                                   rtk_config_.min_hold_count,
