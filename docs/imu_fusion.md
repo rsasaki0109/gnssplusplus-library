@@ -236,6 +236,9 @@ bias estimate of the run is in parentheses (rad/s).
   correct FIX fall from 68.21% to 65.10% and the wrong-FIX rate rises from
   6.41% to 9.53%. `--navi776-tc` uses the independent output filter instead,
   which makes the consider update without touching the RTK stream.
+- **Since 2026-11-02 the flag also re-aligns** over the stand-still before
+  the latch ([below](#independent-output-filter)). The table above was
+  measured before that.
 
 ### Independent output filter
 
@@ -303,20 +306,37 @@ previous table.
   - the RTK stream identical on both.
 
   `--navi776-tc` has turned it on since then (2026-11-01).
-- **Known issue: a start-up transient before the latch.**
-  - **Where it comes from.** The filter takes its gyro bias and tilt from the
-    first 2 s of IMU data. Before the latch, the consider update keeps both
-    out of every measurement update.
-  - **What it does.** An IMU start-up transient in that window integrates
-    into the tilt for the whole stand-still.
+- **Re-alignment over the stand-still before the latch** (2026-11-02). The
+  filter takes its gyro bias and tilt from the first 2 s of IMU data. Before
+  the latch, the consider update keeps both out of every measurement update.
+  - **The failure.** An IMU start-up transient in that window used to
+    integrate into the tilt for the whole stand-still:
     - SmartPNT Data15: 46° of pitch by the first motion, and `--out`
-      hundreds of kilometres off.
+      hundreds of kilometres off;
     - UrbanNav HK Harsh-Urban-1: 27°.
-  - **The candidate fix.** Re-aligning over the current stand-still before
-    the latch passed a frozen holdout
+  - **The fix.** While the consider update is in force, the filter now
+    re-aligns over the current stand-still. Once the ZUPT stationarity test
+    has held for 2 s, and then every 1 s, it sets three values from the mean
+    raw IMU sample of that stand-still, as the static alignment does:
+    the gyro bias, the tilt and the accel bias. The yaw is kept, and any
+    motion restarts the stand-still.
+  - **Where it applies.** The independent output filter under
+    `--navi776-tc`, and `--consider-before-heading-latch`. The RTK stream
+    never changes.
+  - **Evidence.** It passed a frozen holdout
     ([contract](smartpnt_prelatch_realign_holdout.md),
     [results](smartpnt_prelatch_realign_holdout_results.md)) with a small
-    effect, and is not in the code yet.
+    effect: one run better and four equal. The large repair is development
+    evidence only.
+  - **Effect on the 20 development runs**, fused `--out` 3D p50 / p90 (m)
+    under `--navi776-tc`, before → after:
+    - **Better:** Data15 776,534 km / 26,124,910 m → 1.00 / 22.5 m; Data16
+      0.191 / 76.4 → 0.175 / 76.4; nagoya/run1 1.458 / 52.6 → 1.464 / 50.8.
+    - **Equal:** the other usable runs.
+    - **Unusable either way**, worse on three: HK Deep 28.1 / 126 → 46.6 / 133;
+      HK Harsh 27.2 / 252 → 78.7 / 369; HK Medium 908 / 25,565 → 46.3 / 258;
+      Data01 545 / 186,987 → 179 / 2,241; Data14 405 / 27,223 → 14,596 /
+      477,702.
 
 ### Reverse starts
 

@@ -280,6 +280,16 @@ public:
         // the covariance is updated in Joseph form (consistent for any gain).
         // Updates after the latch are unchanged. False keeps the previous
         // behavior bit-for-bit.
+        //
+        // Because nothing corrects the attitude or the biases until the
+        // latch, the filter also re-aligns itself while it stands still
+        // before the latch: once the current stand-still (ZUPT
+        // stationarity) spans 2 s, and then every 1 s, the gyro bias, the
+        // tilt and the accel bias are set from the mean raw IMU sample of
+        // that stand-still, as the static alignment sets them; the yaw is
+        // kept. A start-up transient in the 2 s alignment window otherwise
+        // integrates into the tilt for the whole stand-still
+        // (docs/smartpnt_prelatch_realign_holdout.md).
         bool consider_attitude_and_biases_before_heading_latch = false;
     };
 
@@ -316,6 +326,8 @@ public:
     /** @brief True once a heading latch has been made (see class doc: this alone does NOT mean the
      *  latch is trustworthy -- use isHeadingConverged() for a real health signal). */
     bool isHeadingAligned() const { return heading_aligned_; }
+    /** @brief Re-alignments over a stand-still before the latch (consider_attitude_and_biases_before_heading_latch). */
+    std::size_t prelatchRealignCount() const { return prelatch_realign_count_; }
     /**
      * @brief Real heading-health metric, replacing the old always-"aligned"
      * flag: true only while heading_aligned_ AND the recent velocity-update
@@ -449,6 +461,15 @@ private:
 
     std::vector<ImuSample> static_window_;
     std::deque<ImuSample> zupt_window_;
+    // Stand-still before the latch (consider_attitude_and_biases_before_heading_latch).
+    void realignOverPrelatchStandStill(const GNSSTime& time);
+    Eigen::Vector3d prelatch_still_gyro_sum_ = Eigen::Vector3d::Zero();
+    Eigen::Vector3d prelatch_still_accel_sum_ = Eigen::Vector3d::Zero();
+    double prelatch_still_count_ = 0.0;
+    GNSSTime prelatch_still_start_;
+    GNSSTime prelatch_last_realign_;
+    bool prelatch_realigned_ = false;
+    std::size_t prelatch_realign_count_ = 0;
     Eigen::Vector3d last_angular_rate_body_ = Eigen::Vector3d::Zero();
     bool has_gnss_velocity_ = false;
     double last_gnss_velocity_speed_mps_ = 0.0;
