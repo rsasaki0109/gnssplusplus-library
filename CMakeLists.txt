@@ -109,6 +109,7 @@ set(GNSS_SOURCES
     src/fusion/fusion_initialization.cpp
     src/fusion/fusion_processor.cpp
     src/fusion/online_rtk_imu.cpp
+    src/fusion/rtk_imu_fusion.cpp
     src/algorithms/rtk_base_alignment.cpp
     src/algorithms/rtk_presets.cpp
     src/fusion/dd_imu_bridge.cpp
