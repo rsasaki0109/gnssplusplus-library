@@ -25,6 +25,8 @@ bool debugHeadingEnabled() {
     return enabled;
 }
 
+constexpr double kPrelatchRealignMinStandStillS = 2.0;  // as the 2 s static alignment window
+constexpr double kPrelatchRealignIntervalS = 1.0;
 constexpr size_t kZuptWindowSize = 20;      // 0.2 s at 100 Hz; reference's zupt_min_samples=5 is the floor.
 constexpr double kDefaultPositionSigmaM = 5.0;
 constexpr double kDefaultVelocitySigmaMps = 0.5;
@@ -154,11 +156,37 @@ void LooseCouplingProcessor::initializeFromStaticWindow() {
     error_state_.setZero();
     initialized_ = true;
     static_window_.clear();
+    prelatch_still_gyro_sum_.setZero();
+    prelatch_still_accel_sum_.setZero();
+    prelatch_still_count_ = 0.0;
     // The static-alignment window is not evidence of rest after a reset that
     // happens while moving: v_long is invalid until the stationarity
     // condition first holds (Config::heading_latch_direction_test).
     v_long_ = 0.0;
     v_long_valid_ = false;
+}
+
+void LooseCouplingProcessor::realignOverPrelatchStandStill(const GNSSTime& time) {
+    const Eigen::Vector3d gyro_mean = prelatch_still_gyro_sum_ / prelatch_still_count_;
+    const Eigen::Vector3d accel_mean = prelatch_still_accel_sum_ / prelatch_still_count_;
+    const double norm = accel_mean.norm();
+    if (!(norm > 1e-9) || !gyro_mean.allFinite()) return;
+    const Eigen::Vector3d up_body = accel_mean / norm;
+    // The static alignment's tilt (fusion_initialization::alignStatic), turned
+    // about up to keep the current yaw: the heading of body +X in ENU.
+    const Eigen::Quaterniond level =
+        Eigen::Quaterniond::FromTwoVectors(up_body, Eigen::Vector3d::UnitZ()).normalized();
+    const Eigen::Matrix3d r_now = state_.nominal.attitude_body_to_enu.toRotationMatrix();
+    const Eigen::Matrix3d r_level = level.toRotationMatrix();
+    const double yaw_now = std::atan2(r_now(1, 0), r_now(0, 0));
+    const double yaw_level = std::atan2(r_level(1, 0), r_level(0, 0));
+    const Eigen::Quaterniond turn(Eigen::AngleAxisd(yaw_now - yaw_level, Eigen::Vector3d::UnitZ()));
+    state_.nominal.attitude_body_to_enu = (turn * level).normalized();
+    state_.nominal.gyro_bias = gyro_mean;
+    state_.nominal.accel_bias = accel_mean - kStandardGravityMps2 * up_body;
+    prelatch_last_realign_ = time;
+    prelatch_realigned_ = true;
+    ++prelatch_realign_count_;
 }
 
 bool LooseCouplingProcessor::detectStationary() const {
@@ -491,6 +519,27 @@ void LooseCouplingProcessor::processImuSample(const ImuSample& sample_body_flu) 
         if (gnssSpeedGateAllowsZupt() && detectStationary()) {
             v_long_ = 0.0;
             v_long_valid_ = true;
+        }
+    }
+
+    // Before the latch the consider update corrects neither the attitude nor
+    // the biases, so re-align over the current stand-still instead
+    // (Config::consider_attitude_and_biases_before_heading_latch).
+    if (config_.consider_attitude_and_biases_before_heading_latch && !heading_aligned_) {
+        if (gnssSpeedGateAllowsZupt() && detectStationary()) {
+            if (prelatch_still_count_ == 0.0) prelatch_still_start_ = sample_body_flu.time;
+            prelatch_still_gyro_sum_ += sample_body_flu.gyro_raw_radps;
+            prelatch_still_accel_sum_ += sample_body_flu.accel_raw;
+            prelatch_still_count_ += 1.0;
+            if (sample_body_flu.time - prelatch_still_start_ >= kPrelatchRealignMinStandStillS &&
+                (!prelatch_realigned_ ||
+                 sample_body_flu.time - prelatch_last_realign_ >= kPrelatchRealignIntervalS)) {
+                realignOverPrelatchStandStill(sample_body_flu.time);
+            }
+        } else {
+            prelatch_still_gyro_sum_.setZero();
+            prelatch_still_accel_sum_.setZero();
+            prelatch_still_count_ = 0.0;
         }
     }
 

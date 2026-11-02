@@ -1520,6 +1520,80 @@ TEST(FusionProcessorSyntheticTest, ConsiderBeforeHeadingLatchStillCorrectsPositi
     }
 }
 
+// Re-alignment over the stand-still before the latch (part of
+// consider_attitude_and_biases_before_heading_latch). The IMU stands still on
+// a tilted mount (roll ~5 deg, pitch ~3 deg); its first second carries a gyro
+// start-up transient of 0.002 rad/s about body x, which the 2 s static window
+// averages into the gyro bias (0.001 rad/s). With nothing else correcting the
+// bias, that error would integrate into the roll for the whole stand-still.
+namespace {
+const Eigen::Vector3d kTiltedStillAccel(-0.51, 0.86, 9.76);
+struct StandStillRun {
+    double tilt_error_deg = 0.0;   // angle between the estimated and the true body up
+    double gyro_bias_norm = 0.0;
+    double yaw_change_deg = 0.0;   // across the run, after the initialization
+    std::size_t realigns = 0;
+};
+// `burst` makes the IMU vibrate (not stationary) between 60 s and 61 s.
+StandStillRun runStandStill(bool consider, double seconds, bool burst = false) {
+    LooseCouplingProcessor::Config config;
+    config.lever_arm_body.setZero();
+    config.consider_attitude_and_biases_before_heading_latch = consider;
+    LooseCouplingProcessor processor(config);
+    StandStillRun run;
+    double yaw_after_init = 0.0;
+    bool have_yaw = false;
+    const int samples = static_cast<int>(seconds / kDt);
+    for (int i = 0; i <= samples; ++i) {
+        const double t = i * kDt;
+        ImuSample sample;
+        sample.time = GNSSTime(2200, 100000.0 + t);
+        sample.accel_raw = kTiltedStillAccel;
+        if (burst && t >= 60.0 && t < 61.0) sample.accel_raw.z() += (i % 2 == 0) ? 3.0 : -3.0;
+        sample.gyro_raw_radps = t < 1.0 ? Eigen::Vector3d(0.002, 0.0, 0.0) : Eigen::Vector3d::Zero();
+        processor.processImuSample(sample);
+        if (processor.isInitialized() && !have_yaw) {
+            const Eigen::Matrix3d r = processor.state().nominal.attitude_body_to_enu.toRotationMatrix();
+            yaw_after_init = std::atan2(r(1, 0), r(0, 0));
+            have_yaw = true;
+        }
+    }
+    const Eigen::Matrix3d r = processor.state().nominal.attitude_body_to_enu.toRotationMatrix();
+    const Eigen::Vector3d up_estimated = r.transpose() * Eigen::Vector3d::UnitZ();
+    const Eigen::Vector3d up_true = kTiltedStillAccel.normalized();
+    run.tilt_error_deg = std::acos(std::min(1.0, up_estimated.dot(up_true))) * 180.0 / M_PI;
+    run.gyro_bias_norm = processor.state().nominal.gyro_bias.norm();
+    run.yaw_change_deg = std::abs(std::atan2(r(1, 0), r(0, 0)) - yaw_after_init) * 180.0 / M_PI;
+    run.realigns = processor.prelatchRealignCount();
+    return run;
+}
+}  // namespace
+
+TEST(FusionProcessorSyntheticTest, PrelatchRealignmentRemovesAStartUpTransient) {
+    const StandStillRun run = runStandStill(/*consider=*/true, 120.0);
+    // The 2 s window alone would leave 0.001 rad/s of bias error, ~6.8 deg of
+    // roll over 118 s; the re-alignment takes the bias from the stand-still.
+    EXPECT_GT(run.realigns, 100U);
+    EXPECT_LT(run.gyro_bias_norm, 2e-5);
+    EXPECT_LT(run.tilt_error_deg, 0.1);
+    EXPECT_LT(run.yaw_change_deg, 1e-6);   // the yaw is kept
+}
+
+TEST(FusionProcessorSyntheticTest, PrelatchRealignmentNeedsTheConsiderUpdate) {
+    const StandStillRun run = runStandStill(/*consider=*/false, 120.0);
+    EXPECT_EQ(run.realigns, 0U);
+}
+
+TEST(FusionProcessorSyntheticTest, PrelatchRealignmentRestartsAfterMotion) {
+    const StandStillRun plain = runStandStill(/*consider=*/true, 120.0);
+    const StandStillRun burst = runStandStill(/*consider=*/true, 120.0, /*burst=*/true);
+    // About 1 s of vibration clears the stand-still sums; the next
+    // re-alignment needs 2 s of stand-still again, so about 3 fewer happen.
+    EXPECT_LT(burst.realigns, plain.realigns);
+    EXPECT_GE(burst.realigns + 4, plain.realigns);
+    EXPECT_LT(burst.tilt_error_deg, 0.1);
+}
+
 TEST(FusionProcessorSyntheticTest, LongitudinalVelocityRemovesGravityOfATiltedMount) {
     // A constant tilted specific force (|f| = g) is gravity only: the
     // body-forward kinematic acceleration is 0, whatever the pitch. The
