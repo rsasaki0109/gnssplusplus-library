@@ -305,21 +305,6 @@ struct SolveConfig {
     int bsr_guided_worst_axes = 3;
     int bsr_guided_max_drop_steps = 6;
     int lambda_candidate_shadow_count = 0;
-    double lambda_src_par_shadow_success_rate = 0.0;
-    double lambda_src_par_shadow_covariance_scale = 1.0;
-    int lambda_satellite_par_shadow_max_drop_steps = 0;
-    double lambda_satellite_par_shadow_covariance_scale = 16.0;
-    bool enable_lambda_satellite_par_shadow_quality_diverse = false;
-    bool enable_lambda_l1_l5_wlnl_shadow = false;
-    bool enable_lambda_l1_l5_wlnl_causal_arcs = false;
-    bool enable_safe_fix_shadow_state_machine = false;
-    bool enable_safe_fix_robust_consensus_shadow = false;
-    bool require_safe_fix_independent_failure_budget = false;
-    bool enable_library_fixed_quality_gate = false;
-    double library_fixed_quality_max_covariance_trace_m2 = 0.00025;
-    double library_fixed_quality_max_nis_per_observation = 10.0;
-    int library_fixed_quality_min_strong_observations = 28;
-    double library_fixed_quality_strong_max_nis_per_observation = 1.0;
     bool enable_safe_float_continuity = false;
     double safe_float_continuity_max_age_s = 6.0;
     bool enable_safe_availability_fallback = false;
@@ -1785,56 +1770,6 @@ void printAdvancedUsage(const char* program_name) {
         << "  --lambda-shadow-candidates <n>\n"
         << "                             Record top-K MLAMBDA/BSR diagnostics without\n"
         << "                             changing FIX decisions (0=off, 2..32)\n"
-        << "  --lambda-src-par-shadow-success-rate <p>\n"
-        << "                             Shadow-only SRC partial-AR success threshold\n"
-        << "                             (0=off; requires lambda shadow candidates)\n"
-        << "  --lambda-src-par-shadow-covariance-scale <s>\n"
-        << "                             Positive SRC/FFRT covariance inflation\n"
-        << "                             (default: 1)\n"
-        << "  --lambda-satellite-par-shadow-max-drops <n>\n"
-        << "                             Shadow-only satellite-group sequential PAR\n"
-        << "                             (0=off; requires lambda shadow candidates)\n"
-        << "  --lambda-satellite-par-shadow-covariance-scale <s>\n"
-        << "                             Positive satellite-PAR FFRT covariance\n"
-        << "                             inflation (default: 16)\n"
-        << "  --lambda-satellite-par-shadow-quality-diverse\n"
-        << "                             Add deduplicated variance/residual/fractional/\n"
-        << "                             elevation/SNR/azimuth satellite-drop paths\n"
-        << "  --lambda-l1-l5-wlnl-shadow\n"
-        << "                             Shadow-only L1/L5 WL->NL cascade with\n"
-        << "                             per-stage scale-16 FFRT and MW agreement;\n"
-        << "                             never changes filter/output decisions\n"
-        << "  --lambda-l1-l5-wlnl-causal-arcs\n"
-        << "                             Validate fresh WL searches with causal MW\n"
-        << "                             arc smoothing keyed by satellite, frequency,\n"
-        << "                             and reference generation (default: off)\n"
-        << "  --safe-fix-shadow-state-machine\n"
-        << "                             Run default-off FIX/hold/revoke telemetry;\n"
-        << "                             never changes output status or filter state\n"
-        << "  --safe-fix-robust-consensus-shadow\n"
-        << "                             Enable the experimental default-off robust\n"
-        << "                             full/satellite-PAR consensus state machine\n"
-        << "                             (ratio>=1.4, pairs>=12, 3x/2cm acquisition,\n"
-        << "                             strong/change-point shortcuts, no hold)\n"
-        << "  --safe-fix-independent-failure-budget\n"
-        << "                             Require >=2 distinct source families and\n"
-        << "                             joint fixed-failure probability <=2e-6;\n"
-        << "                             full and satellite-PAR count as one family\n"
-        << "  --library-fixed-quality-gate\n"
-        << "                             Demote library FIX unless safe-shadow or a\n"
-        << "                             structural quality branch passes (default: off)\n"
-        << "  --library-fixed-quality-max-cov-trace <m^2>\n"
-        << "                             Covariance-branch float ECEF trace ceiling\n"
-        << "                             (default: 0.00025)\n"
-        << "  --library-fixed-quality-max-nis <v>\n"
-        << "                             Covariance-branch NIS/observation ceiling\n"
-        << "                             (default: 10)\n"
-        << "  --library-fixed-quality-min-observations <n>\n"
-        << "                             Strong-innovation observation floor\n"
-        << "                             (default: 28)\n"
-        << "  --library-fixed-quality-strong-max-nis <v>\n"
-        << "                             Strong-innovation NIS/observation ceiling\n"
-        << "                             (default: 1)\n"
         << "  --safe-float-continuity\n"
         << "                             Emit bounded Doppler-propagated FLOAT output\n"
         << "                             during short no-solution gaps (default: off)\n"
@@ -3028,71 +2963,6 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.spp_height_step_guard_max_rate_mps = std::stod(argv[++i]);
         } else if (arg == "--lambda-shadow-candidates" && i + 1 < argc) {
             config.lambda_candidate_shadow_count = std::stoi(argv[++i]);
-        } else if (arg == "--lambda-src-par-shadow-success-rate" &&
-                   i + 1 < argc) {
-            config.lambda_src_par_shadow_success_rate =
-                std::stod(argv[++i]);
-        } else if (arg == "--lambda-src-par-shadow-covariance-scale" &&
-                   i + 1 < argc) {
-            config.lambda_src_par_shadow_covariance_scale =
-                std::stod(argv[++i]);
-        } else if (arg == "--lambda-satellite-par-shadow-max-drops" &&
-                   i + 1 < argc) {
-            config.lambda_satellite_par_shadow_max_drop_steps =
-                std::stoi(argv[++i]);
-        } else if (
-            arg == "--lambda-satellite-par-shadow-covariance-scale" &&
-            i + 1 < argc) {
-            config.lambda_satellite_par_shadow_covariance_scale =
-                std::stod(argv[++i]);
-        } else if (
-            arg ==
-            "--lambda-satellite-par-shadow-quality-diverse") {
-            config
-                .enable_lambda_satellite_par_shadow_quality_diverse =
-                true;
-        } else if (arg == "--lambda-l1-l5-wlnl-shadow") {
-            config.enable_lambda_l1_l5_wlnl_shadow = true;
-        } else if (arg == "--lambda-l1-l5-wlnl-causal-arcs") {
-            config.enable_lambda_l1_l5_wlnl_causal_arcs = true;
-        } else if (arg == "--safe-fix-shadow-state-machine") {
-            config.enable_safe_fix_shadow_state_machine = true;
-        } else if (arg == "--safe-fix-robust-consensus-shadow") {
-            config.enable_safe_fix_shadow_state_machine = true;
-            config.enable_safe_fix_robust_consensus_shadow = true;
-            config.lambda_candidate_shadow_count =
-                std::max(config.lambda_candidate_shadow_count, 2);
-            config.lambda_satellite_par_shadow_max_drop_steps =
-                std::max(
-                    config.lambda_satellite_par_shadow_max_drop_steps,
-                    8);
-        } else if (
-            arg == "--safe-fix-independent-failure-budget") {
-            config.require_safe_fix_independent_failure_budget =
-                true;
-        } else if (arg == "--library-fixed-quality-gate") {
-            config.enable_library_fixed_quality_gate = true;
-        } else if (
-            arg == "--library-fixed-quality-max-cov-trace" &&
-            i + 1 < argc) {
-            config.library_fixed_quality_max_covariance_trace_m2 =
-                std::stod(argv[++i]);
-        } else if (
-            arg == "--library-fixed-quality-max-nis" &&
-            i + 1 < argc) {
-            config.library_fixed_quality_max_nis_per_observation =
-                std::stod(argv[++i]);
-        } else if (
-            arg == "--library-fixed-quality-min-observations" &&
-            i + 1 < argc) {
-            config.library_fixed_quality_min_strong_observations =
-                std::stoi(argv[++i]);
-        } else if (
-            arg == "--library-fixed-quality-strong-max-nis" &&
-            i + 1 < argc) {
-            config
-                .library_fixed_quality_strong_max_nis_per_observation =
-                std::stod(argv[++i]);
         } else if (arg == "--safe-float-continuity") {
             config.enable_safe_float_continuity = true;
         } else if (
@@ -3520,113 +3390,6 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             "--lambda-shadow-candidates must be 0 or in [2, 32]",
             argv[0]);
     }
-    if (!std::isfinite(config.lambda_src_par_shadow_success_rate) ||
-        config.lambda_src_par_shadow_success_rate < 0.0 ||
-        config.lambda_src_par_shadow_success_rate > 1.0) {
-        argumentError(
-            "--lambda-src-par-shadow-success-rate must be in [0, 1]",
-            argv[0]);
-    }
-    if (!std::isfinite(config.lambda_src_par_shadow_covariance_scale) ||
-        config.lambda_src_par_shadow_covariance_scale <= 0.0) {
-        argumentError(
-            "--lambda-src-par-shadow-covariance-scale must be > 0",
-            argv[0]);
-    }
-    if (config.lambda_src_par_shadow_success_rate > 0.0 &&
-        config.lambda_candidate_shadow_count < 2) {
-        argumentError(
-            "--lambda-src-par-shadow-success-rate requires "
-            "--lambda-shadow-candidates >= 2",
-            argv[0]);
-    }
-    if (config.lambda_satellite_par_shadow_max_drop_steps < 0 ||
-        config.lambda_satellite_par_shadow_max_drop_steps > 32) {
-        argumentError(
-            "--lambda-satellite-par-shadow-max-drops must be in [0, 32]",
-            argv[0]);
-    }
-    if (!std::isfinite(
-            config.lambda_satellite_par_shadow_covariance_scale) ||
-        config.lambda_satellite_par_shadow_covariance_scale <= 0.0) {
-        argumentError(
-            "--lambda-satellite-par-shadow-covariance-scale must be > 0",
-            argv[0]);
-    }
-    if (config.lambda_satellite_par_shadow_max_drop_steps > 0 &&
-        config.lambda_candidate_shadow_count < 2) {
-        argumentError(
-            "--lambda-satellite-par-shadow-max-drops requires "
-            "--lambda-shadow-candidates >= 2",
-            argv[0]);
-    }
-    if (
-        config.enable_lambda_satellite_par_shadow_quality_diverse &&
-        config.lambda_satellite_par_shadow_max_drop_steps <= 0) {
-        argumentError(
-            "--lambda-satellite-par-shadow-quality-diverse requires "
-            "--lambda-satellite-par-shadow-max-drops > 0",
-            argv[0]);
-    }
-    if (config.enable_lambda_l1_l5_wlnl_causal_arcs &&
-        !config.enable_lambda_l1_l5_wlnl_shadow) {
-        argumentError(
-            "--lambda-l1-l5-wlnl-causal-arcs requires "
-            "--lambda-l1-l5-wlnl-shadow",
-            argv[0]);
-    }
-    if (config.enable_safe_fix_shadow_state_machine &&
-        config.lambda_candidate_shadow_count < 2) {
-        argumentError(
-            "--safe-fix-shadow-state-machine requires "
-            "--lambda-shadow-candidates >= 2",
-            argv[0]);
-    }
-    if (config.enable_library_fixed_quality_gate &&
-        !config.enable_safe_fix_robust_consensus_shadow) {
-        argumentError(
-            "--library-fixed-quality-gate requires "
-            "--safe-fix-robust-consensus-shadow",
-            argv[0]);
-    }
-    if (config.require_safe_fix_independent_failure_budget &&
-        (!config.enable_safe_fix_robust_consensus_shadow ||
-         !config.enable_lambda_l1_l5_wlnl_shadow)) {
-        argumentError(
-            "--safe-fix-independent-failure-budget requires "
-            "--safe-fix-robust-consensus-shadow and "
-            "--lambda-l1-l5-wlnl-shadow",
-            argv[0]);
-    }
-    if (!std::isfinite(
-            config.library_fixed_quality_max_covariance_trace_m2) ||
-        config.library_fixed_quality_max_covariance_trace_m2 <= 0.0) {
-        argumentError(
-            "--library-fixed-quality-max-cov-trace must be > 0",
-            argv[0]);
-    }
-    if (!std::isfinite(
-            config.library_fixed_quality_max_nis_per_observation) ||
-        config.library_fixed_quality_max_nis_per_observation <= 0.0) {
-        argumentError(
-            "--library-fixed-quality-max-nis must be > 0",
-            argv[0]);
-    }
-    if (config.library_fixed_quality_min_strong_observations < 1) {
-        argumentError(
-            "--library-fixed-quality-min-observations must be >= 1",
-            argv[0]);
-    }
-    if (!std::isfinite(
-            config
-                .library_fixed_quality_strong_max_nis_per_observation) ||
-        config
-                .library_fixed_quality_strong_max_nis_per_observation <=
-            0.0) {
-        argumentError(
-            "--library-fixed-quality-strong-max-nis must be > 0",
-            argv[0]);
-    }
     if (
         !std::isfinite(config.safe_float_continuity_max_age_s) ||
         config.safe_float_continuity_max_age_s <= 0.0) {
@@ -4039,66 +3802,6 @@ int main(int argc, char* argv[]) {
         rtk_config.bsr_guided_max_drop_steps = config.bsr_guided_max_drop_steps;
         rtk_config.lambda_candidate_shadow_count =
             config.lambda_candidate_shadow_count;
-        rtk_config.lambda_src_par_shadow_success_rate =
-            config.lambda_src_par_shadow_success_rate;
-        rtk_config.lambda_src_par_shadow_covariance_scale =
-            config.lambda_src_par_shadow_covariance_scale;
-        rtk_config.lambda_satellite_par_shadow_max_drop_steps =
-            config.lambda_satellite_par_shadow_max_drop_steps;
-        rtk_config.lambda_satellite_par_shadow_covariance_scale =
-            config.lambda_satellite_par_shadow_covariance_scale;
-        rtk_config.lambda_satellite_par_shadow_quality_diverse =
-            config
-                .enable_lambda_satellite_par_shadow_quality_diverse;
-        rtk_config.lambda_l1_l5_wlnl_shadow =
-            config.enable_lambda_l1_l5_wlnl_shadow;
-        rtk_config.lambda_l1_l5_wlnl_causal_arc_smoothing =
-            config.enable_lambda_l1_l5_wlnl_causal_arcs;
-        rtk_config.safe_fix_shadow_state_machine.enabled =
-            config.enable_safe_fix_shadow_state_machine;
-        rtk_config.safe_fix_shadow_state_machine
-            .require_independent_failure_budget =
-            config.require_safe_fix_independent_failure_budget;
-        rtk_config.library_fixed_quality_gate.enabled =
-            config.enable_library_fixed_quality_gate;
-        rtk_config.library_fixed_quality_gate
-            .require_independent_failure_budget =
-            config.require_safe_fix_independent_failure_budget;
-        rtk_config.library_fixed_quality_gate
-            .maximum_float_position_covariance_trace_m2 =
-            config.library_fixed_quality_max_covariance_trace_m2;
-        rtk_config.library_fixed_quality_gate
-            .maximum_covariance_branch_nis_per_observation =
-            config.library_fixed_quality_max_nis_per_observation;
-        rtk_config.library_fixed_quality_gate
-            .minimum_strong_innovation_observations =
-            config.library_fixed_quality_min_strong_observations;
-        rtk_config.library_fixed_quality_gate
-            .maximum_strong_innovation_nis_per_observation =
-            config
-                .library_fixed_quality_strong_max_nis_per_observation;
-        if (config.enable_safe_fix_robust_consensus_shadow) {
-            rtk_config.safe_fix_shadow_state_machine
-                .acquisition_streak_epochs = 3;
-            rtk_config.safe_fix_shadow_state_machine
-                .maximum_acquisition_correction_jump_m = 0.02;
-            rtk_config.safe_fix_shadow_state_machine
-                .maximum_hold_epochs = 0;
-            rtk_config.safe_fix_shadow_state_machine
-                .minimum_absolute_ratio = 1.4;
-            rtk_config.safe_fix_shadow_state_machine
-                .maximum_independent_consensus_delta_m = 0.10;
-            rtk_config.safe_fix_shadow_state_machine
-                .allow_strong_instant_acquisition = true;
-            rtk_config.safe_fix_shadow_state_machine
-                .allow_change_point_acquisition = true;
-            rtk_config.safe_fix_shadow_minimum_pairs = 12;
-            rtk_config
-                .safe_fix_shadow_maximum_second_position_delta_m =
-                0.25;
-            rtk_config.safe_fix_shadow_maximum_nis_per_observation =
-                3.0;
-        }
         rtk_config.safe_float_continuity.enabled =
             config.enable_safe_float_continuity;
         rtk_config.safe_float_continuity.maximum_anchor_age_s =
