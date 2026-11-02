@@ -648,21 +648,6 @@ TEST(LAMBDATest, CandidateShadowIsDefaultOffAndConfigurable) {
     EXPECT_FALSE(processor.getLastDebugTelemetry().lambda_shadow_attempted);
 }
 
-TEST(LAMBDATest, SafeFixStateMachineIsDefaultOffAndShadowOnly) {
-    RTKProcessor processor;
-    EXPECT_FALSE(
-        processor.getRTKConfig().safe_fix_shadow_state_machine.enabled);
-    EXPECT_FALSE(
-        processor.getLastDebugTelemetry().safe_fix_shadow_enabled);
-
-    auto config = processor.getRTKConfig();
-    config.safe_fix_shadow_state_machine.enabled = true;
-    config.lambda_candidate_shadow_count = 2;
-    processor.setRTKConfig(config);
-    EXPECT_TRUE(
-        processor.getRTKConfig().safe_fix_shadow_state_machine.enabled);
-}
-
 // ============================================================================
 // Test 9: DD formation produces correct number of differences
 // ============================================================================

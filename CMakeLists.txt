@@ -176,7 +176,6 @@ set(GNSS_RTK_RUNTIME_SOURCES
     src/algorithms/rtk_bias.cpp
     src/algorithms/rtk_fallback.cpp
     src/algorithms/rtk_epoch.cpp
-    src/algorithms/rtk_quality_gates.cpp
     src/algorithms/rtk_filter.cpp
     src/algorithms/rtk_ar_resolve.cpp
     src/algorithms/rtk_ar_validate.cpp

@@ -101,11 +101,7 @@ if(GTest_FOUND)
         test_ppp_correction_contract.cpp
         test_rtk_ar_evaluation.cpp
         test_rtk_ar_selection.cpp
-        test_safe_fix_state_machine.cpp
-          test_fixed_quality_gate.cpp
-          test_fix_failure_budget.cpp
-    test_inertial_fix_evidence.cpp
-    test_disjoint_satellite_fix_evidence.cpp
+        test_safe_float_continuity.cpp
         test_disjoint_constellation_partition.cpp
         test_causal_ambiguity_arc.cpp
         test_nlos_weights.cpp

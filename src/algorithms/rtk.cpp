@@ -1,8 +1,6 @@
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/rtk_ar_evaluation.hpp>
 #include <libgnss++/algorithms/rtk_ar_selection.hpp>
-#include <libgnss++/algorithms/disjoint_satellite_fix_evidence.hpp>
-#include <libgnss++/algorithms/fix_failure_budget.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/rtk_cp_pr_gate.hpp>
 #include <libgnss++/algorithms/rtk_ddpr_anchor.hpp>
@@ -116,14 +114,6 @@ void RTKProcessor::reset() {
         static_cast<int>(lock_count_l1_.size() +
                          lock_count_l2_.size() +
                          lock_count_l5_.size());
-    safe_fix_shadow_state_machine_.reset();
-    disjoint_consensus_state_machine_.reset();
-    causal_arc_consensus_state_machine_.reset();
-    satellite_par_consensus_state_machine_.reset();
-    src_par_consensus_state_machine_.reset();
-    inertial_referenced_consensus_state_machine_.reset();
-    multifrequency_consensus_state_machine_.reset();
-    l1_l2_multifrequency_consensus_state_machine_.reset();
     satellite_par_persistent_satellites_.clear();
     l1_l5_mw_arc_bank_.reset();
     wide_lane_mw_arc_bank_.reset();
