@@ -61,6 +61,7 @@ if(GTest_FOUND)
         test_mechanization.cpp
         test_preintegration.cpp
         test_tight_coupling_processor.cpp
+        test_rtk_imu_fusion.cpp
         test_fusion_process_noise.cpp
         test_fusion_update.cpp
         test_fusion_measurement.cpp

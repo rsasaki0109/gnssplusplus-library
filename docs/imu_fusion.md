@@ -127,6 +127,7 @@ Acc Z ≈ +9.81, despite the upstream README saying FRD).
 | Dense Joseph-form update + NIS gate | `src/fusion/fusion_update.cpp` |
 | Static + heading alignment | `src/fusion/fusion_initialization.cpp` |
 | Per-epoch driver | `src/fusion/fusion_processor.cpp` (`LooseCouplingProcessor`) |
+| RTK + IMU epoch pipeline (`gnss fuse --base`) | `src/fusion/rtk_imu_fusion.cpp` (`RtkImuFusionProcessor`) |
 | Tight DD row adapter | `RTKProcessor::formTightlyCoupledObservations` |
 | Augmented INS/ambiguity update | `src/fusion/dd_imu_bridge.cpp` |
 | Doppler LS velocity (feeds SPP/RTK solutions) | `src/algorithms/spp_velocity.cpp` |
