@@ -1533,6 +1533,9 @@ struct StandStillRun {
     double gyro_bias_norm = 0.0;
     double yaw_change_deg = 0.0;   // across the run, after the initialization
     std::size_t realigns = 0;
+    double yaw_sigma_deg = 0.0;    // at the end of the run
+    std::size_t yaw_variance_caps = 0;
+    double min_covariance_eigenvalue = 0.0;
 };
 // `burst` makes the IMU vibrate (not stationary) between 60 s and 61 s.
 StandStillRun runStandStill(bool consider, double seconds, bool burst = false) {
@@ -1565,6 +1568,12 @@ StandStillRun runStandStill(bool consider, double seconds, bool burst = false) {
     run.gyro_bias_norm = processor.state().nominal.gyro_bias.norm();
     run.yaw_change_deg = std::abs(std::atan2(r(1, 0), r(0, 0)) - yaw_after_init) * 180.0 / M_PI;
     run.realigns = processor.prelatchRealignCount();
+    const Eigen::MatrixXd& covariance = processor.state().covariance;
+    constexpr int kYaw = fusion_index::ATTITUDE + 2;
+    run.yaw_sigma_deg = std::sqrt(covariance(kYaw, kYaw)) * 180.0 / M_PI;
+    run.yaw_variance_caps = processor.prelatchYawVarianceCapCount();
+    run.min_covariance_eigenvalue =
+        Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd>(covariance).eigenvalues().minCoeff();
     return run;
 }
 }  // namespace
@@ -1592,6 +1601,21 @@ TEST(FusionProcessorSyntheticTest, PrelatchRealignmentRestartsAfterMotion) {
     EXPECT_LT(burst.realigns, plain.realigns);
     EXPECT_GE(burst.realigns + 4, plain.realigns);
     EXPECT_LT(burst.tilt_error_deg, 0.1);
+}
+
+// Before the latch the consider update leaves the yaw variance alone and the
+// gyro-bias variance adds to it; it is held at the initial (180 deg)^2.
+TEST(FusionProcessorSyntheticTest, PrelatchYawVarianceStaysAtTheUnknownYawLevel) {
+    const StandStillRun run = runStandStill(/*consider=*/true, 600.0);
+    EXPECT_GT(run.yaw_variance_caps, 0U);
+    EXPECT_LE(run.yaw_sigma_deg, 180.0 + 1e-9);
+    EXPECT_GT(run.yaw_sigma_deg, 179.0);
+    EXPECT_GT(run.min_covariance_eigenvalue, -1e-12);
+}
+
+TEST(FusionProcessorSyntheticTest, PrelatchYawVarianceCapNeedsTheConsiderUpdate) {
+    const StandStillRun run = runStandStill(/*consider=*/false, 600.0);
+    EXPECT_EQ(run.yaw_variance_caps, 0U);
 }
 
 TEST(FusionProcessorSyntheticTest, LongitudinalVelocityRemovesGravityOfATiltedMount) {

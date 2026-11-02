@@ -337,6 +337,35 @@ previous table.
       HK Harsh 27.2 / 252 → 78.7 / 369; HK Medium 908 / 25,565 → 46.3 / 258;
       Data01 545 / 186,987 → 179 / 2,241; Data14 405 / 27,223 → 14,596 /
       477,702.
+- **Yaw variance before the latch** (2026-11-02). The consider update never
+  lowers the yaw variance, and the gyro-bias variance keeps adding to it.
+  - **The failure.** On SmartPNT Data16 the yaw sigma of the output filter
+    grew from 180° to 794° over the 1,300 s stand-still. Through the lever
+    arm (0.57 m) that made the position update worth several metres of
+    sigma: the filter took 0.1 m RTK updates all along, yet its east position
+    sigma grew from 0.72 m to 1.66 m and `--out` wandered about 0.4 m from
+    the RTK position.
+  - **The fix.** While the consider update is in force, the filter keeps the
+    yaw variance at the initial (180°)². It scales the yaw row and column of
+    the covariance, which keeps the matrix positive semi-definite and the
+    yaw correlations. The latch replaces the yaw row and column as before.
+  - **Where it applies.** Where the re-alignment does. The RTK stream never
+    changes, and without the consider update the output is byte-identical
+    (checked on tokyo/run1 and Data16 without tight coupling).
+  - **Effect on the 20 development runs**, fused `--out` 3D p50 / p90 (m)
+    under `--navi776-tc`, before → after. The fused stream changes on every
+    run, but on most only within the 1% band:
+    - **Better:** Data13 0.159 / 0.79 → 0.118 / 0.79; Data16 0.175 / 76.4 →
+      0.165 / 76.4.
+    - **Equal:** the other 13 usable runs.
+    - **Unusable either way:** HK Deep and HK Medium equal; HK Harsh
+      78.7 / 369 → 90.6 / 615; Data01 179 / 2,241 → 260 / 2,488; Data14
+      14,596 / 477,702 → 2,014 / 592,669.
+
+    The cap shrinks the Data16 wander in the second half of the stand-still
+    (−0.12 → −0.01 m east at TOW 376200), not the 0.2 m offset of its first
+    minute. It is a correctness fix with no holdout: an unbounded variance
+    has no meaning, and the development runs show no harm.
 
 ### Reverse starts
 

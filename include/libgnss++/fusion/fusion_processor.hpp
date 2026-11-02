@@ -328,6 +328,9 @@ public:
     bool isHeadingAligned() const { return heading_aligned_; }
     /** @brief Re-alignments over a stand-still before the latch (consider_attitude_and_biases_before_heading_latch). */
     std::size_t prelatchRealignCount() const { return prelatch_realign_count_; }
+    /** @brief IMU steps whose yaw variance was capped at the unknown-yaw level before the latch
+     *  (consider_attitude_and_biases_before_heading_latch). */
+    std::size_t prelatchYawVarianceCapCount() const { return prelatch_yaw_variance_caps_; }
     /**
      * @brief Real heading-health metric, replacing the old always-"aligned"
      * flag: true only while heading_aligned_ AND the recent velocity-update
@@ -470,6 +473,7 @@ private:
     GNSSTime prelatch_last_realign_;
     bool prelatch_realigned_ = false;
     std::size_t prelatch_realign_count_ = 0;
+    std::size_t prelatch_yaw_variance_caps_ = 0;
     Eigen::Vector3d last_angular_rate_body_ = Eigen::Vector3d::Zero();
     bool has_gnss_velocity_ = false;
     double last_gnss_velocity_speed_mps_ = 0.0;

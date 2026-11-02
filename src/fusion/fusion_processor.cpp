@@ -493,6 +493,23 @@ void LooseCouplingProcessor::processImuSample(const ImuSample& sample_body_flu) 
                                               Eigen::Vector3d(0.0, 0.0, -kStandardGravityMps2));
     state_.covariance = phi * state_.covariance * phi.transpose() + qd;
     state_.covariance = 0.5 * (state_.covariance + state_.covariance.transpose());
+    // Before the latch the consider update never lowers the yaw variance, and
+    // the gyro-bias variance keeps adding to it (on SmartPNT-POS Data16 the
+    // yaw sigma reached 794 deg after 1,300 s). Past the unknown-yaw level its
+    // linear lever-arm term only weakens every position update, so keep it
+    // there: scale the yaw row and column, which keeps the matrix positive
+    // semi-definite and the yaw correlations.
+    if (config_.consider_attitude_and_biases_before_heading_latch && !heading_aligned_) {
+        constexpr int kYaw = fusion_index::ATTITUDE + 2;
+        const double max_yaw_variance = std::pow(kInitialYawSigmaDeg * M_PI / 180.0, 2);
+        const double yaw_variance = state_.covariance(kYaw, kYaw);
+        if (yaw_variance > max_yaw_variance) {
+            const double scale = std::sqrt(max_yaw_variance / yaw_variance);
+            state_.covariance.row(kYaw) *= scale;
+            state_.covariance.col(kYaw) *= scale;
+            ++prelatch_yaw_variance_caps_;
+        }
+    }
     dd_transition_since_update_ = phi * dd_transition_since_update_;
 
     zupt_window_.push_back(sample_body_flu);
