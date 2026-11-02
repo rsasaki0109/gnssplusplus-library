@@ -62,7 +62,6 @@ struct FuseOptions {
     std::string kml_path;
     bool write_kml = false;
     std::string attitude_csv_path;  ///< optional roll/pitch/yaw debug export (validation-only)
-    std::string sse_par_csv_path;
     std::string library_fix_integrity_csv_path;
 
     // RTK tuning (only consulted when --base is provided; see
@@ -79,23 +78,8 @@ struct FuseOptions {
         libgnss::RTKProcessor::RTKConfig::GlonassARMode::OFF;
     double max_position_jump_m = 5.0;
     double rtk_update_outlier_threshold = 0.0;
-    bool prefer_trusted_seed = false;
-    std::string rover_seed_pos_path;
     double elevation_mask_deg = 15.0;
     bool enable_base_interpolation = true;
-    // Off by default: see runRtkFusion's doc comment. RTKProcessor/SPPProcessor
-    // now populate has_velocity from a real Doppler-derived least squares
-    // solve (spp_velocity::solveVelocity/solveVelocityFromObservations, see
-    // docs/design.md), which is preferred and applies whenever an epoch has
-    // >= 4 satellites with usable Doppler. This finite-difference-of-FIXED-
-    // positions fallback remains available (guarded on !has_velocity, so it
-    // only fires when Doppler velocity was unavailable that epoch) but stays
-    // opt-in: validation on PPC tokyo/run1 showed it can amplify a single
-    // low-cost-preset wrong-fix into a bad heading/attitude latch
-    // (fusion_initialization::tryAlignHeading is a one-shot, ungated
-    // correction).
-    bool derive_velocity_from_fixed = false;
-    bool integrity_fixed_velocity = false;
     bool tightly_coupled_dd_imu = false;
     bool tightly_coupled_dd_code_only = false;
     bool library_fix_integrity_gate = false;
@@ -208,8 +192,6 @@ struct FuseOptions {
     // position prior above; the two modes are mutually exclusive.
     bool tc_ins_time_update = false;
     bool tc_closed_loop = false;
-    bool tc_trusted_reanchor = false;
-    int tc_trusted_reanchor_max_epochs = 0;
     bool tc_velocity_states = false;
     // navi.776 B2: SD Doppler rows making the M4 velocity states directly
     // observable. Requires --tc-velocity-states.
@@ -225,7 +207,6 @@ struct FuseOptions {
     bool tc_tdcp_diagnostics = false;
     double tc_ins_position_q_floor_m2 = 25.0;
     double tc_ins_max_sample_gap_s = 0.1;
-    bool tc_cp_pr_gate = false;
     double tc_cp_pr_threshold_m = 10.0;
     int tc_cp_pr_min_pairs = 4;
     int tc_cp_pr_max_bad_pairs = 1;
@@ -430,42 +411,6 @@ bool observationInputsAreDisjoint(
     return true;
 }
 
-double roundedTowKey(double tow) {
-    return std::round(tow * 10.0) / 10.0;
-}
-
-std::map<double, Eigen::Vector3d> loadSeedPositions(
-    const std::string& path) {
-    std::ifstream input(path);
-    if (!input.is_open()) {
-        throw std::runtime_error(
-            "failed to open rover seed .pos: " + path);
-    }
-    std::map<double, Eigen::Vector3d> output;
-    std::string line;
-    while (std::getline(input, line)) {
-        if (line.empty() || line[0] == '%') continue;
-        std::istringstream stream(line);
-        double week = 0.0;
-        double tow = 0.0;
-        Eigen::Vector3d position = Eigen::Vector3d::Zero();
-        if (!(stream >> week >> tow >> position.x() >>
-              position.y() >> position.z())) {
-            continue;
-        }
-        if (std::isfinite(tow) && position.allFinite() &&
-            position.norm() > 1e6) {
-            output[roundedTowKey(tow)] = position;
-        }
-    }
-    if (output.empty()) {
-        throw std::runtime_error(
-            "rover seed .pos contained no usable ECEF rows: " +
-            path);
-    }
-    return output;
-}
-
 void applyImuGradePreset(const std::string& grade, libgnss::ProcessNoiseConfig& cfg) {
     // Continuous-time spectral-density presets, matching
     // reference_notes.md 7's IMU_PRESETS table (same names/values as the
@@ -567,7 +512,6 @@ void printAdvancedUsage(const char* program_name) {
         << "  --kml <fused.kml>            Optional KML trajectory output\n"
         << "  --attitude-csv <path>        Optional roll/pitch/yaw (deg) debug CSV, one row per\n"
         << "                                fused epoch (validation against reference.csv attitude)\n"
-        << "  --tight-dd-sse-csv <path>    Optional truth-free per-epoch SSE-PAR audit CSV\n"
         << "  --library-fix-integrity-gate Require primary FFRT plus an independent\n"
         << "                                L1/L5 or causal pre-update INS source before\n"
         << "                                emitting library Status=4 (default: off)\n"
@@ -681,10 +625,6 @@ void printAdvancedUsage(const char* program_name) {
         << "  --glonass-ar <off|on|autocal>\n"
         << "  --max-pos-jump <m>           RTK absolute position jump bound\n"
         << "  --rtk-update-outlier-threshold <sigma>\n"
-        << "  --prefer-trusted-seed        Prefer trusted/current rover seed\n"
-        << "  --rover-seed-pos <file>      Per-epoch ECEF seed .pos\n"
-        << "  --integrity-fixed-velocity   Feed causal velocity from consecutive\n"
-        << "                                independently accepted FIX positions to INS\n"
         << "  --lever-arm x,y,z            IMU -> antenna lever arm, body FLU, meters (default 0,0,0)\n"
         << "  --zupt / --no-zupt           Enable/disable zero-velocity updates (default: enabled)\n"
         << "  --zupt-gnss-speed-gate / --no-zupt-gnss-speed-gate\n"
@@ -760,11 +700,6 @@ void printAdvancedUsage(const char* program_name) {
         << "  --elevation-mask-deg <v>     RTK elevation mask in degrees (default: 15)\n"
         << "  --base-ecef <x> <y> <z>      Override base ECEF position in meters\n"
         << "  --no-base-interp             Require exact rover/base epoch alignment (RTK path)\n"
-        << "  --derive-velocity-from-fixed Fallback: derive GNSS velocity from consecutive FIXED\n"
-        << "                                position differences (RTK path only) when an epoch's\n"
-        << "                                Doppler-derived velocity solve (the default source of\n"
-        << "                                has_velocity) is unavailable. Experimental -- see\n"
-        << "                                docs/design.md notes on wrong-fix sensitivity. Default: off.\n"
         << "  --tight-dd-imu               Opt-in DD + IMU ESKF update. Code DD is committed; carrier DD\n"
         << "                                and ambiguity/partial-AR updates are shadow-gated by default\n"
         << "  --tight-dd-carrier-experimental\n"
@@ -818,13 +753,6 @@ void printAdvancedUsage(const char* program_name) {
         << "  --tc-closed-loop             M3 TightCouplingProcessor path. Owns IMU intervals,\n"
         << "                                re-anchoring, ZUPT/NHC, and enables the M2 gate.\n"
         << "                                Mutually exclusive with --tc-ins-time-update. Default: off.\n"
-        << "  --tc-trusted-reanchor        With --tc-closed-loop, re-anchor only after a FIXED RTK\n"
-        << "                                epoch; bridge FLOAT/SPP epochs by continuing the IMU\n"
-        << "                                prediction instead of copying their posterior. Default: off.\n"
-        << "  --tc-trusted-reanchor-max-epochs <n>\n"
-        << "                                Maximum consecutive FLOAT/SPP epochs bridged before\n"
-        << "                                re-anchoring to the next available posterior (0 = no\n"
-        << "                                limit). Requires --tc-trusted-reanchor. Default: 0.\n"
         << "  --tc-doppler-rows            navi.776: rover-only between-satellite SD Doppler\n"
         << "                                observation rows (velocity observability). Requires\n"
         << "                                --tc-velocity-states. Default: off.\n"
@@ -853,9 +781,8 @@ void printAdvancedUsage(const char* program_name) {
         << "                                Requires --tc-closed-loop. Default: off.\n"
         << "  --tc-tdcp-diagnostics        M5 measurement-neutral SD-TDCP vs Doppler diagnostics.\n"
         << "                                Requires --tc-velocity-states. Default: off.\n"
-        << "  --tc-cp-pr-gate              M2 fixed-candidate CP-vs-PR gate (--base only). Vetoes\n"
-        << "                                inconsistent integers before FIX feedback. Default: off.\n"
-        << "  --tc-cp-pr-threshold <m>     Per-pair absolute innovation threshold (default: 10).\n"
+        << "  --tc-cp-pr-threshold <m>     M2 fixed-candidate CP-vs-PR gate (on with --tc-closed-loop):\n"
+        << "                                per-pair absolute innovation threshold (default: 10).\n"
         << "  --tc-cp-pr-min-pairs <n>     Minimum non-GLONASS DD pairs to evaluate (default: 4).\n"
         << "  --tc-cp-pr-max-bad-pairs <n> Allowed above-threshold pairs (default: 1).\n"
         << "  --tc-cp-pr-escalation <n>    Consecutive vetoes before DDPR-LS anchor (default: 2).\n"
@@ -966,57 +893,6 @@ public:
         file_ << time.week << "," << std::fixed << std::setprecision(3) << time.tow << ","
               << std::setprecision(4) << angles.roll_deg << "," << angles.pitch_deg << ","
               << angles.yaw_deg << "\n";
-    }
-
-private:
-    std::ofstream file_;
-};
-
-class SSEPartialARCsvWriter {
-public:
-    bool open(const std::string& path) {
-        if (path.empty()) {
-            return true;
-        }
-        file_.open(path);
-        if (!file_.is_open()) {
-            return false;
-        }
-        file_ << "gps_week,tow,available,attempted,subsets_evaluated,"
-                 "ratio_passed_subsets,separation_rejected_subsets,passed,"
-                 "fixed_count,dropped_count,ratio,bsr_qscale16,"
-                 "ffrt_min_ratio,sse_statistic_per_dof,"
-                 "position_separation_m,candidate_ecef_x,candidate_ecef_y,"
-                 "candidate_ecef_z\n";
-        return true;
-    }
-
-    void write(
-        const libgnss::GNSSTime& time,
-        const libgnss::dd_imu_bridge::SSEPartialARResult& result,
-        const Eigen::Vector3d& candidate_ecef) {
-        if (!file_.is_open()) {
-            return;
-        }
-        file_ << time.week << "," << std::fixed << std::setprecision(3)
-              << time.tow << "," << result.available << ","
-              << result.attempted << "," << result.subsets_evaluated
-              << "," << result.ratio_passed_subsets << ","
-              << result.separation_rejected_subsets << ","
-              << result.passed << "," << result.fixed_count << ","
-              << result.dropped_count << "," << std::setprecision(9)
-              << result.ratio << ","
-              << result.bootstrapped_success_rate << ","
-              << result.ffrt_minimum_ratio << ","
-              << result.statistic_per_dof << ","
-              << result.position_separation_m << ",";
-        if (result.passed && candidate_ecef.allFinite()) {
-            file_ << std::setprecision(4) << candidate_ecef.x() << ","
-                  << candidate_ecef.y() << "," << candidate_ecef.z();
-        } else {
-            file_ << ",,";
-        }
-        file_ << "\n";
     }
 
 private:
@@ -1643,8 +1519,6 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.write_kml = true;
         } else if (arg == "--attitude-csv") {
             options.attitude_csv_path = requireValue(arg, i, argc, argv);
-        } else if (arg == "--tight-dd-sse-csv") {
-            options.sse_par_csv_path = requireValue(arg, i, argc, argv);
         } else if (arg == "--library-fix-integrity-gate") {
             options.library_fix_integrity_gate = true;
         } else if (arg == "--library-fix-integrity-csv") {
@@ -1958,11 +1832,6 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         } else if (arg == "--rtk-update-outlier-threshold") {
             options.rtk_update_outlier_threshold =
                 std::stod(requireValue(arg, i, argc, argv));
-        } else if (arg == "--prefer-trusted-seed") {
-            options.prefer_trusted_seed = true;
-        } else if (arg == "--rover-seed-pos") {
-            options.rover_seed_pos_path =
-                requireValue(arg, i, argc, argv);
         } else if (arg == "--max-baseline-m") {
             options.max_baseline_length_m = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--elevation-mask-deg") {
@@ -1977,10 +1846,6 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.base_position_override = true;
         } else if (arg == "--no-base-interp") {
             options.enable_base_interpolation = false;
-        } else if (arg == "--derive-velocity-from-fixed") {
-            options.derive_velocity_from_fixed = true;
-        } else if (arg == "--integrity-fixed-velocity") {
-            options.integrity_fixed_velocity = true;
         } else if (arg == "--tight-dd-imu") {
             options.tightly_coupled_dd_imu = true;
         } else if (arg == "--tight-dd-carrier-experimental") {
@@ -2031,11 +1896,6 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.navi776_tc = true;
         } else if (arg == "--tc-closed-loop") {
             options.tc_closed_loop = true;
-        } else if (arg == "--tc-trusted-reanchor") {
-            options.tc_trusted_reanchor = true;
-        } else if (arg == "--tc-trusted-reanchor-max-epochs") {
-            options.tc_trusted_reanchor_max_epochs =
-                std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-velocity-states") {
             options.tc_velocity_states = true;
         } else if (arg == "--tc-doppler-rows") {
@@ -2059,8 +1919,6 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.tc_ins_position_q_floor_m2 = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-ins-max-sample-gap") {
             options.tc_ins_max_sample_gap_s = std::stod(requireValue(arg, i, argc, argv));
-        } else if (arg == "--tc-cp-pr-gate") {
-            options.tc_cp_pr_gate = true;
         } else if (arg == "--tc-cp-pr-threshold") {
             options.tc_cp_pr_threshold_m = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-cp-pr-min-pairs") {
@@ -2241,16 +2099,6 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     }
     if (options.tc_velocity_states && !options.tc_closed_loop) {
         argumentError("--tc-velocity-states requires --tc-closed-loop", argv[0]);
-    }
-    if (options.tc_trusted_reanchor && !options.tc_closed_loop) {
-        argumentError("--tc-trusted-reanchor requires --tc-closed-loop", argv[0]);
-    }
-    if (options.tc_trusted_reanchor_max_epochs < 0) {
-        argumentError("--tc-trusted-reanchor-max-epochs must be non-negative", argv[0]);
-    }
-    if (options.tc_trusted_reanchor_max_epochs > 0 && !options.tc_trusted_reanchor) {
-        argumentError("--tc-trusted-reanchor-max-epochs requires --tc-trusted-reanchor",
-                      argv[0]);
     }
     if (options.tc_tdcp_diagnostics && !options.tc_velocity_states) {
         argumentError("--tc-tdcp-diagnostics requires --tc-velocity-states", argv[0]);
@@ -2556,11 +2404,6 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     rtk_config.glonass_ar_mode = options.glonass_ar_mode;
     rtk_config.max_position_jump_m =
         options.max_position_jump_m;
-    rtk_config.prefer_trusted_position_seed =
-        options.prefer_trusted_seed;
-    rtk_config.prefer_rover_position_seed =
-        options.prefer_trusted_seed ||
-        !options.rover_seed_pos_path.empty();
     if (options.rtk_update_outlier_threshold > 0.0) {
         rtk_config.outlier_threshold =
             options.rtk_update_outlier_threshold;
@@ -2593,7 +2436,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     rtk_config.doppler_row_max_baseline_m = options.tc_doppler_max_baseline_m;
     rtk_config.enable_tdcp_diagnostics = options.tc_tdcp_diagnostics;
     rtk_config.ins_time_update_position_q_floor_m2 = options.tc_ins_position_q_floor_m2;
-    rtk_config.enable_cp_pr_fixed_gate = options.tc_cp_pr_gate || options.tc_closed_loop;
+    rtk_config.enable_cp_pr_fixed_gate = options.tc_closed_loop;
     rtk_config.cp_pr_fixed_gate_threshold_m = options.tc_cp_pr_threshold_m;
     rtk_config.cp_pr_fixed_gate_min_pairs = options.tc_cp_pr_min_pairs;
     rtk_config.cp_pr_fixed_gate_max_bad_pairs = options.tc_cp_pr_max_bad_pairs;
@@ -2874,11 +2717,6 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             disjoint_validators.push_back(std::move(validator));
         }
     }
-    const auto rover_seed_positions =
-        options.rover_seed_pos_path.empty()
-            ? std::map<double, Eigen::Vector3d>{}
-            : loadSeedPositions(options.rover_seed_pos_path);
-
     libgnss::LooseCouplingProcessor fusion_processor(options.fusion_config);
     // --independent-output-filter: the loose ESKF behind --out. It never feeds
     // the RTK filter or the closed-loop INS, so the RTK stream is unchanged.
@@ -2908,8 +2746,6 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     int tc_update_supplied_count = 0;
     int tc_anchor_count = 0;
     int tc_invalid_interval_count = 0;
-    int tc_trusted_reanchor_fallback_count = 0;
-    int tc_consecutive_prediction_continuations = 0;
     int tc_cp_pr_evaluated_count = 0;
     int tc_cp_pr_rejected_count = 0;
     int tc_cp_pr_escalated_count = 0;
@@ -2930,12 +2766,6 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     AttitudeCsvWriter attitude_writer;
     if (!attitude_writer.open(options.attitude_csv_path)) {
         std::cerr << "Error: failed to open attitude CSV: " << options.attitude_csv_path << "\n";
-        return 1;
-    }
-    SSEPartialARCsvWriter sse_par_writer;
-    if (!sse_par_writer.open(options.sse_par_csv_path)) {
-        std::cerr << "Error: failed to open SSE-PAR CSV: "
-                  << options.sse_par_csv_path << "\n";
         return 1;
     }
     LibraryFixIntegrityCsvWriter integrity_writer;
@@ -2974,7 +2804,6 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     int exact_base_epochs = 0;
     int interpolated_base_epochs = 0;
     int skipped_rover_epochs = 0;
-    int derived_velocity_updates = 0;
     int tight_dd_epochs = 0;
     int tight_dd_accepted = 0;
     int tight_dd_rejected = 0;
@@ -3009,53 +2838,10 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
     std::vector<int> ins_prior_eligible_nsats;
     std::vector<double> ins_prior_eligible_nis;
 
-    // RTKProcessor::processRTKEpoch() now populates PositionSolution::
-    // has_velocity from a real Doppler-derived least squares solve
-    // (spp_velocity::solveVelocityFromObservations(), run automatically on
-    // every valid solution that doesn't already carry one) whenever an
-    // epoch has >= 4 satellites with usable Doppler -- so
-    // LooseCouplingProcessor::processGnssSolution()'s velocity update and
-    // GNSS-course heading alignment (fusion_initialization::
-    // tryAlignHeading(), gated on solution.has_velocity) fire on their own
-    // now, without any help from this app. The block below is a secondary,
-    // opt-in (--derive-velocity-from-fixed) fallback for epochs where
-    // Doppler is unavailable (e.g. a receiver/RINEX stream missing D
-    // observables): derive a coarse velocity from consecutive FIXED epochs'
-    // position difference instead (finite-difference of two cm-level FIXED
-    // positions a fraction of a second apart is itself a reasonably precise
-    // velocity estimate), propagating each position's covariance through
-    // the difference (Var(v) = (Var(p1)+Var(p0))/dt^2). Only FIXED-to-FIXED
-    // pairs are used (not FLOAT/SPP) so an ambiguity reconvergence jump
-    // never gets misread as a real velocity.
-    // Deliberately tight: the "low-cost" preset's raw (unguarded --
-    // apps/native/gnss_solve.cpp's own nonfix-drift/float-bridge/jump guards are
-    // solve-specific output polish this app does not replicate, see the
-    // runRtkFusion doc comment above) FIXED stream occasionally contains a
-    // wrong-fix epoch. A wrong-fix differenced against its FIXED neighbor
-    // produces a bogus velocity that is otherwise indistinguishable from a
-    // real one; requiring back-to-back epochs (no skipped/FLOAT epoch in
-    // between) and a plausible car speed bounds the damage a single
-    // wrong-fix can do to fusion_initialization::tryAlignHeading() (a
-    // one-shot, ungated latch -- see fusion_initialization.cpp) and to the
-    // velocity update.
-    libgnss::PositionSolution previous_fixed_solution;
-    bool have_previous_fixed_solution = false;
-    constexpr double kMaxVelocityDerivationGapSeconds = 0.25;
-    constexpr double kMaxPlausibleSpeedMps = 60.0;
-    constexpr double kMinDerivedVelocityRatio = 2.0;
-
     while (rover_ok) {
         if (options.max_epochs > 0 && processed_epochs >= options.max_epochs) {
             break;
         }
-        if (!rover_seed_positions.empty()) {
-            const auto seed = rover_seed_positions.find(
-                roundedTowKey(rover_obs.time.tow));
-            if (seed != rover_seed_positions.end()) {
-                rover_obs.receiver_position = seed->second;
-            }
-        }
-
         libgnss::ObservationData lower_base_obs = previous_base_obs;
         bool have_lower_base = has_previous_base;
 
@@ -3453,7 +3239,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                 disjoint_validators_evaluated,
                 processing_runtime_ms);
         }
-        if (options.tc_cp_pr_gate || options.tc_closed_loop) {
+        if (options.tc_closed_loop) {
             const auto& telemetry = rtk_processor.getLastDebugTelemetry();
             tc_cp_pr_evaluated_count += telemetry.cp_pr_gate_evaluated ? 1 : 0;
             tc_cp_pr_rejected_count += telemetry.cp_pr_gate_rejected ? 1 : 0;
@@ -3513,36 +3299,6 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                     epoch_telemetry
                         .library_fixed_quality_gate_original_ratio;
             }
-            const bool use_fixed_velocity =
-                (options.derive_velocity_from_fixed &&
-                 !fusion_solution.has_velocity) ||
-                (options.library_fix_integrity_gate &&
-                 options.integrity_fixed_velocity);
-            if (use_fixed_velocity &&
-                fusion_solution.isFixed() && have_previous_fixed_solution &&
-                fusion_solution.ratio >= kMinDerivedVelocityRatio &&
-                previous_fixed_solution.ratio >= kMinDerivedVelocityRatio) {
-                const double dt =
-                    fusion_solution.time -
-                    previous_fixed_solution.time;
-                if (dt > 0.0 && dt <= kMaxVelocityDerivationGapSeconds) {
-                    const Eigen::Vector3d candidate_velocity =
-                        (fusion_solution.position_ecef -
-                         previous_fixed_solution.position_ecef) /
-                        dt;
-                    if (candidate_velocity.norm() <= kMaxPlausibleSpeedMps) {
-                        fusion_solution.velocity_ecef =
-                            candidate_velocity;
-                        fusion_solution.velocity_covariance =
-                            (fusion_solution.position_covariance +
-                             previous_fixed_solution.position_covariance) /
-                            (dt * dt);
-                        fusion_solution.has_velocity = true;
-                        ++derived_velocity_updates;
-                    }
-                }
-            }
-
             if (options.independent_output_filter) {
                 // The epoch SPP Doppler velocity, not the RTK velocity state
                 // (docs/imu_fusion.md, "Independent output filter").
@@ -3557,10 +3313,6 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                 output_filter.processGnssSolution(output_input);
             }
             fusion_processor.processGnssSolution(fusion_solution);
-            if (fusion_solution.isFixed()) {
-                previous_fixed_solution = fusion_solution;
-                have_previous_fixed_solution = true;
-            }
             if (!causal_candidate_promoted) {
                 pos_solution.velocity_ecef =
                     fusion_solution.velocity_ecef;
@@ -3622,26 +3374,6 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                         tight_dd_sse_par_fixed_ambiguities +=
                             dd_result.sse_partial_ar.fixed_count;
                     }
-                    Eigen::Vector3d sse_candidate_ecef =
-                        Eigen::Vector3d::Constant(
-                            std::numeric_limits<double>::quiet_NaN());
-                    if (dd_result.sse_partial_ar.passed) {
-                        const auto fused_now =
-                            fusion_processor.toPositionSolution();
-                        sse_candidate_ecef =
-                            fused_now.position_ecef +
-                            fusion_processor
-                                .ecefToLocalEnuRotation()
-                                .transpose() *
-                                (dd_result.sse_partial_ar
-                                     .fixed_position_enu -
-                                 fusion_processor.state()
-                                     .nominal.position_enu);
-                    }
-                    sse_par_writer.write(
-                        pos_solution.time,
-                        dd_result.sse_partial_ar,
-                        sse_candidate_ecef);
                     if (dd_result.reset_action !=
                         libgnss::dd_imu_bridge::SoftResetAction::REJECTED) {
                         ++tight_dd_soft_resets;
@@ -3688,12 +3420,6 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                 const bool bootstrap_ready = !needs_bootstrap ||
                     (fusion_processor.isInitialized() && fusion_processor.isOriginSet() &&
                      fusion_processor.isHeadingConverged());
-                const bool continuation_limit_reached = options.tc_trusted_reanchor &&
-                    options.tc_trusted_reanchor_max_epochs > 0 &&
-                    tc_consecutive_prediction_continuations >=
-                        options.tc_trusted_reanchor_max_epochs;
-                const bool trusted_reanchor = !options.tc_trusted_reanchor ||
-                    pos_solution.isFixed() || continuation_limit_reached;
                 bool have_anchor = false;
                 const auto& telemetry = rtk_processor.getLastDebugTelemetry();
                 if (telemetry.ddpr_anchor_valid) {
@@ -3705,7 +3431,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                     have_anchor = rtk_processor.getFloatPosteriorPosition(
                         anchor_position_ecef, anchor_position_covariance_ecef);
                 }
-                if (trusted_reanchor && bootstrap_ready && have_anchor && pos_solution.has_velocity &&
+                if (bootstrap_ready && have_anchor && pos_solution.has_velocity &&
                     pos_solution.velocity_ecef.allFinite() &&
                     pos_solution.velocity_covariance.allFinite()) {
                     const libgnss::FusionState* bootstrap =
@@ -3714,22 +3440,8 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                         anchor_position_ecef, anchor_position_covariance_ecef,
                         pos_solution.velocity_ecef, pos_solution.velocity_covariance,
                         rover_obs.time, bootstrap);
-                    if (anchored) {
-                        if (continuation_limit_reached && !pos_solution.isFixed()) {
-                            ++tc_trusted_reanchor_fallback_count;
-                        }
-                        tc_consecutive_prediction_continuations = 0;
-                    }
                 }
-                if (!anchored) {
-                    const bool continued = options.tc_trusted_reanchor && !needs_bootstrap &&
-                        !continuation_limit_reached &&
-                        tc_closed_loop_processor.continueFromPrediction();
-                    if (continued) ++tc_consecutive_prediction_continuations;
-                    if (!continued) {
-                        tc_closed_loop_processor.invalidateInterval();
-                    }
-                }
+                if (!anchored) tc_closed_loop_processor.invalidateInterval();
             }
             ++valid_solutions;
             if (pos_solution.isFixed()) {
@@ -3745,17 +3457,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
             }
         } else {
             if (options.tc_ins_time_update) tc_preintegrator.clear();
-            if (options.tc_closed_loop) {
-                const bool continuation_limit_reached = options.tc_trusted_reanchor &&
-                    options.tc_trusted_reanchor_max_epochs > 0 &&
-                    tc_consecutive_prediction_continuations >=
-                        options.tc_trusted_reanchor_max_epochs;
-                const bool continued = options.tc_trusted_reanchor &&
-                    !continuation_limit_reached &&
-                    tc_closed_loop_processor.continueFromPrediction();
-                if (continued) ++tc_consecutive_prediction_continuations;
-                if (!continued) tc_closed_loop_processor.invalidateInterval();
-            }
+            if (options.tc_closed_loop) tc_closed_loop_processor.invalidateInterval();
         }
 
         if (options.library_fix_integrity_gate &&
@@ -3880,14 +3582,9 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                   << (options.tc_closed_loop ? "on" : "off");
         if (options.tc_closed_loop) {
             const auto diagnostics = tc_closed_loop_processor.diagnostics();
-            std::cout << " (trusted_reanchor="
-                      << (options.tc_trusted_reanchor ? "on" : "off")
-                      << ", max_bridge_epochs="
-                      << options.tc_trusted_reanchor_max_epochs << ")\n  anchors="
+            std::cout << "\n  anchors="
                       << diagnostics.anchors
                       << " supplied=" << diagnostics.supplied_updates
-                      << " continued=" << diagnostics.prediction_continuations
-                      << " fallback_reanchors=" << tc_trusted_reanchor_fallback_count
                       << " invalid_intervals=" << diagnostics.invalid_intervals
                       << " zupt_updates=" << diagnostics.zupt_updates
                       << " nhc_updates=" << diagnostics.nhc_updates;
@@ -3911,7 +3608,7 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
                       << " max_abs_m=" << tc_tdcp_residual_max_abs_m;
         }
         std::cout << "\n";
-        const bool cp_pr_gate_active = options.tc_cp_pr_gate || options.tc_closed_loop;
+        const bool cp_pr_gate_active = options.tc_closed_loop;
         std::cout << "RTK CP-vs-PR fixed gate: " << (cp_pr_gate_active ? "on" : "off");
         if (cp_pr_gate_active) {
             std::cout << " (threshold_m=" << options.tc_cp_pr_threshold_m
@@ -3958,7 +3655,6 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         std::cout << "Exact base epochs: " << exact_base_epochs << "\n";
         std::cout << "Interpolated base epochs: " << interpolated_base_epochs << "\n";
         std::cout << "Skipped rover epochs (no aligned base): " << skipped_rover_epochs << "\n";
-        std::cout << "Derived FIXED-to-FIXED velocity updates: " << derived_velocity_updates << "\n";
         if (options.tightly_coupled_dd_imu) {
             std::cout << "Tight DD/IMU epochs: " << tight_dd_epochs
                       << " (accepted=" << tight_dd_accepted
