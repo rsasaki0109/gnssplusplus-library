@@ -46,32 +46,20 @@ causal_ambiguity_arc::Config wideLaneMwArcConfig(const RTKProcessor::RTKConfig& 
 
 RTKProcessor::RTKProcessor()
     : spp_processor_(makeRTKSppProcessor(rtk_config_)),
-      l1_l5_mw_arc_bank_(
-          rtk_config_.lambda_l1_l5_wlnl_causal_arc_config),
-      wide_lane_mw_arc_bank_(wideLaneMwArcConfig(rtk_config_)),
-      ambiguity_arc_bank_(
-          rtk_config_.lambda_causal_arc_readiness_config) {
+      wide_lane_mw_arc_bank_(wideLaneMwArcConfig(rtk_config_)) {
     filter_initialized_ = false;
 }
 RTKProcessor::RTKProcessor(const RTKConfig& rtk_config)
     : rtk_config_(rtk_config),
       spp_processor_(makeRTKSppProcessor(rtk_config_)),
-      l1_l5_mw_arc_bank_(
-          rtk_config_.lambda_l1_l5_wlnl_causal_arc_config),
-      wide_lane_mw_arc_bank_(wideLaneMwArcConfig(rtk_config_)),
-      ambiguity_arc_bank_(
-          rtk_config_.lambda_causal_arc_readiness_config) {
+      wide_lane_mw_arc_bank_(wideLaneMwArcConfig(rtk_config_)) {
     filter_initialized_ = false;
 }
 
 void RTKProcessor::setRTKConfig(const RTKConfig& config) {
     rtk_config_ = config;
-    l1_l5_mw_arc_bank_ = causal_ambiguity_arc::Bank(
-        rtk_config_.lambda_l1_l5_wlnl_causal_arc_config);
     wide_lane_mw_arc_bank_ =
         causal_ambiguity_arc::Bank(wideLaneMwArcConfig(rtk_config_));
-    ambiguity_arc_bank_ = causal_ambiguity_arc::Bank(
-        rtk_config_.lambda_causal_arc_readiness_config);
     syncSPPConfig();
     // Phase 2a: cmc_suspect_tracker_ is lazily constructed with the
     // cmc_ref_level_m threshold captured at construction time; drop it so a
@@ -114,8 +102,6 @@ void RTKProcessor::reset() {
         static_cast<int>(lock_count_l1_.size() +
                          lock_count_l2_.size() +
                          lock_count_l5_.size());
-    satellite_par_persistent_satellites_.clear();
-    l1_l5_mw_arc_bank_.reset();
     wide_lane_mw_arc_bank_.reset();
     filter_state_ = RTKState{};
     filter_state_.next_state_idx = REAL_STATES + IONO_STATES;
@@ -171,7 +157,6 @@ void RTKProcessor::reset() {
     current_epoch_slips_l1_.clear();
     current_epoch_slips_l2_.clear();
     current_epoch_slips_l5_.clear();
-    ambiguity_arc_bank_.reset();
     consecutive_fix_count_ = 0;
     nis_suspended_hold_run_ = 0;
     consecutive_float_count_ = 0;
