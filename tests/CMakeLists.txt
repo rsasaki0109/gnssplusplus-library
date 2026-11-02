@@ -504,10 +504,6 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_tdcp_trajectory.py
     )
     add_test(
-        NAME python_smartphone_observable_error_correction_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_observable_error_correction.py
-    )
-    add_test(
         NAME python_smartphone_doppler_position_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_doppler_position.py
     )
@@ -524,32 +520,12 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_reacquisition_conservative_eval.py
     )
     add_test(
-        NAME python_smartphone_segment_stability_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_segment_stability.py
-    )
-    add_test(
         NAME python_smartphone_wls_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls.py
     )
     add_test(
-        NAME python_smartphone_wls_eval_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_eval.py
-    )
-    add_test(
         NAME python_smartphone_wls_stability_selector_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_stability_selector.py
-    )
-    add_test(
-        NAME python_smartphone_wls_stability_selector_eval_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_stability_selector_eval.py
-    )
-    add_test(
-        NAME python_smartphone_wls_residual_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_residual.py
-    )
-    add_test(
-        NAME python_smartphone_wls_residual_v2_tests
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_wls_residual_v2.py
     )
     add_test(
         NAME python_smartphone_wls_multi_phone_ensemble_tests
@@ -899,15 +875,11 @@ if(GTest_FOUND)
         python_smartphone_kaggle_tests
         python_smartphone_trajectory_smoother_tests
         python_smartphone_trajectory_imu_tests
-        python_smartphone_observable_error_correction_tests
         python_smartphone_doppler_position_tests
         python_smartphone_reacquisition_eval_tests
         python_smartphone_reacquisition_conservative_eval_tests
-        python_smartphone_segment_stability_tests
         python_smartphone_wls_tests
-        python_smartphone_wls_eval_tests
         python_smartphone_wls_stability_selector_tests
-        python_smartphone_wls_stability_selector_eval_tests
         python_smartphone_wls_multi_phone_ensemble_tests
         python_smartphone_native_gnss_pdc_bridge_tests
         python_optional_madoca_materialization_diff_tests

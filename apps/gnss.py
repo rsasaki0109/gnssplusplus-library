@@ -706,11 +706,6 @@ COMMANDS = {
         "target": python_target("gnss_smartphone_tdcp_trajectory.py"),
         "summary": "Run truth-free TDCP/ADR displacement-constrained smartphone trajectory postprocess.",
     },
-    "smartphone-observable-error-correction": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_observable_error_correction.py"),
-        "summary": "Apply a sealed truth-free observable-feature residual correction to handset WLS ECEF positions.",
-    },
     "smartphone-doppler-position": {
         "kind": "python",
         "target": python_target("gnss_smartphone_doppler_position.py"),
@@ -740,26 +735,6 @@ COMMANDS = {
         "kind": "python",
         "target": python_target("gnss_smartphone_wls.py"),
         "summary": "Extract and validate Android handset WLS ECEF positions into WGS84/POS artifacts with a truth-free atomic manifest.",
-    },
-    "smartphone-wls-position-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_wls_eval.py"),
-        "summary": "Compare truth-free handset WLS against Galileo E1/Hatch and segment-stability lanes on fixed development routes.",
-    },
-    "smartphone-wls-stability-selector-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_wls_stability_selector_eval.py"),
-        "summary": "Evaluate a truth-free native-segment-stability versus raw-WLS selector on known routes and one metadata-frozen validation route without opening holdout data.",
-    },
-    "smartphone-wls-residual-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_wls_residual_eval.py"),
-        "summary": "Research fixed truth-free WLS residual median candidates on seven development routes and one metadata-frozen validation route without opening the next holdout.",
-    },
-    "smartphone-wls-residual-v2-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_wls_residual_v2_eval.py"),
-        "summary": "Run the one-shot v2 fresh validation of the frozen truth-free WLS residual median5/zero-shift lane without opening the next holdout.",
     },
     "smartphone-wls-multi-phone-ensemble-eval": {
         "kind": "python",
