@@ -509,6 +509,7 @@ with the unperturbed lever arm on the six runs.
   - However, correct FIX fall from 80.96% to 57.37%.
   - It also changes the RTK configuration, so it cannot serve as a
     re-acquisition-only check.
+  - It was removed from `gnss fuse` on 2026-11-02, with its sub-options.
 - **An INS bridged from the last FIX does not separate them.**
   - The bridge copies the loose ESKF's velocity, attitude and biases at each
     FIX, anchors on that FIX, and then propagates with the IMU only.
@@ -609,7 +610,8 @@ runs. The PPC column is the six-run mean.
 measurement rows. It was previously assigned only inside the
 `--library-fix-integrity-gate` block, so it was a silent no-op on this lane
 (byte-identical output); it now applies to the primary RTK config whenever
-selected. Default behaviour is unchanged.
+selected. Default behaviour is unchanged. The `--integrity-` prefix is
+historical: the front-end stayed when the gate was removed (2026-11-02).
 
 ## Rejected: turn-aware SPP stabilizer
 

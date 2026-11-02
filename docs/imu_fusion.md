@@ -259,8 +259,8 @@ for reference; each stream is scored on the epochs it outputs.
 
 It is meant for `--navi776-tc`. There the RTK velocity state is not a usable
 velocity, and the main filter, which takes it, drifts kilometres away.
-`--navi776-tc` turns the filter on when `--base` is given and
-`--library-fix-integrity-gate` is not. `--no-independent-output-filter`, given
+`--navi776-tc` turns the filter on when `--base` is given.
+`--no-independent-output-filter`, given
 anywhere, keeps `--out` from the main filter. Under `--navi776-tc` the run
 summary says whether the filter is on and, if not, why.
 
