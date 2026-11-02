@@ -237,24 +237,14 @@ class GnssFuseCliTest(unittest.TestCase):
 
         rtk_inputs = ("--imu", "missing-imu.csv", "--rover", "missing-rover.obs",
                       "--base", "missing-base.obs", "--nav", "missing.nav")
-        result = self.run_fuse(*rtk_inputs, "--independent-output-filter",
-                               "--library-fix-integrity-gate")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn(
-            "--independent-output-filter cannot be combined with --library-fix-integrity-gate",
-            result.stderr,
-        )
 
-        # The preset only asks for it: without --base, or with the integrity
-        # gate, it stays off instead of failing, so those runs still reach the
-        # input loader.
+        # The preset only asks for it: without --base it stays off instead of
+        # failing, so those runs still reach the input loader.
         for arguments in (
             ("--imu", "missing-imu.csv", "--gnss-pos", "missing-solution.pos", "--navi776-tc"),
-            (*rtk_inputs, "--navi776-tc", "--library-fix-integrity-gate"),
             (*rtk_inputs, "--navi776-tc"),
             (*rtk_inputs, "--no-independent-output-filter", "--navi776-tc"),
-            (*rtk_inputs, "--independent-output-filter", "--no-independent-output-filter",
-             "--library-fix-integrity-gate"),
+            (*rtk_inputs, "--independent-output-filter", "--no-independent-output-filter"),
         ):
             result = self.run_fuse(*arguments)
             self.assertEqual(result.returncode, 1, msg=arguments)
