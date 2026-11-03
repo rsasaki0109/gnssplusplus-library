@@ -123,14 +123,14 @@ and is a separate comparator, not proof of received-event causality.
 
 ## Docker and binary bundles
 
-Use the versioned v0.3.0 runtime image:
+Use the versioned v0.4.0 runtime image:
 
 ```sh
-docker pull ghcr.io/rsasaki0109/gnssplusplus-library:v0.3.0
-docker run --rm -v "$PWD/out:/out" ghcr.io/rsasaki0109/gnssplusplus-library:v0.3.0 \
+docker pull ghcr.io/rsasaki0109/gnssplusplus-library:v0.4.0
+docker run --rm -v "$PWD/out:/out" ghcr.io/rsasaki0109/gnssplusplus-library:v0.4.0 \
   pva-demo --output-dir /out/pva-demo --plot
 docker run --rm -v /datasets/PPC-Dataset:/datasets/PPC-Dataset:ro \
-  -v "$PWD/out:/out" ghcr.io/rsasaki0109/gnssplusplus-library:v0.3.0 pva-evaluate \
+  -v "$PWD/out:/out" ghcr.io/rsasaki0109/gnssplusplus-library:v0.4.0 pva-evaluate \
   --run-dir /datasets/PPC-Dataset/tokyo/run1 --output-dir /out/tokyo1 --plot
 ```
 
@@ -138,7 +138,7 @@ No raw PPC log is bundled. The Dockerfile runs the synthetic PVA witness at
 image build time; release smoke-install runs it from the installed DEB.
 CPack produces TGZ/DEB on Linux and ZIP on Windows. Generate locally after a
 full Release build using `cpack --config build/CPackConfig.cmake -C Release`.
-Download native packages from the [v0.3.0 release](https://github.com/rsasaki0109/gnssplusplus-library/releases/tag/v0.3.0).
+Download native packages from the [v0.4.0 release](https://github.com/rsasaki0109/gnssplusplus-library/releases/tag/v0.4.0).
 Checksums and platform verification accompany each artifact. The earlier
 v0.2.0 release does not include the PVA command surface.
 The Linux DEB packager needs `file` and `dpkg-dev` for ELF dependency discovery;
