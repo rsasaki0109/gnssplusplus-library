@@ -15,6 +15,7 @@
       <button role="tab" data-tool="post" aria-selected="true">Post-process</button>
       <button role="tab" data-tool="conv" aria-selected="false">Convert</button>
       <button role="tab" data-tool="plot" aria-selected="false">Plot</button>
+      <button role="tab" data-tool="obs" aria-selected="false">Observations</button>
       <button role="tab" data-tool="info" aria-selected="false">RINEX info</button>
     </nav>
     <div class="links">
@@ -212,6 +213,79 @@
           </div>
         </div>
         <div id="plot-cursor" class="cursor-info" aria-live="polite"></div>
+      </section>
+
+      <!-- Observation viewer (RTKPLOT observation data / skyplot) -->
+      <section class="tool" id="tool-obs" data-tool="obs" hidden>
+        <form class="panel form" id="obs-form" autocomplete="off">
+          <h2>Observation data</h2>
+          <fieldset>
+            <legend>Input files</legend>
+            <label>Observation (RINEX OBS)
+              <select name="obs" data-kinds="obs" data-prefer="rover"></select></label>
+            <label>Navigation (RINEX NAV)
+              <select name="nav" data-kinds="nav"></select></label>
+          </fieldset>
+          <fieldset>
+            <legend>Options</legend>
+            <div class="grid3">
+              <label>Elevation mask (deg)<input name="minElevation" type="number" step="any" min="-90" max="90" placeholder="0"></label>
+              <label>Max epochs<input name="maxEpochs" type="number" min="0" step="1" placeholder="all"></label>
+              <label>Receiver position
+                <select name="receiverPos">
+                  <option value="auto">RINEX header, else SPP</option>
+                  <option value="ecef">ECEF X / Y / Z (m)</option>
+                </select></label>
+            </div>
+            <div class="grid3" data-show-receiver="ecef">
+              <input name="receiverX" type="number" step="any" placeholder="X (m)" aria-label="Receiver ECEF X">
+              <input name="receiverY" type="number" step="any" placeholder="Y (m)" aria-label="Receiver ECEF Y">
+              <input name="receiverZ" type="number" step="any" placeholder="Z (m)" aria-label="Receiver ECEF Z">
+            </div>
+            <label>Extra arguments<input name="extra" type="text" spellcheck="false"></label>
+          </fieldset>
+          <div class="actions">
+            <button type="submit" class="btn primary">Analyze</button>
+            <button type="button" class="btn" data-abort disabled>Abort</button>
+          </div>
+        </form>
+        <div class="panel run" data-run></div>
+        <div class="obs-viewer">
+          <div class="panel plot-controls">
+            <label>Visibility data<select id="obs-data" data-kinds="vis"></select></label>
+            <label>Colour
+              <select id="obs-color">
+                <option value="snr">SNR (dB-Hz)</option>
+                <option value="sys">System</option>
+              </select></label>
+            <div class="qfilter" id="obs-sysfilter" aria-label="System filter"></div>
+          </div>
+          <div class="plot-empty panel" id="obs-empty">Analyze an observation file (or open a <code>*_vis.csv</code> from <code>gnss visibility</code>) to see the skyplot, tracking timeline and SNR.</div>
+          <div class="obs-grid" id="obs-grid" hidden>
+            <div class="card sky">
+              <div class="card-title">Skyplot <span class="hint">hover a timeline for the satellites at that epoch</span></div>
+              <canvas id="cv-sky"></canvas>
+              <div class="legend" id="obs-legend"></div>
+            </div>
+            <div class="card timeline">
+              <div class="card-title">Tracking <span class="hint">one row per satellite · ticks = LLI slip · wheel zoom time</span></div>
+              <canvas id="cv-track"></canvas>
+            </div>
+            <div class="card snr-el">
+              <div class="card-title">SNR vs elevation</div>
+              <canvas id="cv-snr-el"></canvas>
+            </div>
+            <div class="card nsat">
+              <div class="card-title">Satellites above the mask</div>
+              <canvas id="cv-obs-nsat"></canvas>
+            </div>
+            <div class="card stats">
+              <div class="card-title">Summary</div>
+              <div id="obs-stats" class="stats-body"></div>
+            </div>
+          </div>
+          <div id="obs-cursor" class="cursor-info" aria-live="polite"></div>
+        </div>
       </section>
 
       <!-- RINEX info -->

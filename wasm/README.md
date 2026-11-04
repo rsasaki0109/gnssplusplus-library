@@ -29,7 +29,8 @@ tests).
 ## Outputs
 
 `build-wasm/wasm/dist/<tool>.js` + `<tool>.wasm` for `gnss_convert`,
-`gnss_rinex_info`, `gnss_spp`, `gnss_solve` and `gnss_ppp`. Each `.js` is an
+`gnss_rinex_info`, `gnss_visibility`, `gnss_spp`, `gnss_solve` and
+`gnss_ppp`. Each `.js` is an
 ES module whose default export is an Emscripten module factory:
 
 ```js
