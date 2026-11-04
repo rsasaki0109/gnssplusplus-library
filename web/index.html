@@ -47,7 +47,13 @@
       <!-- Post-processing (RTKPOST) -->
       <section class="tool" id="tool-post" data-tool="post">
         <form class="panel form" id="post-form" autocomplete="off">
-          <h2>Post-processing</h2>
+          <div class="form-head">
+            <h2>Post-processing</h2>
+            <div class="row" aria-label="Options file">
+              <label class="btn small" title="Read a gnss solve / gnss ppp --config TOML into the form">Load options<input type="file" id="options-input" accept=".toml,text/plain" hidden></label>
+              <button type="button" class="btn small" id="options-save" title="Write the options as TOML for gnss solve / gnss ppp --config">Save options</button>
+            </div>
+          </div>
           <div class="grid2">
             <label class="wide">Positioning mode
               <select name="mode">

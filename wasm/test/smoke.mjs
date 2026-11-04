@@ -17,6 +17,7 @@ import { runTool } from '../../web/js/engine.js';
 import { buildConvertCommand, buildInfoCommand, buildPostCommand } from '../../web/js/commands.js';
 import { parseSolution, Q } from '../../web/js/formats.js';
 import { errorSummary, isFixQuality, referenceErrors } from '../../web/js/analysis.js';
+import { exportOptionsToml } from '../../web/js/options.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -83,6 +84,21 @@ export async function runSmoke(factoryFor, log = console.log) {
   assert.ok(fixCount >= 180, `expected >= 180 FIX epochs, got ${fixCount}`);
   assert.ok(fixErr.horizontalRms < 0.15, `FIX horizontal RMS ${fixErr.horizontalRms} m`);
   assert.match(text('rover_rtk.kml'), /<kml/);
+
+  // "Save options" TOML through --config gives the same solution as the flags.
+  const optionSet = {
+    mode: 'static', rover: 'rover.obs', base: 'base.obs', nav: 'base.nav', preset: 'survey', ratio: '2.5',
+    elevationMask: '12', kml: false, baseEcef: ['-3961905.0275', '3348993.7526', '3698211.7831'],
+    extra: '--min-ar-sats 6',
+  };
+  await run(buildPostCommand({ ...optionSet, out: 'flags.pos' }));
+  files.set('options.toml', new TextEncoder().encode(exportOptionsToml(optionSet)));
+  await run(buildPostCommand({
+    mode: 'static', rover: 'rover.obs', base: 'base.obs', nav: 'base.nav', kml: false, out: 'config.pos',
+    extra: '--config options.toml', workspaceNames: [...files.keys()],
+  }));
+  assert.equal(text('config.pos'), text('flags.pos'), '--config TOML and flags differ');
+  log('Options TOML: --config run identical to the flags run');
 
   await run(buildPostCommand({ mode: 'single', rover: 'rover.obs', nav: 'base.nav', out: 'rover_spp.pos' }));
   const spp = parseSolution('rover_spp.pos', text('rover_spp.pos'));

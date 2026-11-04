@@ -38,6 +38,19 @@ RTK preset, ionosphere option, ratio threshold, base position, KML) and an
 file name in Files (an ANTEX or BLQ file, a TOML config) is mounted as an
 input automatically.
 
+**Save options** writes the RTK or PPP settings as the flat TOML that
+`gnss solve --config` and `gnss ppp --config` read (input and output files
+are left out, as in RTKPOST's options file); **Load options**, or *load* on a
+`.toml` in Files, reads one back, including the repository examples in
+`configs/examples/`. Options the form has no field for become extra
+arguments. For example, a saved static RTK setup runs natively as:
+
+```bash
+gnss solve --config rover_rtk_options.toml --rover rover.obs --base base.obs --nav base.nav --out rtk.pos
+```
+
+`gnss spp` has no `--config`, so SPP settings are not saved.
+
 ## What runs where
 
 ```text
