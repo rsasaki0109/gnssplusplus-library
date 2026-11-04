@@ -12,8 +12,10 @@
 #include <tuple>
 #include <vector>
 
+#include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/navigation.hpp>
+#include <libgnss++/core/processor.hpp>
 #include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/io/rinex.hpp>
@@ -35,7 +37,13 @@ struct Options {
     int max_epochs = 0;
     double min_elevation_deg = 0.0;
     bool quiet = false;
+    bool has_receiver_ecef = false;
+    libgnss::Vector3d receiver_ecef = libgnss::Vector3d::Zero();
 };
+
+// Epochs searched for a first valid SPP fix when the observation header has
+// no APPROX POSITION XYZ (e.g. RINEX converted from a rover RTCM stream).
+constexpr int kMaxSppSeedEpochs = 600;
 
 struct SummaryStats {
     int epochs_processed = 0;
@@ -63,6 +71,9 @@ void printUsage(const char* program_name) {
         << "  --summary-json <summary.json>    Write run summary to JSON\n"
         << "  --max-epochs <count>             Limit processed epochs (default: all)\n"
         << "  --min-elevation-deg <deg>        Filter rows below this elevation (default: 0)\n"
+        << "  --receiver-ecef <x> <y> <z>      Receiver position (ECEF m) for azimuth/elevation;\n"
+        << "                                   default: RINEX APPROX POSITION XYZ, else the first\n"
+        << "                                   valid SPP fix of the observation file\n"
         << "  --quiet                          Suppress stdout summary\n"
         << "  -h, --help                       Show this help\n";
 }
@@ -92,6 +103,11 @@ Options parseArguments(int argc, char* argv[]) {
             options.max_epochs = std::stoi(argv[++i]);
         } else if (arg == "--min-elevation-deg" && i + 1 < argc) {
             options.min_elevation_deg = std::stod(argv[++i]);
+        } else if (arg == "--receiver-ecef" && i + 3 < argc) {
+            options.receiver_ecef = libgnss::Vector3d(
+                std::stod(argv[i + 1]), std::stod(argv[i + 2]), std::stod(argv[i + 3]));
+            options.has_receiver_ecef = true;
+            i += 3;
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -110,6 +126,10 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.min_elevation_deg < -90.0 || options.min_elevation_deg > 90.0) {
         argumentError("--min-elevation-deg must be within [-90, 90]", argv[0]);
+    }
+    if (options.has_receiver_ecef &&
+        (!options.receiver_ecef.allFinite() || options.receiver_ecef.norm() <= 0.0)) {
+        argumentError("--receiver-ecef must be a finite, non-zero ECEF position", argv[0]);
     }
     return options;
 }
@@ -185,8 +205,38 @@ const libgnss::Observation* selectRepresentativeObservation(
     return best;
 }
 
+// First valid SPP position within the first kMaxSppSeedEpochs epochs.
+bool sppSeedPosition(const std::string& obs_path,
+                     const libgnss::NavigationData& nav_data,
+                     libgnss::Vector3d& position,
+                     int& seed_epoch) {
+    libgnss::io::RINEXReader reader;
+    libgnss::io::RINEXReader::RINEXHeader header;
+    if (!reader.open(obs_path) || !reader.readHeader(header)) {
+        return false;
+    }
+    libgnss::ProcessorConfig config;
+    config.mode = libgnss::PositioningMode::SPP;
+    libgnss::SPPProcessor processor;
+    if (!processor.initialize(config)) {
+        return false;
+    }
+    libgnss::ObservationData epoch;
+    for (int index = 1; index <= kMaxSppSeedEpochs && reader.readObservationEpoch(epoch); ++index) {
+        const auto solution = processor.processEpoch(epoch, nav_data);
+        if (solution.isValid() && solution.position_ecef.allFinite() &&
+            solution.position_ecef.norm() > 0.0) {
+            position = solution.position_ecef;
+            seed_epoch = index;
+            return true;
+        }
+    }
+    return false;
+}
+
 void writeSummaryJson(const Options& options,
                       const libgnss::Vector3d& receiver_position,
+                      const std::string& receiver_position_source,
                       const SummaryStats& stats) {
     if (options.summary_json_path.empty()) {
         return;
@@ -215,6 +265,7 @@ void writeSummaryJson(const Options& options,
            << std::setprecision(4) << receiver_position.x() << ", "
            << receiver_position.y() << ", "
            << receiver_position.z() << "],\n";
+    output << "  \"receiver_position_source\": \"" << jsonEscape(receiver_position_source) << "\",\n";
     if (stats.has_first_epoch) {
         output << "  \"first_epoch\": {\"week\": " << stats.first_epoch.week
                << ", \"tow\": " << std::setprecision(3) << stats.first_epoch.tow << "},\n";
@@ -249,6 +300,7 @@ void writeSummaryJson(const Options& options,
 
 void printSummary(const Options& options,
                   const libgnss::Vector3d& receiver_position,
+                  const std::string& receiver_position_source,
                   const SummaryStats& stats) {
     if (options.quiet) {
         return;
@@ -271,6 +323,7 @@ void printSummary(const Options& options,
               << receiver_position.x() << " "
               << receiver_position.y() << " "
               << receiver_position.z() << "\n";
+    std::cout << "  receiver position source: " << receiver_position_source << "\n";
     std::cout << "  epochs processed: " << stats.epochs_processed << "\n";
     std::cout << "  epochs with rows: " << stats.epochs_with_rows << "\n";
     std::cout << "  rows written: " << stats.rows_written << "\n";
@@ -320,9 +373,19 @@ int main(int argc, char* argv[]) {
         }
 
         libgnss::Vector3d receiver_position = obs_header.approximate_position;
-        if (receiver_position.norm() <= 0.0) {
-            std::cerr << "Error: observation header does not contain an approximate receiver position\n";
-            return 1;
+        std::string receiver_position_source = "rinex-header";
+        if (options.has_receiver_ecef) {
+            receiver_position = options.receiver_ecef;
+            receiver_position_source = "receiver-ecef";
+        } else if (!receiver_position.allFinite() || receiver_position.norm() <= 0.0) {
+            int seed_epoch = 0;
+            if (!sppSeedPosition(options.obs_path, nav_data, receiver_position, seed_epoch)) {
+                std::cerr << "Error: observation header does not contain an approximate receiver position "
+                             "and no SPP fix was found in the first "
+                          << kMaxSppSeedEpochs << " epochs; pass --receiver-ecef\n";
+                return 1;
+            }
+            receiver_position_source = "spp-epoch-" + std::to_string(seed_epoch);
         }
 
         std::ofstream csv_output;
@@ -333,7 +396,7 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             csv_output << "epoch_index,week,tow,satellite,system,signal,azimuth_deg,elevation_deg,snr_dbhz,"
-                          "has_pseudorange,has_carrier_phase,has_doppler\n";
+                          "has_pseudorange,has_carrier_phase,has_doppler,lli\n";
         }
 
         const double min_elevation_rad = options.min_elevation_deg / kRadToDeg;
@@ -401,7 +464,8 @@ int main(int argc, char* argv[]) {
                                << chosen->snr << ","
                                << (chosen->has_pseudorange ? 1 : 0) << ","
                                << (chosen->has_carrier_phase ? 1 : 0) << ","
-                               << (chosen->has_doppler ? 1 : 0) << "\n";
+                               << (chosen->has_doppler ? 1 : 0) << ","
+                               << static_cast<int>(chosen->lli) << "\n";
                 }
             }
 
@@ -421,8 +485,8 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        writeSummaryJson(options, receiver_position, stats);
-        printSummary(options, receiver_position, stats);
+        writeSummaryJson(options, receiver_position, receiver_position_source, stats);
+        printSummary(options, receiver_position, receiver_position_source, stats);
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";

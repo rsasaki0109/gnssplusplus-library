@@ -93,10 +93,10 @@ class AnalysisVisualsCases:
             self.assertEqual(
                 csv_lines[0],
                 "epoch_index,week,tow,satellite,system,signal,azimuth_deg,elevation_deg,snr_dbhz,"
-                "has_pseudorange,has_carrier_phase,has_doppler",
+                "has_pseudorange,has_carrier_phase,has_doppler,lli",
             )
             first_row = csv_lines[1].split(",")
-            self.assertEqual(len(first_row), 12)
+            self.assertEqual(len(first_row), 13)
             self.assertTrue(first_row[3].startswith(("G", "R", "E", "C", "J", "S", "I")))
 
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
@@ -104,6 +104,58 @@ class AnalysisVisualsCases:
             self.assertGreater(payload["rows_written"], 0)
             self.assertGreater(payload["unique_satellites"], 0)
             self.assertIn("GPS", payload["rows_per_system"])
+            self.assertEqual(payload["receiver_position_source"], "rinex-header")
+    def test_visibility_falls_back_to_spp_without_header_position(self) -> None:
+        # A rover RINEX converted from RTCM has no APPROX POSITION XYZ. gnss visibility then takes the
+        # first valid SPP fix as the receiver position (or --receiver-ecef) instead of failing, and the
+        # CSV carries the representative signal's LLI so slips can be plotted.
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        with tempfile.TemporaryDirectory(prefix="gnss_visibility_spp_seed_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_obs = temp_root / "rover.obs"
+            base_nav = temp_root / "base.nav"
+            for source, outputs in (
+                ("rover.rtcm", ("--obs-out", str(rover_obs))),
+                ("base.rtcm", ("--nav-out", str(base_nav))),
+            ):
+                converted = self.run_gnss(
+                    "convert", "--format", "rtcm", "--input", str(fixture / source), *outputs,
+                    "--gps-week", "2324", "--quiet",
+                )
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+
+            def visibility(name: str, *extra: str) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+                csv_path = temp_root / f"{name}.csv"
+                summary_path = temp_root / f"{name}.json"
+                result = self.run_gnss(
+                    "visibility", "--obs", str(rover_obs), "--nav", str(base_nav),
+                    "--csv", str(csv_path), "--summary-json", str(summary_path), *extra,
+                )
+                return result, csv_path, summary_path
+
+            result, csv_path, summary_path = visibility("seeded")
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("receiver position source: spp-epoch-", result.stdout)
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertTrue(payload["receiver_position_source"].startswith("spp-epoch-"))
+            self.assertEqual(payload["epochs_processed"], 201)
+            # Within SPP accuracy of the PPC Tokyo run1 start (reference.csv first row).
+            seed = payload["receiver_position_ecef_m"]
+            reference = (-3961767.630, 3349008.712, 3698309.780)
+            self.assertLess(math.dist(seed, reference), 30.0)
+            with csv_path.open(encoding="utf-8", newline="") as stream:
+                rows = list(csv.DictReader(stream))
+            self.assertEqual(len(rows), payload["rows_written"])
+            self.assertTrue(all(row["lli"].isdigit() for row in rows))
+            self.assertTrue(any(int(row["lli"]) & 1 for row in rows))
+
+            result, _, summary_path = visibility("override", "--receiver-ecef", *map(str, reference))
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertEqual(json.loads(summary_path.read_text(encoding="utf-8"))["receiver_position_source"], "receiver-ecef")
+
+            result, _, _ = visibility("bad", "--receiver-ecef", "0", "0", "0")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("--receiver-ecef must be a finite, non-zero ECEF position", result.stderr)
     def test_visibility_plot_generates_png_from_visibility_csv(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_visibility_plot_cli_") as temp_dir:
             temp_root = Path(temp_dir)

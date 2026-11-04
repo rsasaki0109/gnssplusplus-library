@@ -76,6 +76,9 @@ gnsspp_add_wasm_tool(gnss_rinex_info
 gnsspp_add_wasm_tool(gnss_spp
     SOURCES ${GNSSPP_NATIVE_APP_DIR}/gnss_spp.cpp
     LIBS gnss_lib gnss_lib_solvers)
+gnsspp_add_wasm_tool(gnss_visibility
+    SOURCES ${GNSSPP_NATIVE_APP_DIR}/gnss_visibility.cpp
+    LIBS gnss_lib gnss_lib_solvers)
 gnsspp_add_wasm_tool(gnss_solve
     SOURCES
         ${GNSSPP_NATIVE_APP_DIR}/gnss_solve.cpp
