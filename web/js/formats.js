@@ -16,7 +16,7 @@ const LIBGNSS_STATUS_TO_Q = [Q.NONE, Q.SINGLE, Q.DGPS, Q.FLOAT, Q.FIX, Q.PPP, Q.
 
 /**
  * Guess what a file is from its name and first bytes.
- * Returns one of: obs, nav, sp3, clk, rtcm, ubx, pos, csv, kml, json, toml, other.
+ * Returns one of: obs, nav, sp3, clk, rtcm, ubx, pos, vis, csv, kml, json, toml, other.
  */
 export function sniffKind(name, headBytes) {
   const lower = name.toLowerCase();
@@ -32,6 +32,7 @@ export function sniffKind(name, headBytes) {
     if ('NGHLBJIEFQ'.includes(type) || /NAV/.test(firstLine)) return 'nav';
   }
   if (/^#[a-d][PV]/.test(firstLine)) return 'sp3';
+  if (firstLine.startsWith('epoch_index,week,tow,satellite,')) return 'vis';
   if (/^%/.test(firstLine) || /\.pos$/.test(lower)) return 'pos';
   if (/\.(rtcm3?|rtc)$/.test(lower)) return 'rtcm';
   if (/\.ubx$/.test(lower)) return 'ubx';
@@ -215,4 +216,66 @@ export function parseSolution(name, text) {
   }
   if (sol.n === 0) throw new Error(`${name}: no solution epochs found`);
   return sol;
+}
+
+// GNSS system order and one-letter prefixes used by the observation viewer.
+export const SYSTEMS = ['GPS', 'GLONASS', 'Galileo', 'BeiDou', 'QZSS', 'SBAS', 'NavIC'];
+const SYSTEM_PREFIX = { G: 0, R: 1, E: 2, C: 3, J: 4, S: 5, I: 6 };
+
+/**
+ * Parse a `gnss visibility` CSV (epoch_index,week,tow,satellite,system,
+ * signal,azimuth_deg,elevation_deg,snr_dbhz,has_pseudorange,
+ * has_carrier_phase,has_doppler[,lli]).
+ * Result: { name, n, t, az, el, snr, lli, sat (Uint16 index into sats),
+ *           sys (Uint8 index into SYSTEMS), signal: string[], sats: string[],
+ *           epochs: Float64Array of distinct times, hasLli }
+ * Satellites are sorted by system then PRN, as RTKPLOT lists them.
+ */
+export function parseVisibilityCsv(name, text) {
+  const lines = text.split(/\r?\n/);
+  const header = (lines[0] || '').split(',');
+  const col = (key) => header.indexOf(key);
+  const iWeek = col('week'); const iTow = col('tow'); const iSat = col('satellite');
+  const iSig = col('signal'); const iAz = col('azimuth_deg'); const iEl = col('elevation_deg');
+  const iSnr = col('snr_dbhz'); const iLli = col('lli');
+  if ([iWeek, iTow, iSat, iAz, iEl].some((i) => i < 0)) {
+    throw new Error(`${name}: not a gnss visibility CSV`);
+  }
+  const rows = [];
+  for (let k = 1; k < lines.length; k += 1) {
+    if (!lines[k]) continue;
+    const f = lines[k].split(',');
+    if (f.length <= iEl) continue;
+    const t = gpsSeconds(Number(f[iWeek]), Number(f[iTow]));
+    if (!Number.isFinite(t)) continue;
+    rows.push({ t, f });
+  }
+  const names = [...new Set(rows.map((r) => r.f[iSat]))];
+  const order = (s) => [SYSTEM_PREFIX[s[0]] ?? 9, Number(s.slice(1)) || 0];
+  names.sort((a, b) => {
+    const [sa, pa] = order(a); const [sb, pb] = order(b);
+    return sa - sb || pa - pb || a.localeCompare(b);
+  });
+  const index = new Map(names.map((s, i) => [s, i]));
+  const n = rows.length;
+  const out = {
+    name, n,
+    t: new Float64Array(n), az: new Float64Array(n), el: new Float64Array(n),
+    snr: new Float64Array(n), lli: new Uint8Array(n), sat: new Uint16Array(n), sys: new Uint8Array(n),
+    signal: new Array(n), sats: names, hasLli: iLli >= 0,
+  };
+  for (let i = 0; i < n; i += 1) {
+    const { t, f } = rows[i];
+    out.t[i] = t;
+    out.az[i] = Number(f[iAz]);
+    out.el[i] = Number(f[iEl]);
+    out.snr[i] = iSnr >= 0 && f[iSnr] !== '' ? Number(f[iSnr]) : NaN;
+    out.lli[i] = iLli >= 0 ? Number(f[iLli]) || 0 : 0;
+    out.sat[i] = index.get(f[iSat]);
+    out.sys[i] = SYSTEM_PREFIX[f[iSat][0]] ?? 6;
+    out.signal[i] = iSig >= 0 ? f[iSig] : '';
+  }
+  out.epochs = Float64Array.from(new Set(out.t)).sort();
+  if (n === 0) throw new Error(`${name}: no visibility rows`);
+  return out;
 }

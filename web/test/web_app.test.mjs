@@ -5,9 +5,9 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import {
-  buildConvertCommand, buildInfoCommand, buildPostCommand, defaultPosName, splitArgs,
+  buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultPosName, splitArgs,
 } from '../js/commands.js';
-import { parseSolution, Q, rinexObsTimeSpan, sniffKind } from '../js/formats.js';
+import { parseSolution, parseVisibilityCsv, Q, rinexObsTimeSpan, sniffKind } from '../js/formats.js';
 import { errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu } from '../js/analysis.js';
 import { calendarToGpsSeconds, ecefToLlh, formatGpst, gpsSeconds, llhToEcef } from '../js/geo.js';
 
@@ -194,4 +194,41 @@ test('splitArgs handles quotes and escapes', () => {
   assert.deepEqual(splitArgs(` --a 1  --b "two words" 'x y' c\\ d ""`), ['--a', '1', '--b', 'two words', 'x y', 'c d', '']);
   assert.deepEqual(splitArgs(''), []);
   assert.throws(() => splitArgs('"open'), /unterminated/);
+});
+
+// Rows from `gnss visibility` on the converted realtime_stress rover file.
+const VIS_CSV = `epoch_index,week,tow,satellite,system,signal,azimuth_deg,elevation_deg,snr_dbhz,has_pseudorange,has_carrier_phase,has_doppler,lli
+1,2324,187470.000,G05,GPS,GPS_L1CA,293.612610,39.445566,41.500000,1,1,1,0
+1,2324,187470.000,E11,Galileo,GAL_E1,125.958785,44.705874,38.375000,1,1,1,0
+1,2324,187470.000,G13,GPS,GPS_L1CA,80.1,20.2,,1,0,1,0
+2,2324,187470.200,G05,GPS,GPS_L1CA,293.613000,39.445000,41.250000,1,1,1,1
+`;
+
+test('visibility CSV: sniffing, parsing and satellite order', () => {
+  assert.equal(sniffKind('rover_vis.csv', new TextEncoder().encode(VIS_CSV)), 'vis');
+  const vis = parseVisibilityCsv('rover_vis.csv', VIS_CSV);
+  assert.equal(vis.n, 4);
+  assert.deepEqual(vis.sats, ['G05', 'G13', 'E11']); // GPS before Galileo, PRN order
+  assert.deepEqual([...vis.sat], [0, 2, 1, 0]);
+  assert.deepEqual([...vis.sys], [0, 2, 0, 0]);
+  assert.deepEqual([...vis.lli], [0, 0, 0, 1]);
+  assert.ok(Number.isNaN(vis.snr[2]));
+  assert.equal(vis.epochs.length, 2);
+  assert.equal(vis.t[0], gpsSeconds(2324, 187470));
+  assert.ok(vis.hasLli);
+  // Older CSVs without the lli column still parse.
+  const legacy = VIS_CSV.replace(/,lli\n/, '\n').replace(/,(0|1)\n/g, '\n');
+  assert.equal(parseVisibilityCsv('old.csv', legacy).hasLli, false);
+  assert.throws(() => parseVisibilityCsv('x.csv', 'a,b\n1,2\n'), /not a gnss visibility CSV/);
+});
+
+test('visibility command', () => {
+  const vis = buildVisibilityCommand({ obs: 'rover.obs', nav: 'base.nav', minElevation: '10' });
+  assert.equal(vis.commandLine,
+    'gnss visibility --obs rover.obs --nav base.nav --csv rover_vis.csv --summary-json rover_vis_summary.json '
+    + '--min-elevation-deg 10 --quiet');
+  assert.deepEqual(vis.outputs, ['rover_vis.csv', 'rover_vis_summary.json']);
+  const ecef = buildVisibilityCommand({ obs: 'r.obs', nav: 'n.nav', receiverEcef: ['-3961767.63', '3349008.712', '3698309.78'] });
+  assert.ok(ecef.args.join(' ').includes('--receiver-ecef -3961767.63 3349008.712 3698309.78'));
+  assert.throws(() => buildVisibilityCommand({ obs: 'r.obs' }), /navigation file/);
 });

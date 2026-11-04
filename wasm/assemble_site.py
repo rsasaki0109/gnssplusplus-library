@@ -27,7 +27,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_DIR = ROOT / "web"
-TOOLS = ("gnss_convert", "gnss_rinex_info", "gnss_spp", "gnss_solve", "gnss_ppp")
+TOOLS = ("gnss_convert", "gnss_rinex_info", "gnss_visibility", "gnss_spp", "gnss_solve", "gnss_ppp")
 # Sample inputs offered by the GUI ("Load files" / "Run demo pipeline").
 SAMPLES = {
     "rover.rtcm": "tests/fixtures/realtime_stress/rover.rtcm",

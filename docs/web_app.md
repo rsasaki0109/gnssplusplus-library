@@ -13,6 +13,7 @@ uploaded to a server.
 | Post-process | RTKPOST | `gnss_spp`, `gnss_solve`, `gnss_ppp` | `gnss solve --rover rover.obs --base base.obs --nav base.nav --out rover_rtk.pos --mode kinematic` |
 | Convert | RTKCONV | `gnss_convert` | `gnss convert --input base.rtcm --format rtcm --gps-week 2324 --obs-out base.obs --nav-out base.nav` |
 | Plot | RTKPLOT | (in the page) | ground track, E/N/U or error vs reference, satellites / ratio / PDOP, statistics |
+| Observations | RTKPLOT (observation data, skyplot) | `gnss_visibility` | `gnss visibility --obs rover.obs --nav base.nav --csv rover_vis.csv --summary-json rover_vis_summary.json` |
 | RINEX info | — | `gnss_rinex_info` | `gnss rinex-info --count-records rover.obs base.nav` |
 
 Every run prints the equivalent `gnss ...` command, so a browser session can
@@ -30,6 +31,13 @@ be repeated natively, for example on a larger dataset or in a script.
 3. Outputs (`.pos`, `.kml`, RINEX, summary JSON) appear in Files; download
    them or open `.pos` files in Plot. Solution 2 and a reference trajectory
    can be overlaid, as in RTKPLOT.
+4. **Observations** shows the data before you solve: a skyplot, one tracking
+   row per satellite coloured by SNR (or system) with loss-of-lock (LLI)
+   slip ticks, SNR against elevation, the satellite count and a per-satellite
+   table. Hovering a time highlights the satellites of that epoch on the
+   skyplot. The receiver position for azimuth/elevation comes from the RINEX
+   header, else the first SPP fix (rover files converted from RTCM have no
+   header position), or an ECEF position you enter.
 
 Post-process exposes the everyday options (positioning mode, elevation mask,
 RTK preset, ionosphere option, ratio threshold, base position, KML) and an

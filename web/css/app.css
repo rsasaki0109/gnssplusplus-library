@@ -15,6 +15,21 @@
   --plot-bg: #ffffff;
   --plot-grid: #ece8de;
   --plot-axis: #9ca3af;
+  /* SNR scale (dB-Hz bins <25, 25-30, 30-35, 35-40, 40-45, >=45) and systems */
+  --snr-0: #d7191c;
+  --snr-1: #f46d43;
+  --snr-2: #e6b800;
+  --snr-3: #a6d96a;
+  --snr-4: #1a9641;
+  --snr-5: #2b83ba;
+  --sys-gps: #2563eb;
+  --sys-glo: #dc2626;
+  --sys-gal: #16a34a;
+  --sys-bds: #d97706;
+  --sys-qzs: #7c3aed;
+  --sys-sbas: #6b7280;
+  --sys-irn: #a16207;
+  --slip: #111827;
   /* RTKPLOT-like quality colours */
   --q-fix: #16a34a;
   --q-float: #f59e0b;
@@ -47,6 +62,7 @@
     --plot-axis: #4b5563;
     --sol2: #c4b5fd;
     --ref: #f3f4f6;
+    --slip: #f9fafb;
     color-scheme: dark;
   }
 }
@@ -68,6 +84,7 @@
   --plot-axis: #4b5563;
   --sol2: #c4b5fd;
   --ref: #f3f4f6;
+  --slip: #f9fafb;
   color-scheme: dark;
 }
 
@@ -207,6 +224,13 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .stats-body th, .stats-body td { text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .stats-body th:first-child, .stats-body td:first-child { text-align: left; }
 .stats-body caption { text-align: left; font-weight: 700; padding: 4px 0; }
+/* Observation viewer */
+.obs-viewer { grid-column: 1 / -1; }
+.obs-grid { display: grid; grid-template-columns: minmax(280px, 420px) minmax(0, 1fr); gap: 10px; }
+.obs-grid .stats { grid-column: 1 / -1; }
+#cv-sky { aspect-ratio: 1 / 1; height: auto; }
+#cv-track { height: 260px; }
+#cv-snr-el, #cv-obs-nsat { height: 160px; }
 .cursor-info { margin-top: 8px; min-height: 1.4em; font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
 .plot-empty { color: var(--muted); }
 
@@ -219,6 +243,7 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 @media (max-width: 1100px) {
   .tool { grid-template-columns: minmax(0, 1fr); }
   .plot-grid { grid-template-columns: minmax(0, 1fr); }
+  .obs-grid { grid-template-columns: minmax(0, 1fr); }
   .gt { grid-row: auto; }
   #cv-gt { height: 380px; }
 }

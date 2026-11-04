@@ -35,6 +35,8 @@ export function cssVar(name, fallback) {
  *   opts.equalAspect  same metres per pixel on both axes (ground track)
  *   opts.yLabel / xLabel
  *   opts.integerY     y ticks on whole numbers (counts)
+ *   opts.yTickFormat(v) -> label  custom y tick labels (e.g. satellite IDs)
+ *   opts.yStep        fixed y tick step (overrides the automatic one)
  *   opts.onHover(x, y) / onLeave()
  *   opts.onViewChange(view)  after user zoom/pan (used to link time axes)
  */
@@ -176,6 +178,7 @@ export class PlotPanel {
     const xStep = this.opts.timeAxis ? timeStep(v.x1 - v.x0, r.width / 90) : niceStep(v.x1 - v.x0, r.width / 80);
     let yStep = niceStep(v.y1 - v.y0, r.height / 36);
     if (this.opts.integerY) yStep = Math.max(1, Math.round(yStep));
+    if (this.opts.yStep) yStep = this.opts.yStep;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     for (let x = Math.ceil(v.x0 / xStep) * xStep; x <= v.x1; x += xStep) {
@@ -189,7 +192,7 @@ export class PlotPanel {
     for (let y = Math.ceil(v.y0 / yStep) * yStep; y <= v.y1; y += yStep) {
       const py = Math.round(t.py(y)) + 0.5;
       ctx.beginPath(); ctx.moveTo(r.left, py); ctx.lineTo(r.left + r.width, py); ctx.stroke();
-      ctx.fillText(formatNumber(y, yStep), r.left - 6, py);
+      ctx.fillText(this.opts.yTickFormat ? this.opts.yTickFormat(y) : formatNumber(y, yStep), r.left - 6, py);
     }
     ctx.strokeStyle = colors.axis;
     ctx.strokeRect(r.left + 0.5, r.top + 0.5, r.width, r.height);
@@ -215,6 +218,7 @@ export class PlotPanel {
     const layers = [...this.layers].sort((a, b) => (a.order || 0) - (b.order || 0));
     for (const layer of layers) {
       if (layer.type === 'line') this.drawLine(ctx, layer, t);
+      else if (layer.type === 'vticks') this.drawTicks(ctx, layer, t, v);
       else this.drawPoints(ctx, layer, t, v);
     }
     if (this.cursor) {
@@ -242,6 +246,23 @@ export class PlotPanel {
       if (!Number.isFinite(x) || !Number.isFinite(y)) { pen = false; continue; }
       if (pen) ctx.lineTo(t.px(x), t.py(y)); else ctx.moveTo(t.px(x), t.py(y));
       pen = true;
+    }
+    ctx.stroke();
+  }
+
+  // Short vertical marks centred on each point (cycle slips on a timeline).
+  drawTicks(ctx, layer, t, v) {
+    const half = (layer.size || 10) / 2;
+    ctx.strokeStyle = layer.colors;
+    ctx.lineWidth = layer.width || 2;
+    ctx.beginPath();
+    for (let i = 0; i < layer.x.length; i += 1) {
+      const x = layer.x[i]; const y = layer.y[i];
+      if (!(x >= v.x0 && x <= v.x1 && y >= v.y0 && y <= v.y1)) continue;
+      const px = Math.round(t.px(x)) + 0.5;
+      const py = t.py(y);
+      ctx.moveTo(px, py - half);
+      ctx.lineTo(px, py + half);
     }
     ctx.stroke();
   }
@@ -335,5 +356,130 @@ export class PlotPanel {
     const r = this.plotRect();
     const v = this.effectiveView();
     return { kx: r.width / (v.x1 - v.x0), ky: r.height / (v.y1 - v.y0) };
+  }
+}
+
+/**
+ * Polar azimuth / elevation plot (RTKPLOT skyplot). North up, east right,
+ * zenith at the centre, 0 deg elevation on the outer ring.
+ *   setData({ az, el, cls, colors, labels: [{ az, el, text, color }] })
+ *   setCursor([{ az, el, text, color }])  highlighted satellites
+ *   opts.onHover(index | -1)  nearest sample within 12 px
+ */
+export class SkyPlot {
+  constructor(canvas, opts = {}) {
+    this.canvas = canvas;
+    this.opts = opts;
+    this.data = null;
+    this.cursor = [];
+    new ResizeObserver(() => this.draw()).observe(canvas);
+    canvas.addEventListener('pointermove', (event) => this.hover(event));
+    canvas.addEventListener('pointerleave', () => this.opts.onHover && this.opts.onHover(-1));
+  }
+
+  setData(data) { this.data = data; this.draw(); }
+
+  setCursor(marks) { this.cursor = marks || []; this.draw(); }
+
+  geometry() {
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    return { cx: w / 2, cy: h / 2, radius: Math.max(10, Math.min(w, h) / 2 - 22) };
+  }
+
+  project(az, el, g) {
+    const r = g.radius * (1 - Math.max(0, Math.min(90, el)) / 90);
+    const a = (az * Math.PI) / 180;
+    return [g.cx + r * Math.sin(a), g.cy - r * Math.cos(a)];
+  }
+
+  draw() {
+    const canvas = this.canvas;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (w === 0 || h === 0) return;
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = cssVar('--plot-bg', '#fff');
+    ctx.fillRect(0, 0, w, h);
+    const g = this.geometry();
+    const grid = cssVar('--plot-grid', '#e5e7eb');
+    const text = cssVar('--muted', '#6b7280');
+    ctx.strokeStyle = grid;
+    ctx.lineWidth = 1;
+    for (const el of [0, 15, 30, 45, 60, 75]) {
+      ctx.beginPath();
+      ctx.arc(g.cx, g.cy, g.radius * (1 - el / 90), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    for (let az = 0; az < 360; az += 30) {
+      const [x, y] = this.project(az, 0, g);
+      ctx.beginPath(); ctx.moveTo(g.cx, g.cy); ctx.lineTo(x, y); ctx.stroke();
+    }
+    ctx.strokeStyle = cssVar('--plot-axis', '#9ca3af');
+    ctx.beginPath(); ctx.arc(g.cx, g.cy, g.radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = text;
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const [label, az] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]) {
+      const [x, y] = this.project(az, -14, g);
+      ctx.fillText(label, x, y);
+    }
+    ctx.textAlign = 'left';
+    for (const el of [30, 60]) ctx.fillText(`${el}°`, g.cx + 3, g.cy - g.radius * (1 - el / 90) + 8);
+
+    const d = this.data;
+    if (d) {
+      const classes = Object.keys(d.colors).map(Number);
+      for (const cls of classes) {
+        ctx.fillStyle = d.colors[cls];
+        for (let i = 0; i < d.az.length; i += 1) {
+          if (d.cls[i] !== cls || !Number.isFinite(d.el[i])) continue;
+          const [x, y] = this.project(d.az[i], d.el[i], g);
+          ctx.fillRect(x - 1, y - 1, 2.2, 2.2);
+        }
+      }
+      ctx.font = '10px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      for (const label of d.labels || []) {
+        const [x, y] = this.project(label.az, label.el, g);
+        ctx.fillStyle = label.color || text;
+        ctx.fillText(label.text, x, y - 3);
+      }
+    }
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 10px system-ui, sans-serif';
+    for (const mark of this.cursor) {
+      const [x, y] = this.project(mark.az, mark.el, g);
+      ctx.fillStyle = mark.color;
+      ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.fillText(mark.text, x, y + 0.5);
+    }
+  }
+
+  hover(event) {
+    if (!this.opts.onHover || !this.data) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const px = event.clientX - rect.left;
+    const py = event.clientY - rect.top;
+    const g = this.geometry();
+    let best = -1;
+    let bestD = 144;
+    for (let i = 0; i < this.data.az.length; i += 1) {
+      if (!(this.data.cls[i] in this.data.colors)) continue;
+      const [x, y] = this.project(this.data.az[i], this.data.el[i], g);
+      const dd = (x - px) ** 2 + (y - py) ** 2;
+      if (dd < bestD) { bestD = dd; best = i; }
+    }
+    this.opts.onHover(best);
   }
 }

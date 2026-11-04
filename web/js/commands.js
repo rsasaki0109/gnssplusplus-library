@@ -12,6 +12,7 @@ export const DISPATCH_NAMES = {
   gnss_ppp: 'ppp',
   gnss_convert: 'convert',
   gnss_rinex_info: 'rinex-info',
+  gnss_visibility: 'visibility',
 };
 
 export const POST_MODES = {
@@ -222,6 +223,32 @@ export function buildConvertCommand(opts) {
 export function defaultConvertNames(input) {
   const base = stem(input || 'converted');
   return { obsOut: `${base}.obs`, navOut: `${base}.nav` };
+}
+
+/**
+ * Satellite azimuth / elevation / SNR / LLI per epoch for the observation
+ * viewer (RTKPLOT observation / skyplot views).
+ * opts: { obs, nav, minElevation, maxEpochs, receiverEcef: [x,y,z] | null, extra, workspaceNames }
+ */
+export function buildVisibilityCommand(opts) {
+  if (!opts.obs) throw new Error('choose a RINEX observation file');
+  if (!opts.nav) throw new Error('choose a RINEX navigation file');
+  const base = stem(opts.obs);
+  const cmd = new Command('gnss_visibility');
+  cmd.input('--obs', opts.obs).input('--nav', opts.nav);
+  cmd.output('--csv', `${base}_vis.csv`).output('--summary-json', `${base}_vis_summary.json`);
+  const minElevation = finite(opts.minElevation);
+  if (minElevation !== null) cmd.flag('--min-elevation-deg', minElevation);
+  const maxEpochs = finite(opts.maxEpochs);
+  if (maxEpochs) cmd.flag('--max-epochs', maxEpochs);
+  if (opts.receiverEcef) {
+    const xyz = opts.receiverEcef.map(finite);
+    if (xyz.length !== 3 || xyz.some((v) => v === null)) throw new Error('receiver ECEF needs X, Y and Z');
+    cmd.flag('--receiver-ecef', ...xyz);
+  }
+  cmd.flag('--quiet');
+  cmd.extra(opts.extra, opts.workspaceNames);
+  return cmd.result();
 }
 
 /** RINEX header / record summary. opts: { files: [names], countRecords } */
