@@ -115,6 +115,26 @@ class GnssSolveCliTest(unittest.TestCase):
         self.assertIn("unknown or incomplete argument: --this-option-does-not-exist",
                       result.stderr)
 
+    def test_config_base_ecef_array_expands_to_three_values(self) -> None:
+        # base_ecef = [x, y, z] is the TOML spelling of --base-ecef x y z (the browser GUI writes it).
+        with tempfile.TemporaryDirectory(prefix="gnss_solve_config_") as temp_dir:
+            config_path = Path(temp_dir) / "solve.toml"
+            config_path.write_text(
+                "[gnss_solve]\n"
+                "base_ecef = [-3961905.0275, 3348993.7526, 3698211.7831]\n",
+                encoding="utf-8",
+            )
+            result = self.run_solve("--config", str(config_path), "--rover", "missing.obs",
+                                    "--base", "missing.obs", "--nav", "missing.nav")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("cannot open rover observation file", result.stderr)
+            self.assertNotIn("arrays are not supported", result.stderr)
+
+            config_path.write_text("[gnss_solve]\nbase_ecef = [1.0, 2.0]\n", encoding="utf-8")
+            result = self.run_solve("--config", str(config_path))
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("base_ecef requires exactly 3 values", result.stderr)
+
     def test_pos_fix_diagnostics_is_advanced_help_and_requires_pos_format(self) -> None:
         advanced = self.run_solve("--help-advanced")
         self.assertEqual(advanced.returncode, 0, msg=advanced.stderr)
