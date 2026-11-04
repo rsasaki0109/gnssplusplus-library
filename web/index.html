@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>libgnss++ Web</title>
+  <meta name="description" content="RTKLIB-style GNSS post-processing, RINEX conversion and solution plotting in the browser: the libgnss++ command-line tools compiled to WebAssembly.">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./">libgnss++ <span>Web</span></a>
+    <nav class="tools" role="tablist" aria-label="Tools">
+      <button role="tab" data-tool="post" aria-selected="true">Post-process</button>
+      <button role="tab" data-tool="conv" aria-selected="false">Convert</button>
+      <button role="tab" data-tool="plot" aria-selected="false">Plot</button>
+      <button role="tab" data-tool="info" aria-selected="false">RINEX info</button>
+    </nav>
+    <div class="links">
+      <a href="../">Docs</a>
+      <a href="https://github.com/rsasaki0109/gnssplusplus-library" target="_blank" rel="noreferrer">GitHub</a>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <div class="layout">
+    <aside class="files" aria-label="Files">
+      <div class="files-head">
+        <h2>Files</h2>
+        <label class="btn small">Add files<input type="file" id="file-input" multiple hidden></label>
+      </div>
+      <p class="hint">Drop files anywhere on the page. They stay in this browser tab; nothing is uploaded.</p>
+      <ul id="file-list" class="file-list"></ul>
+      <div class="sample">
+        <h3>Sample data</h3>
+        <p class="hint">40&nbsp;s of the PPC Tokyo run1 drive as RTCM3 (rover 5&nbsp;Hz, base 1&nbsp;Hz, GPS) with the reference trajectory, plus a synthetic PPP set.</p>
+        <div class="row">
+          <button type="button" class="btn small" id="load-sample">Load files</button>
+          <button type="button" class="btn small primary" id="run-sample">Run demo pipeline</button>
+        </div>
+      </div>
+    </aside>
+
+    <main>
+      <!-- Post-processing (RTKPOST) -->
+      <section class="tool" id="tool-post" data-tool="post">
+        <form class="panel form" id="post-form" autocomplete="off">
+          <h2>Post-processing</h2>
+          <div class="grid2">
+            <label class="wide">Positioning mode
+              <select name="mode">
+                <option value="single">Single (SPP)</option>
+                <option value="kinematic" selected>Kinematic RTK</option>
+                <option value="static">Static RTK</option>
+                <option value="moving-base">Moving-base RTK</option>
+                <option value="ppp-kinematic">PPP Kinematic</option>
+                <option value="ppp-static">PPP Static</option>
+              </select>
+            </label>
+          </div>
+          <fieldset>
+            <legend>Input files</legend>
+            <label>Rover observation (RINEX OBS)
+              <select name="rover" data-kinds="obs" data-prefer="rover"></select></label>
+            <label data-show="rtk">Base observation (RINEX OBS)
+              <select name="base" data-kinds="obs" data-prefer="base"></select></label>
+            <label>Navigation (RINEX NAV)<span data-show="ppp" class="opt"> optional</span>
+              <select name="nav" data-kinds="nav" data-optional-modes="ppp"></select></label>
+            <label data-show="spp ppp">Precise orbit (SP3) <span class="opt">optional</span>
+              <select name="sp3" data-kinds="sp3" data-optional></select></label>
+            <label data-show="spp ppp">Precise clock (CLK) <span class="opt">optional</span>
+              <select name="clk" data-kinds="clk" data-optional></select></label>
+          </fieldset>
+          <fieldset>
+            <legend>Options</legend>
+            <div class="grid3">
+              <label>Elevation mask (deg)<input name="elevationMask" type="number" step="any" min="0" max="90" placeholder="15"></label>
+              <label>Max epochs<input name="maxEpochs" type="number" min="0" step="1" placeholder="all"></label>
+              <label data-show="rtk">Preset
+                <select name="preset">
+                  <option value="">(none)</option>
+                  <option value="survey">survey</option>
+                  <option value="low-cost">low-cost</option>
+                  <option value="moving-base">moving-base</option>
+                  <option value="odaiba">odaiba</option>
+                  <option value="urban">urban</option>
+                </select></label>
+              <label data-show="rtk">Ionosphere
+                <select name="iono">
+                  <option value="auto">auto</option>
+                  <option value="off">off</option>
+                  <option value="iflc">iflc</option>
+                  <option value="est">est</option>
+                </select></label>
+              <label data-show="rtk">AR ratio threshold<input name="ratio" type="number" step="any" min="1" placeholder="default"></label>
+            </div>
+            <div data-show="rtk" class="base-pos">
+              <label>Base position
+                <select name="basePos">
+                  <option value="header">RINEX header (APPROX POSITION XYZ)</option>
+                  <option value="ecef">ECEF X / Y / Z (m)</option>
+                </select></label>
+              <div class="grid3" data-show-base="ecef">
+                <input name="baseX" type="number" step="any" placeholder="X (m)" aria-label="Base ECEF X">
+                <input name="baseY" type="number" step="any" placeholder="Y (m)" aria-label="Base ECEF Y">
+                <input name="baseZ" type="number" step="any" placeholder="Z (m)" aria-label="Base ECEF Z">
+              </div>
+            </div>
+            <div class="checks">
+              <label data-show="spp" class="check"><input type="checkbox" name="ionoFree"> Ionosphere-free code (dual frequency)</label>
+              <label data-show="ppp" class="check"><input type="checkbox" name="enableAr"> PPP ambiguity resolution</label>
+              <label data-show="rtk ppp" class="check"><input type="checkbox" name="kml" checked> Write KML</label>
+              <label data-show="rtk" class="check"><input type="checkbox" name="verbose" checked> Progress (<code>--verbose</code>)</label>
+            </div>
+            <label>Extra arguments <span class="opt">passed through; a token equal to a file name in Files is mounted as input</span>
+              <input name="extra" type="text" spellcheck="false" placeholder="e.g. --arfilter --min-ar-sats 6"></label>
+          </fieldset>
+          <fieldset>
+            <legend>Output</legend>
+            <label>Solution file<input name="out" type="text" spellcheck="false" placeholder="derived from the rover file"></label>
+          </fieldset>
+          <div class="actions">
+            <button type="submit" class="btn primary">Execute</button>
+            <button type="button" class="btn" data-abort disabled>Abort</button>
+          </div>
+        </form>
+        <div class="panel run" data-run></div>
+      </section>
+
+      <!-- Conversion (RTKCONV) -->
+      <section class="tool" id="tool-conv" data-tool="conv" hidden>
+        <form class="panel form" id="conv-form" autocomplete="off">
+          <h2>RTCM3 / UBX to RINEX</h2>
+          <fieldset>
+            <legend>Input</legend>
+            <label>Receiver log
+              <select name="input" data-kinds="rtcm ubx"></select></label>
+            <div class="grid3">
+              <label>Format
+                <select name="format">
+                  <option value="auto">auto (from file)</option>
+                  <option value="rtcm">RTCM3</option>
+                  <option value="ubx">u-blox UBX</option>
+                </select></label>
+              <label data-show-format="rtcm">GPS week<input name="gpsWeek" type="number" min="0" step="1" placeholder="current"></label>
+              <label>Message limit<input name="limit" type="number" min="0" step="1" placeholder="all"></label>
+            </div>
+            <p class="hint" data-show-format="rtcm">RTCM3 carries only the time of week; set the week the log was recorded in.</p>
+          </fieldset>
+          <fieldset>
+            <legend>Outputs (RINEX 3.04)</legend>
+            <div class="grid2">
+              <label class="check"><input type="checkbox" name="obsEnabled" checked> Observation</label>
+              <input name="obsOut" type="text" spellcheck="false" aria-label="Observation file name">
+              <label class="check"><input type="checkbox" name="navEnabled" checked> Navigation</label>
+              <input name="navOut" type="text" spellcheck="false" aria-label="Navigation file name">
+            </div>
+            <label class="check"><input type="checkbox" name="quiet" checked> Quiet (no per-message log)</label>
+            <label>Extra arguments<input name="extra" type="text" spellcheck="false"></label>
+          </fieldset>
+          <div class="actions">
+            <button type="submit" class="btn primary">Convert</button>
+            <button type="button" class="btn" data-abort disabled>Abort</button>
+          </div>
+        </form>
+        <div class="panel run" data-run></div>
+      </section>
+
+      <!-- Plot (RTKPLOT) -->
+      <section class="tool" id="tool-plot" data-tool="plot" hidden>
+        <div class="panel plot-controls">
+          <label>Solution 1<select id="plot-sol1" data-kinds="pos"></select></label>
+          <label>Solution 2<select id="plot-sol2" data-kinds="pos" data-optional></select></label>
+          <label>Reference<select id="plot-ref" data-kinds="pos csv" data-optional></select></label>
+          <label>Origin
+            <select id="plot-origin">
+              <option value="mean">Mean of solution 1</option>
+              <option value="first">First epoch of solution 1</option>
+              <option value="reference">Mean of reference</option>
+            </select></label>
+          <label class="check"><input type="checkbox" id="plot-errors"> Errors vs reference</label>
+          <div class="qfilter" id="plot-qfilter" aria-label="Quality filter"></div>
+        </div>
+        <div class="plot-empty panel" id="plot-empty">Load or compute a <code>.pos</code> solution (libgnss++ or RTKLIB format) to plot it.</div>
+        <div class="plot-grid" id="plot-grid" hidden>
+          <div class="card gt">
+            <div class="card-title">Ground track <span class="hint">E/N (m) · wheel zoom · drag pan · double-click fit</span></div>
+            <canvas id="cv-gt"></canvas>
+            <div class="legend" id="plot-legend"></div>
+          </div>
+          <div class="card ts">
+            <div class="card-title"><span id="ts-title">Position E / N / U (m)</span> <span class="hint">wheel zoom time · shift+wheel zoom value</span></div>
+            <canvas id="cv-e"></canvas>
+            <canvas id="cv-n"></canvas>
+            <canvas id="cv-u"></canvas>
+          </div>
+          <div class="card aux">
+            <div class="card-title">
+              <select id="plot-aux" aria-label="Quantity">
+                <option value="ns">Satellites</option>
+                <option value="ratio">AR ratio</option>
+                <option value="pdop">PDOP</option>
+              </select>
+            </div>
+            <canvas id="cv-aux"></canvas>
+          </div>
+          <div class="card stats">
+            <div class="card-title">Statistics</div>
+            <div id="plot-stats" class="stats-body"></div>
+          </div>
+        </div>
+        <div id="plot-cursor" class="cursor-info" aria-live="polite"></div>
+      </section>
+
+      <!-- RINEX info -->
+      <section class="tool" id="tool-info" data-tool="info" hidden>
+        <form class="panel form" id="info-form" autocomplete="off">
+          <h2>RINEX header and record summary</h2>
+          <fieldset>
+            <legend>Files</legend>
+            <div id="info-files" class="checklist" data-kinds="obs nav clk"></div>
+            <label class="check"><input type="checkbox" name="countRecords" checked> Count epochs / ephemerides</label>
+          </fieldset>
+          <div class="actions">
+            <button type="submit" class="btn primary">Inspect</button>
+            <button type="button" class="btn" data-abort disabled>Abort</button>
+          </div>
+        </form>
+        <div class="panel run" data-run></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="drop-overlay" class="drop-overlay" hidden><div>Drop files to add them to Files</div></div>
+  <footer class="statusbar"><span id="status">Ready</span><span id="engine"></span></footer>
+</body>
+</html>

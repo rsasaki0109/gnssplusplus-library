@@ -70,6 +70,22 @@ Diff `after.txt` against a baseline captured from the pre-change tree
 (e.g. a `git worktree` at the base commit). Output must be byte-identical.
 Remove the symlinks afterwards so `RTKRealDataTest.*` returns to skipping.
 
+## Browser GUI (WebAssembly)
+
+`web/` is an RTKLIB-style GUI (published at `/app/` by
+`.github/workflows/docs.yml`) that runs `gnss_convert`, `gnss_rinex_info`,
+`gnss_spp`, `gnss_solve` and `gnss_ppp` compiled unchanged with Emscripten
+(`wasm/CMakeLists.txt`, `bash wasm/build.sh`; see `wasm/README.md`).
+
+- `web/js/commands.js` maps GUI fields to CLI flags. Renaming or removing one
+  of those flags must update it and `web/test/web_app.test.mjs`
+  (`node --test web/test/web_app.test.mjs`, ctest `web_app_js_tests`).
+- `wasm/test/smoke.mjs` runs the demo pipeline (RTCM3 -> RINEX -> RTK/SPP/PPP)
+  on the wasm build in CI; keep it passing when solver output changes.
+- The wasm link sets mirror `apps/CMakeLists.txt`; keep them in step, and do
+  not add `Threads::Threads` / `-pthread` there (static hosting has no
+  cross-origin isolation, so no SharedArrayBuffer).
+
 ## Conventions
 
 - Conventional commits (`feat:`, `fix:`, `refactor:`, `build:`, `docs:`,

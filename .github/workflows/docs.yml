@@ -11,6 +11,16 @@ on:
       - "requirements-docs.txt"
       - "scripts/generate_architecture_diagram.py"
       - "tests/test_cli_ux.py"
+      # Browser GUI (/app/): the WebAssembly tools are built from the C++ tree.
+      - "web/**"
+      - "wasm/**"
+      - "CMakeLists.txt"
+      - "src/**"
+      - "include/**"
+      - "apps/native/**"
+      - "third_party/**"
+      - "tests/fixtures/realtime_stress/**"
+      - "demo/fixtures/**"
   pull_request:
     branches: [ main, develop ]
     paths:
@@ -21,6 +31,16 @@ on:
       - "requirements-docs.txt"
       - "scripts/generate_architecture_diagram.py"
       - "tests/test_cli_ux.py"
+      # Browser GUI (/app/): the WebAssembly tools are built from the C++ tree.
+      - "web/**"
+      - "wasm/**"
+      - "CMakeLists.txt"
+      - "src/**"
+      - "include/**"
+      - "apps/native/**"
+      - "third_party/**"
+      - "tests/fixtures/realtime_stress/**"
+      - "demo/fixtures/**"
   workflow_dispatch:
 
 permissions:
@@ -31,6 +51,10 @@ permissions:
 concurrency:
   group: pages-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  # Official Emscripten SDK image used for the browser build (docs/web_app.md).
+  EMSDK_IMAGE: emscripten/emsdk:4.0.10
 
 jobs:
   build:
@@ -54,6 +78,25 @@ jobs:
         run: python scripts/generate_architecture_diagram.py --output docs/libgnsspp_architecture.png
       - name: Build MkDocs site
         run: python -m mkdocs build --strict
+      - name: Restore WebAssembly tools
+        id: wasm-cache
+        uses: actions/cache@v6
+        with:
+          path: build-wasm/wasm/dist
+          key: wasm-${{ env.EMSDK_IMAGE }}-${{ hashFiles('CMakeLists.txt', 'wasm/CMakeLists.txt', 'src/**', 'include/**', 'apps/native/**', 'third_party/**') }}
+      - name: Build WebAssembly tools (Emscripten)
+        if: steps.wasm-cache.outputs.cache-hit != 'true'
+        run: >-
+          docker run --rm -v "$PWD:/src" -w /src "$EMSDK_IMAGE"
+          bash -c "apt-get update -qq
+          && apt-get install -y -qq --no-install-recommends cmake make libeigen3-dev > /dev/null
+          && bash wasm/build.sh build-wasm"
+      - name: Test browser GUI modules
+        run: node --test web/test/web_app.test.mjs
+      - name: Smoke-test WebAssembly tools (demo pipeline in Node)
+        run: node wasm/test/smoke.mjs build-wasm/wasm/dist
+      - name: Add browser GUI to the site (/app/)
+        run: python wasm/assemble_site.py --dist build-wasm/wasm/dist --out site/app
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
