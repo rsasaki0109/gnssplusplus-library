@@ -76,6 +76,44 @@ class RuntimeReceiverCases:
                 self.assertGreaterEqual(len(records), 30, msg=label)
                 self.assertEqual({row[0] for row in records}, {"2324"}, msg=label)
 
+    def test_convert_rtcm_writes_station_arp_as_approx_position(self) -> None:
+        # The fixture base stream carries a 1005 ARP. gnss convert must write it to APPROX POSITION XYZ (as
+        # RTKLIB convbin does) so the converted base log solves without --base-ecef; a rover stream without
+        # 1005/1006 keeps the zero header position.
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        with tempfile.TemporaryDirectory(prefix="gnss_convert_rtcm_arp_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_obs = temp_root / "rover.obs"
+            base_obs = temp_root / "base.obs"
+            base_nav = temp_root / "base.nav"
+            for source, outputs in (
+                ("rover.rtcm", ("--obs-out", str(rover_obs))),
+                ("base.rtcm", ("--obs-out", str(base_obs), "--nav-out", str(base_nav))),
+            ):
+                converted = self.run_gnss(
+                    "convert", "--format", "rtcm", "--input", str(fixture / source), *outputs,
+                    "--gps-week", "2324", "--quiet",
+                )
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+
+            def approx_position(path: Path) -> list[str]:
+                for line in path.read_text(encoding="ascii").splitlines():
+                    if line[60:].strip() == "APPROX POSITION XYZ":
+                        return line[:60].split()
+                self.fail(f"no APPROX POSITION XYZ in {path}")
+
+            self.assertEqual(approx_position(base_obs), ["-3961905.0275", "3348993.7526", "3698211.7831"])
+            self.assertEqual(approx_position(rover_obs), ["0.0000", "0.0000", "0.0000"])
+
+            output_path = temp_root / "rtk.pos"
+            solved = self.run_gnss(
+                "solve", "--rover", str(rover_obs), "--base", str(base_obs), "--nav", str(base_nav),
+                "--no-kml", "--out", str(output_path),
+            )
+            self.assertEqual(solved.returncode, 0, msg=solved.stderr)
+            rows = [line for line in output_path.read_text(encoding="ascii").splitlines() if not line.startswith("%")]
+            self.assertGreater(len(rows), 0)
+
     def test_replay_supports_moving_base_mode(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_replay_moving_base_") as temp_dir:
             temp_root = Path(temp_dir)

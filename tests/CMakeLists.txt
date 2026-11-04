@@ -5,6 +5,14 @@ cmake_minimum_required(VERSION 3.10)
 find_package(GTest REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
+# Browser GUI (web/) modules: argv builders, solution parsers, statistics.
+find_program(GNSSPP_NODE_EXECUTABLE NAMES node nodejs)
+if(GNSSPP_NODE_EXECUTABLE)
+    add_test(NAME web_app_js_tests
+        COMMAND ${GNSSPP_NODE_EXECUTABLE} --test ${CMAKE_SOURCE_DIR}/web/test/web_app.test.mjs)
+    set_tests_properties(web_app_js_tests PROPERTIES LABELS core)
+endif()
+
 add_test(NAME python_readme_hero_satellite_tests
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_readme_hero_satellites.py)
 set_tests_properties(python_readme_hero_satellite_tests PROPERTIES LABELS core)

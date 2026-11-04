@@ -61,6 +61,10 @@ RTKLIB tuning value into a new profile.
 | `-o <output.pos>` | `--out <file>`; `--kml <file>` is an optional second artifact |
 | RTKLIB status/Q/ns fields | libgnss++ status, satellite count, PDOP, ratio, baseline, and residual telemetry in its own `.pos` schema |
 
+Coming from the RTKPOST / RTKCONV / RTKPLOT GUIs? The [browser GUI](../web_app.md)
+runs the same `gnss solve` / `gnss convert` executables (compiled to
+WebAssembly) behind forms and prints the equivalent command for each run.
+
 There is no promise that every RTKLIB configuration key has a one-to-one
 `gnss solve` option. Start with the inputs, mode, preset, ratio, and epoch
 window; record any remaining tuning as an explicit experiment.

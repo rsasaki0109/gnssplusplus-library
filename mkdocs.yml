@@ -37,6 +37,7 @@ nav:
       - Home: index.md
       - Quick Start: quickstart.md
       - Self-contained Offline Demo: self_contained_demo.md
+      - Browser GUI (WebAssembly): web_app.md
       - Application roadmap: application_use_case_roadmap.md
       - Development plan (Japanese): application_use_case_development_plan.md
   - Guides:

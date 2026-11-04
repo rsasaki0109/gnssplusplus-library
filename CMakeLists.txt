@@ -19,11 +19,24 @@ include(CTest)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
+if(EMSCRIPTEN)
+    # Browser build (see wasm/README.md). The CLI tools report errors with C++
+    # exceptions, so every C++ object uses native WebAssembly exception
+    # handling; mixing it with the JS-based fallback across archives breaks
+    # throw/catch at link time.
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fwasm-exceptions>)
+    add_link_options(-fwasm-exceptions)
+    set(GNSSPP_PYTHON_BINDINGS_DEFAULT OFF)
+else()
+    set(GNSSPP_PYTHON_BINDINGS_DEFAULT ON)
+endif()
+
 # Find necessary packages
 find_package(Eigen3 REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Doxygen QUIET)
-option(GNSSPP_BUILD_PYTHON_BINDINGS "Build the optional pybind11 Python module" ON)
+option(GNSSPP_BUILD_PYTHON_BINDINGS "Build the optional pybind11 Python module"
+    ${GNSSPP_PYTHON_BINDINGS_DEFAULT})
 if(GNSSPP_BUILD_PYTHON_BINDINGS)
     find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
     find_package(pybind11 CONFIG REQUIRED)
@@ -520,6 +533,13 @@ target_include_directories(gnss_kml_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
+
+if(EMSCRIPTEN)
+    # The browser build only packages selected batch CLI tools as WebAssembly
+    # modules for the web/ GUI; examples, Python, ROS 2 and tests stay native.
+    add_subdirectory(wasm)
+    return()
+endif()
 
 # Add subdirectories
 add_subdirectory(examples)

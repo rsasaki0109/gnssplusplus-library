@@ -16,6 +16,7 @@ That is it: build, verify your machine, then pick a path below.
 |---|---|---|
 | Get a first solution with bundled data | [Quick Start](quickstart.md) | ~5 min |
 | Prove it works with **zero installs** | [Self-contained offline demo](self_contained_demo.md) | ~1 min |
+| Post-process, convert and plot in the browser (RTKLIB-style GUI) | [Browser GUI](web_app.md) | ~1 min |
 | Wire GNSS into a robot / ROS2 | [Robotics Quick Start](robotics_quickstart.md) | ~10 min |
 | Move an existing `rnx2rtkp` job over | [RTKLIB migration](use_cases/rtklib_migration.md) | ~10 min |
 | Deploy urban RTK with IMU continuity | [R1 urban RTK/IMU field checklist](use_cases/urban_rtk_imu_field_checklist.md) | ~15 min |

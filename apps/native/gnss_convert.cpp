@@ -1338,6 +1338,11 @@ int runRTCMConversion(const ConvertConfig& config) {
     size_t exported_obs_epochs = 0;
     size_t exported_nav_messages = 0;
     size_t skipped_nav_messages = 0;
+    // First 1005/1006 reference station ARP of the stream. It becomes the
+    // observation header's APPROX POSITION XYZ (as RTKLIB convbin does), so
+    // a converted base log can be used for RTK without --base-ecef.
+    bool have_station_position = false;
+    libgnss::Vector3d station_position = libgnss::Vector3d::Zero();
 
     // Writes one observation epoch, opening the RINEX file on first use.
     auto writeObsEpoch = [&](const libgnss::ObservationData& epoch) {
@@ -1348,6 +1353,9 @@ int runRTCMConversion(const ConvertConfig& config) {
                 return false;
             }
             obs_writer_open = true;
+            if (have_station_position) {
+                obs_writer.setApproximatePosition(station_position);
+            }
         }
         if (!obs_writer.writeObservationEpoch(epoch)) {
             std::cerr << "Error: failed to write observation epoch to "
@@ -1366,6 +1374,19 @@ int runRTCMConversion(const ConvertConfig& config) {
             std::cout << processed_messages << " "
                       << libgnss::io::rtcm_utils::getMessageTypeName(message.type)
                       << " (" << static_cast<uint16_t>(message.type) << ")\n";
+        }
+
+        if (!config.obs_out_path.empty() && !have_station_position &&
+            libgnss::io::rtcm_utils::isStationMessage(message.type)) {
+            libgnss::Vector3d position;
+            if (processor.decodeStationPosition(message, position) &&
+                position.allFinite() && position.norm() > 0.0) {
+                station_position = position;
+                have_station_position = true;
+                if (obs_writer_open) {
+                    obs_writer.setApproximatePosition(station_position);
+                }
+            }
         }
 
         if (!config.obs_out_path.empty() &&

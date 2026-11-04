@@ -33,7 +33,12 @@ Zenith inset: satellite IDs and LOS/NLOS predictions from PLATEAU buildings and 
 
 ## Try it
 
-The fastest first run uses the published runtime image; no local build is
+No install at all: the [browser GUI](https://rsasaki0109.github.io/gnssplusplus-library/app/)
+runs `gnss convert`, `gnss solve`, `gnss spp` and `gnss ppp` compiled to
+WebAssembly, RTKLIB-style (post-process, convert, plot), on your files or a
+bundled RTCM3 sample, without uploading anything ([guide](docs/web_app.md)).
+
+The fastest command-line run uses the published runtime image; no local build is
 needed:
 
 ```bash
@@ -479,6 +484,7 @@ docker run --rm -it -p 8085:8085 -v "$PWD:/workspace" \
 ## Docs
 
 - <https://rsasaki0109.github.io/gnssplusplus-library/>
+- [Browser GUI](https://rsasaki0109.github.io/gnssplusplus-library/app/) ([guide](docs/web_app.md))
 - [Documentation index](docs/index.md)
 - [Quick start](docs/quickstart.md)
 - [Robotics quick start](docs/robotics_quickstart.md)

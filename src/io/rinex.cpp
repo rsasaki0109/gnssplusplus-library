@@ -3211,6 +3211,11 @@ bool RINEXWriter::writeObservationEpoch(const ObservationData& obs_data) {
     return true;
 }
 
+void RINEXWriter::setApproximatePosition(const Vector3d& position_ecef) {
+    header_.approximate_position = position_ecef;
+    header_.has_approximate_position = position_ecef.allFinite();
+}
+
 bool RINEXWriter::close() {
     bool ok = true;
     if (observation_buffer_) {
