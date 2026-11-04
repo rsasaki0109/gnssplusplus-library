@@ -858,15 +858,15 @@ class ObsView {
     this.hiddenSys = new Set();
     this.dataSelect = $('#obs-data');
     this.colorSelect = $('#obs-color');
-    const leave = () => this.clearCursor();
-    this.sky = new SkyPlot($('#cv-sky'), { onHover: (i) => (i >= 0 ? this.showSample(i) : null) });
+    const leave = () => this.frame(() => this.clearCursor());
+    this.sky = new SkyPlot($('#cv-sky'), { onHover: (i) => (i >= 0 ? this.frame(() => this.showSample(i)) : null) });
     this.track = new PlotPanel($('#cv-track'), {
       timeAxis: true, integerY: true, yTickFormat: (v) => this.rowLabel(v),
-      onHover: (x, y) => this.hoverTrack(x, y), onLeave: leave,
+      onHover: (x, y) => this.frame(() => this.hoverTrack(x, y)), onLeave: leave,
     });
     this.snrEl = new PlotPanel($('#cv-snr-el'), { xLabel: 'elevation (deg)', yLabel: 'SNR (dB-Hz)', onLeave: leave });
     this.nsat = new PlotPanel($('#cv-obs-nsat'), {
-      timeAxis: true, integerY: true, yLabel: 'Nsat', onHover: (x) => this.hoverEpoch(x), onLeave: leave,
+      timeAxis: true, integerY: true, yLabel: 'Nsat', onHover: (x) => this.frame(() => this.hoverEpoch(x)), onLeave: leave,
     });
     this.track.opts.onViewChange = (view) => this.nsat.setXRange(view.x0, view.x1);
     this.nsat.opts.onViewChange = (view) => this.track.setXRange(view.x0, view.x1);
@@ -880,6 +880,30 @@ class ObsView {
     this.dataSelect.value = name;
     showTool('obs');
     this.reload();
+  }
+
+  // Run at most one hover update per animation frame (the latest one).
+  frame(update) {
+    this.pendingUpdate = update;
+    if (this.frameId) return;
+    this.frameId = requestAnimationFrame(() => {
+      this.frameId = 0;
+      const next = this.pendingUpdate;
+      this.pendingUpdate = null;
+      if (next && this.data) next();
+    });
+  }
+
+  // Row indices per satellite (time order) and per epoch, for hover lookups.
+  buildIndex(d) {
+    this.satRows = d.sats.map(() => []);
+    this.epochRows = new Map();
+    for (let i = 0; i < d.n; i += 1) {
+      this.satRows[d.sat[i]].push(i);
+      const rows = this.epochRows.get(d.t[i]);
+      if (rows) rows.push(i); else this.epochRows.set(d.t[i], [i]);
+    }
+    for (const rows of this.satRows) rows.sort((a, b) => d.t[a] - d.t[b]);
   }
 
   async reload() {
@@ -937,6 +961,7 @@ class ObsView {
       this.rowsFor = d;
       this.rowY = Float64Array.from(d.sat, (s) => d.sats.length - 1 - s);
       this.snrCls = null;
+      this.buildIndex(d);
     }
     const { cls, colors } = this.colors();
     // System filter: drop hidden systems from the class -> colour map via a mask class.
@@ -1073,8 +1098,8 @@ class ObsView {
     const te = d.epochs[j];
     const marks = [];
     const sysColors = SYS_VARS.map((v) => cssVar(v, '#888'));
-    for (let i = 0; i < d.n; i += 1) {
-      if (d.t[i] === te && !this.hiddenSys.has(d.sys[i])) marks.push({ az: d.az[i], el: d.el[i], text: d.sats[d.sat[i]].slice(1), color: sysColors[d.sys[i]] });
+    for (const i of this.epochRows.get(te) || []) {
+      if (!this.hiddenSys.has(d.sys[i])) marks.push({ az: d.az[i], el: d.el[i], text: d.sats[d.sat[i]].slice(1), color: sysColors[d.sys[i]] });
     }
     this.sky.setCursor(marks);
     this.track.setCursor({ x: te });
@@ -1094,12 +1119,17 @@ class ObsView {
     if (!d) return;
     const row = Math.round(y);
     const s = d.sats.length - 1 - row;
+    const rows = this.satRows[s] || [];
     let best = -1;
-    let bestDt = Infinity;
-    for (let i = 0; i < d.n; i += 1) {
-      if (d.sat[i] !== s) continue;
-      const dt = Math.abs(d.t[i] - x);
-      if (dt < bestDt) { bestDt = dt; best = i; }
+    if (rows.length) {
+      // Binary search for the satellite's sample nearest in time.
+      let lo = 0;
+      let hi = rows.length - 1;
+      while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (d.t[rows[mid]] < x) lo = mid; else hi = mid;
+      }
+      best = Math.abs(d.t[rows[lo]] - x) <= Math.abs(d.t[rows[hi]] - x) ? rows[lo] : rows[hi];
     }
     if (best < 0) { this.hoverEpoch(x); return; }
     this.cursorAt(d.t[best]);

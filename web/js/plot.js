@@ -24,6 +24,37 @@ function formatNumber(v, step) {
   return v.toFixed(decimals);
 }
 
+// Grid, axes and data are painted once into an offscreen canvas and reused
+// while only the hover cursor changes: with a few hundred thousand points a
+// full repaint per mouse move takes hundreds of milliseconds.
+function prepareCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (w === 0 || h === 0) return null;
+  if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+  }
+  return { dpr, w, h };
+}
+
+function cachedBase(owner, key, paint) {
+  const canvas = owner.canvas;
+  if (!owner.base) owner.base = document.createElement('canvas');
+  if (owner.baseKey !== key || owner.base.width !== canvas.width || owner.base.height !== canvas.height) {
+    owner.base.width = canvas.width;
+    owner.base.height = canvas.height;
+    paint(owner.base.getContext('2d'));
+    owner.baseKey = key;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(owner.base, 0, 0);
+  return ctx;
+}
+
 export function cssVar(name, fallback) {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return value || fallback;
@@ -59,6 +90,7 @@ export class PlotPanel {
    */
   setLayers(layers, { keepView = false } = {}) {
     this.layers = layers;
+    this.version = (this.version || 0) + 1;
     if (!keepView || !this.view) this.fit();
     this.draw();
   }
@@ -145,27 +177,51 @@ export class PlotPanel {
   }
 
   draw() {
-    const canvas = this.canvas;
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-    if (w === 0 || h === 0) return;
-    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
-      canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
+    const size = prepareCanvas(this.canvas);
+    if (!size) return;
+    if (!this.view) this.fit();
+    const v = this.effectiveView();
+    const key = [size.w, size.h, size.dpr, this.version, this.yStepKey(), v.x0, v.x1, v.y0, v.y1].join('|');
+    const ctx = cachedBase(this, key, (base) => this.paintBase(base, size));
+    ctx.setTransform(size.dpr, 0, 0, size.dpr, 0, 0);
+    this.paintCursor(ctx);
+  }
+
+  yStepKey() {
+    return `${this.opts.yStep || ''}:${this.opts.integerY ? 1 : 0}:${this.opts.yLabel || ''}`;
+  }
+
+  paintCursor(ctx) {
+    if (!this.cursor || !this.view) return;
+    const r = this.plotRect();
+    const t = this.toPixel(this.effectiveView(), r);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(r.left, r.top, r.width, r.height);
+    ctx.clip();
+    ctx.strokeStyle = cssVar('--accent', '#0f766e');
+    ctx.lineWidth = 1;
+    if (this.cursor.x !== undefined && this.cursor.y === undefined) {
+      const px = Math.round(t.px(this.cursor.x)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(px, r.top); ctx.lineTo(px, r.top + r.height); ctx.stroke();
+    } else if (this.cursor.y !== undefined) {
+      const px = t.px(this.cursor.x); const py = t.py(this.cursor.y);
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.stroke();
     }
-    const ctx = canvas.getContext('2d');
+    ctx.restore();
+  }
+
+  paintBase(ctx, { dpr, w, h }) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const colors = {
       bg: cssVar('--plot-bg', '#fff'),
       grid: cssVar('--plot-grid', '#e5e7eb'),
       axis: cssVar('--plot-axis', '#6b7280'),
       text: cssVar('--muted', '#6b7280'),
-      cursor: cssVar('--accent', '#0f766e'),
     };
     ctx.fillStyle = colors.bg;
     ctx.fillRect(0, 0, w, h);
-    if (!this.view) this.fit();
     const r = this.plotRect();
     const v = this.effectiveView();
     const t = this.toPixel(v, r);
@@ -220,18 +276,6 @@ export class PlotPanel {
       if (layer.type === 'line') this.drawLine(ctx, layer, t);
       else if (layer.type === 'vticks') this.drawTicks(ctx, layer, t, v);
       else this.drawPoints(ctx, layer, t, v);
-    }
-    if (this.cursor) {
-      ctx.strokeStyle = colors.cursor;
-      ctx.lineWidth = 1;
-      if (this.cursor.x !== undefined && this.cursor.y === undefined) {
-        const px = Math.round(t.px(this.cursor.x)) + 0.5;
-        ctx.beginPath(); ctx.moveTo(px, r.top); ctx.lineTo(px, r.top + r.height); ctx.stroke();
-      } else if (this.cursor.y !== undefined) {
-        const px = t.px(this.cursor.x); const py = t.py(this.cursor.y);
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.stroke();
-      }
     }
     ctx.restore();
   }
@@ -377,7 +421,7 @@ export class SkyPlot {
     canvas.addEventListener('pointerleave', () => this.opts.onHover && this.opts.onHover(-1));
   }
 
-  setData(data) { this.data = data; this.draw(); }
+  setData(data) { this.data = data; this.version = (this.version || 0) + 1; this.draw(); }
 
   setCursor(marks) { this.cursor = marks || []; this.draw(); }
 
@@ -394,16 +438,24 @@ export class SkyPlot {
   }
 
   draw() {
-    const canvas = this.canvas;
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-    if (w === 0 || h === 0) return;
-    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
-      canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
+    const size = prepareCanvas(this.canvas);
+    if (!size) return;
+    const ctx = cachedBase(this, [size.w, size.h, size.dpr, this.version].join('|'), (base) => this.paintBase(base, size));
+    ctx.setTransform(size.dpr, 0, 0, size.dpr, 0, 0);
+    const g = this.geometry();
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 10px system-ui, sans-serif';
+    for (const mark of this.cursor) {
+      const [x, y] = this.project(mark.az, mark.el, g);
+      ctx.fillStyle = mark.color;
+      ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.fillText(mark.text, x, y + 0.5);
     }
-    const ctx = canvas.getContext('2d');
+  }
+
+  paintBase(ctx, { dpr, w, h }) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = cssVar('--plot-bg', '#fff');
     ctx.fillRect(0, 0, w, h);
@@ -453,16 +505,6 @@ export class SkyPlot {
         ctx.fillStyle = label.color || text;
         ctx.fillText(label.text, x, y - 3);
       }
-    }
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 10px system-ui, sans-serif';
-    for (const mark of this.cursor) {
-      const [x, y] = this.project(mark.az, mark.el, g);
-      ctx.fillStyle = mark.color;
-      ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.fillText(mark.text, x, y + 0.5);
     }
   }
 
