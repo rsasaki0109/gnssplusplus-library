@@ -383,6 +383,15 @@ public:
     void setCheckpointInterval(double seconds);
 
     /**
+     * @brief Set the observation header's APPROX POSITION XYZ (ECEF, m).
+     *
+     * The observation file is written by close() (and by snapshots), so this
+     * may be called after epochs were buffered, e.g. once a converter has
+     * decoded the station position from the stream.
+     */
+    void setApproximatePosition(const Vector3d& position_ecef);
+
+    /**
      * @brief Finish the file (writes the buffered observation file) and
      * close it.  Returns false if the file could not be written completely.
      */

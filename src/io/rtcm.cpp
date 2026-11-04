@@ -125,6 +125,14 @@ bool RTCMProcessor::decodeNavigationData(const RTCMMessage& message, NavigationD
     return decodeEphemerisMessage(message, nav_data);
 }
 
+bool RTCMProcessor::decodeStationPosition(const RTCMMessage& message, Vector3d& position) {
+    if (!decodeReferenceStationPosition(message, position)) {
+        return false;
+    }
+    setReferencePosition(position);
+    return true;
+}
+
 
 bool RTCMProcessor::parseHeader(const uint8_t* data, RTCMMessageType& type, uint16_t& length) {
     if (!data || data[0] != kRTCMPreamble) {

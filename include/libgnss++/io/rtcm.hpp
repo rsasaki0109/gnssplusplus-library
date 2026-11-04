@@ -245,6 +245,15 @@ public:
     bool decodeNavigationData(const RTCMMessage& message, NavigationData& nav_data);
 
     /**
+     * @brief Decode a 1005/1006 reference station ARP payload (ECEF, m).
+     *
+     * On success the position also becomes this processor's reference
+     * position (as decode() does for station frames). Returns false for any
+     * other message type or a truncated payload.
+     */
+    bool decodeStationPosition(const RTCMMessage& message, Vector3d& position);
+
+    /**
      * @brief Decode an RTCM SSR payload into orbit/clock corrections
      */
     bool decodeSSRCorrections(const RTCMMessage& message,
