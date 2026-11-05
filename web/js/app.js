@@ -10,6 +10,7 @@ import { formatGpst, splitGpsSeconds, SECONDS_PER_WEEK } from './geo.js';
 import { exportOptionsToml, importOptionsToml } from './options.js';
 import { cssVar, PlotPanel, SkyPlot } from './plot.js';
 import { startJob, wasmAvailable } from './runner.js';
+import { describeStored, FileStore } from './store.js';
 import { enuPlane, MAX_SPAN_M, TILE_SOURCES, TileLayer } from './tiles.js';
 import { Workspace } from './workspace.js';
 
@@ -136,6 +137,95 @@ function renderFiles(fresh) {
 async function addFiles(fileList) {
   for (const file of fileList) await workspace.add(file.name, file, 'upload');
   setStatus(`Added ${fileList.length} file(s)`);
+}
+
+// ---- optional persistence of Files in this browser (IndexedDB)
+const KEEP_SETTING = 'gnsspp.keepFiles';
+const fileStore = new FileStore();
+const keepBox = $('#keep-files');
+let keepFiles = false;
+let restoringFiles = false;
+
+function storedRecord(name) {
+  const entry = workspace.get(name);
+  return entry && { name, blob: entry.blob, origin: entry.origin, added: entry.added, meta: fileMeta.get(name) || null };
+}
+
+async function updateKeepNote() {
+  const note = $('#keep-files-note');
+  if (!keepFiles) {
+    note.textContent = '(stored in this browser only)';
+    return;
+  }
+  try {
+    note.textContent = `(kept: ${describeStored(await fileStore.all())} in this browser)`;
+  } catch (error) {
+    note.textContent = `(could not read the stored files: ${error.message})`;
+  }
+}
+
+/** Mirror one workspace change into the store (when keeping files). */
+function persistChange(detail) {
+  if (!keepFiles || restoringFiles) return;
+  let job;
+  if (detail && detail.added) {
+    const record = storedRecord(detail.added);
+    if (!record) return;
+    job = fileStore.put(record).catch((error) => {
+      setStatus(`Could not keep ${record.name} in this browser (${error.message}); it stays for this session only`);
+    });
+  } else if (detail && detail.removed) {
+    job = fileStore.delete(detail.removed);
+  } else {
+    job = fileStore.clear();
+  }
+  job.catch((error) => setStatus(`Browser storage: ${error.message}`)).finally(updateKeepNote);
+}
+
+async function setKeepFiles(on) {
+  keepFiles = on;
+  writeSetting(KEEP_SETTING, on ? '1' : '0');
+  if (on) {
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    let kept = 0;
+    for (const name of workspace.names()) {
+      try {
+        await fileStore.put(storedRecord(name));
+        kept += 1;
+      } catch (error) {
+        setStatus(`Could not keep ${name} in this browser (${error.message})`);
+      }
+    }
+    if (kept) setStatus(`Keeping ${kept} file(s) in this browser`);
+  } else {
+    await fileStore.clear();
+    setStatus('Files are no longer kept after reload; the stored copies were deleted');
+  }
+  await updateKeepNote();
+}
+
+async function restoreKeptFiles() {
+  if (!(await fileStore.available())) {
+    keepBox.disabled = true;
+    keepBox.closest('label').title = 'Browser storage (IndexedDB) is not available here, e.g. in a private window';
+    return;
+  }
+  keepFiles = readSetting(KEEP_SETTING) === '1';
+  keepBox.checked = keepFiles;
+  keepBox.addEventListener('change', () => setKeepFiles(keepBox.checked).catch((error) => setStatus(`Browser storage: ${error.message}`)));
+  if (!keepFiles) return;
+  const records = await fileStore.all();
+  restoringFiles = true;
+  try {
+    for (const record of records) {
+      if (record.meta) fileMeta.set(record.name, record.meta);
+      await workspace.add(record.name, record.blob, record.origin, { added: record.added });
+    }
+  } finally {
+    restoringFiles = false;
+  }
+  if (records.length) setStatus(`Restored ${describeStored(records)} kept in this browser`);
+  await updateKeepNote();
 }
 
 function preferredOption(names, prefer) {
@@ -1400,6 +1490,7 @@ async function runSamplePipeline() {
 
 // ---------------------------------------------------------------- boot
 workspace.addEventListener('change', (event) => {
+  persistChange(event.detail);
   renderFiles(event.detail && event.detail.added);
   refreshFileSelectors();
   updatePostPreview();
@@ -1416,6 +1507,11 @@ $('#file-input').addEventListener('change', (event) => {
   event.target.value = '';
 });
 $('#load-sample').onclick = () => loadSamples().catch((error) => setStatus(error.message));
+$('#clear-files').onclick = () => {
+  const n = workspace.names().length;
+  if (n && window.confirm(`Remove all ${n} file(s)${keepFiles ? ', including the copies kept in this browser' : ''}?`)) workspace.clear();
+};
+restoreKeptFiles().catch((error) => setStatus(`Browser storage: ${error.message}`));
 $('#run-sample').onclick = () => runSamplePipeline();
 
 let dragDepth = 0;

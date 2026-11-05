@@ -5,7 +5,8 @@
 An RTKLIB-style GUI that runs entirely in the browser. The libgnss++
 command-line tools are compiled to WebAssembly unchanged, so a run in the
 browser executes the same `main()` as the native CLI, with the same
-options and output formats. Files stay in the browser tab; nothing is
+options and output formats. Files stay in the browser (in the tab's memory,
+or in the browser's own storage with *Keep files after reload*); nothing is
 uploaded to a server. The only requests the page makes to other sites are
 map tiles, and only after you choose a map background in Plot.
 
@@ -28,7 +29,13 @@ be repeated natively, for example on a larger dataset or in a script.
    the result in Plot with the errors against the reference.
 2. Or add your own files with **Add files** or drag and drop: RINEX OBS/NAV,
    SP3, CLK, RTCM3, u-blox UBX, `.pos` (libgnss++ or RTKLIB) and reference CSV
-   files are recognised from their content.
+   files are recognised from their content. Files are lost on reload unless
+   **Keep files after reload** is ticked: then inputs and outputs are kept in
+   this browser's IndexedDB (on this device, for this site only) and come
+   back on the next visit; the note next to it shows how much is kept.
+   Removing a file, **Clear**, or unticking the box deletes the stored
+   copies. Browsers limit and may evict site storage, and private windows
+   usually have none (the box is then disabled).
 3. Outputs (`.pos`, `.kml`, RINEX, summary JSON) appear in Files; download
    them or open `.pos` files in Plot. Solution 2 and a reference trajectory
    can be overlaid, as in RTKPLOT. The ground track can be drawn over a map
