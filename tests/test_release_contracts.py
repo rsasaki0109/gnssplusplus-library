@@ -13,7 +13,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 VALIDATOR_PATH = ROOT_DIR / "scripts" / "release" / "validate_version.py"
 RELEASE_WORKFLOW_PATH = ROOT_DIR / ".github" / "workflows" / "release.yml"
 DOCKER_WORKFLOW_PATH = ROOT_DIR / ".github" / "workflows" / "docker.yml"
-PUBLIC_IMAGE = "ghcr.io/rsasaki0109/gnssplusplus-library:v0.4.0"
+PUBLIC_IMAGE = "ghcr.io/rsasaki0109/gnssplusplus-library:v0.5.0"
 
 
 def load_validator_module():
@@ -29,10 +29,10 @@ validator = load_validator_module()
 
 
 class ReleaseVersionValidatorTest(unittest.TestCase):
-    def test_valid_v040_matches_cmake(self) -> None:
+    def test_valid_v050_matches_cmake(self) -> None:
         self.assertEqual(
-            validator.validate_versions("v0.4.0", ROOT_DIR / "CMakeLists.txt"),
-            "0.4.0",
+            validator.validate_versions("v0.5.0", ROOT_DIR / "CMakeLists.txt"),
+            "0.5.0",
         )
 
     def test_invalid_and_prerelease_tags_are_rejected(self) -> None:
