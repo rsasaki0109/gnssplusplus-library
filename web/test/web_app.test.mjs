@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import {
   buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultPosName, splitArgs,
 } from '../js/commands.js';
-import { parseSolution, parseVisibilityCsv, Q, rinexObsTimeSpan, sniffKind } from '../js/formats.js';
+import { parseSolution, parseVisibilityCsv, Q, rinexFirstEpoch, rinexObsTimeSpan, sniffKind } from '../js/formats.js';
 import { exportOptionsToml, extraArgsToEntries, importOptionsToml, parseFlatToml } from '../js/options.js';
 import {
   ERROR_BINS_M, errorClasses, errorClassLabels, errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu,
@@ -497,4 +497,23 @@ test('FGO command and options', () => {
   assert.ok(!plain.args.includes('--epoch-lambda-fixed-output'), 'no AR flags for the float preset');
   assert.throws(() => buildPostCommand({ ...opts, base: '' }), /needs a base file/);
   assert.throws(() => exportOptionsToml(opts), /gnss fgo has no --config/);
+});
+
+test('rinexFirstEpoch reads OBS / NAV first epochs (RINEX 2 and 3)', () => {
+  const header = (type) => `     3.04           ${type.padEnd(20)}M                   RINEX VERSION / TYPE\n`
+    + '                                                            END OF HEADER\n';
+  const at = (...ymdhms) => calendarToGpsSeconds(...ymdhms);
+  assert.equal(rinexFirstEpoch(fixture('demo/fixtures/synthetic_ppp.obs').toString()), at(2026, 3, 26, 1, 0, 0));
+  assert.equal(rinexFirstEpoch(`${header('NAVIGATION DATA')}G04 2024  7 23  4  0  0 4.093437455595D-04 7.73D-12 0.0D+00\n`),
+    at(2024, 7, 23, 4, 0, 0));
+  assert.equal(rinexFirstEpoch(`${header('OBSERVATION DATA')}> 2024 07 23 04 04 30.0000000  0 10\n`), at(2024, 7, 23, 4, 4, 30));
+  // RINEX 2 NAV (PRN, 2-digit year) and OBS epoch lines.
+  assert.equal(rinexFirstEpoch(`${header('N: GPS NAV DATA')} 4 24  7 23  4  0  0.0 4.093437455595D-04 7.7D-12 0.0D+00\n`),
+    at(2024, 7, 23, 4, 0, 0));
+  assert.equal(rinexFirstEpoch(`${header('OBSERVATION DATA')} 05  4  2  0  0  0.0000000  0  8G01G02\n`), at(2005, 4, 2, 0, 0, 0));
+  // TIME OF FIRST OBS wins; no header end or no epoch gives null.
+  const withFirst = '  2024     7    23     4     4   30.0000000     GPS         TIME OF FIRST OBS\n';
+  assert.equal(rinexFirstEpoch(`${withFirst}${header('OBSERVATION DATA')}> 2030 01 01 00 00 00.0  0  1\n`), at(2024, 7, 23, 4, 4, 30));
+  assert.equal(rinexFirstEpoch('no header here'), null);
+  assert.equal(rinexFirstEpoch(`${header('NAVIGATION DATA')}     6.800000000000D+01-1.349687500000D+02\n`), null);
 });

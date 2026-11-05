@@ -61,6 +61,38 @@ export function rinexObsTimeSpan(headerText) {
   return { first: read('TIME OF FIRST OBS'), last: read('TIME OF LAST OBS') };
 }
 
+/**
+ * GPST seconds of the first epoch of a RINEX OBS or NAV file (from its first
+ * ~64 kB): TIME OF FIRST OBS when the header has it, else the first epoch
+ * line ("> yyyy mm dd ..." for RINEX 3/4 OBS, "Gnn yyyy mm dd ..." for RINEX
+ * 3/4 NAV, "yy mm dd ..." for RINEX 2), else null.
+ */
+export function rinexFirstEpoch(text) {
+  const lines = text.split(/\r?\n/);
+  const end = lines.findIndex((l) => l.slice(60).startsWith('END OF HEADER'));
+  if (end < 0) return null;
+  const fromHeader = rinexObsTimeSpan(lines.slice(0, end + 1).join('\n')).first;
+  if (fromHeader !== null) return fromHeader;
+  const patterns = [
+    /^>\s*(\d{4})\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)/, // RINEX 3/4 OBS epoch
+    /^[GRECJIS][ \d]\d\s(\d{4})\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/, // RINEX 3/4 NAV record
+    /^\s?\d{0,2}\s?(\d{2})\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+(?:\.\d+)?)\s/, // RINEX 2 OBS / NAV
+  ];
+  for (const line of lines.slice(end + 1, end + 400)) {
+    for (const re of patterns) {
+      const m = re.exec(line);
+      if (!m) continue;
+      let year = Number(m[1]);
+      if (year < 100) year += year < 80 ? 2000 : 1900;
+      const [month, day, hour, minute] = [m[2], m[3], m[4], m[5]].map(Number);
+      const second = Number(m[6]);
+      if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || !(second < 61)) continue;
+      return calendarToGpsSeconds(year, month, day, hour, minute, second);
+    }
+  }
+  return null;
+}
+
 function makeColumns(n) {
   return {
     t: new Float64Array(n),

@@ -4,7 +4,7 @@
 import {
   buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultConvertNames, defaultPosName, DISPATCH_NAMES, POST_MODES,
 } from './commands.js';
-import { parseSolution, parseVisibilityCsv, Q_LABELS, rinexObsTimeSpan, SYSTEMS } from './formats.js';
+import { parseSolution, parseVisibilityCsv, Q_LABELS, rinexFirstEpoch, rinexObsTimeSpan, SYSTEMS } from './formats.js';
 import {
   chooseOrigin, errorClasses, errorClassLabels, errorSummary, isFixQuality, nearestIndex, referenceErrors, solutionSummary, toEnu,
 } from './analysis.js';
@@ -626,12 +626,37 @@ postForm.addEventListener('submit', (event) => {
   runPost().catch(reportTo(postView));
 });
 postForm.addEventListener('input', updatePostPreview);
-postForm.addEventListener('change', () => {
+postForm.addEventListener('change', (event) => {
   updatePostVisibility();
   refreshFileSelectors();
   applyImuMeta();
   updatePostPreview();
+  if (['mode', 'rover'].includes(event.target.name)) dropUnrelatedNav().catch(() => {});
 });
+
+async function firstEpochOf(name) {
+  const entry = workspace.get(name);
+  return entry ? rinexFirstEpoch(await entry.blob.slice(0, 65536).text()) : null;
+}
+
+// PPP takes navigation data optionally, so a NAV file still selected from
+// other data (e.g. after RTK on another dataset) would be passed along
+// silently. When the rover or the mode changes, drop it if its first record
+// is more than a day from the rover's first epoch; choosing it again by hand
+// keeps it.
+async function dropUnrelatedNav() {
+  const el = postForm.elements;
+  const nav = el.nav.value;
+  const rover = el.rover.value;
+  if (postGroup() !== 'ppp' || !nav || !rover) return;
+  const [navFirst, roverFirst] = await Promise.all([firstEpochOf(nav), firstEpochOf(rover)]);
+  if (navFirst === null || roverFirst === null || Math.abs(navFirst - roverFirst) <= 86400) return;
+  if (el.nav.value !== nav || el.rover.value !== rover || postGroup() !== 'ppp') return; // changed meanwhile
+  el.nav.value = '';
+  updatePostPreview();
+  const day = (t) => formatGpst(t, 0).slice(0, 10);
+  setStatus(`PPP: ${nav} (${day(navFirst)}) is not from the data of ${rover} (${day(roverFirst)}); navigation set to (none)`);
+}
 
 // A sample IMU file carries its lever arm; fill it in while the fields are empty.
 function applyImuMeta() {
