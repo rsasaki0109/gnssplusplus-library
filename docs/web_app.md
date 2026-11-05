@@ -49,6 +49,15 @@ be repeated natively, for example on a larger dataset or in a script.
    instead of by FIX / FLOAT, on every plot, so the stretches where the
    solution goes wrong stand out on the map. **PNG** on each plot saves it
    as an image with its legend (and the map credit when a map is shown).
+   For a static receiver, type its coordinate in *Reference point* (ECEF
+   X Y Z, or lat lon h) instead of choosing a reference file. With any
+   reference, the third plot can show the horizontal or |up| error with the
+   *Converged when* thresholds (default 0.2 m / 0.4 m), and Statistics gives
+   the convergence time (from the first epoch to the time after which every
+   epoch stays below the threshold, as `gnss reproduce has-idd-ppp` scores
+   it) and the error at 10, 30 and 60 minutes, for solution 1 and 2 side by
+   side. On the OBE4 HAS IDD sample it reads H < 0.2 m after 0.8 min and
+   |U| < 0.4 m after 5.8 min, as the lane's table.
 4. **Observations** shows the data before you solve: a skyplot, one tracking
    row per satellite coloured by SNR (or system) with loss-of-lock (LLI)
    slip ticks, SNR against elevation, the satellite count and a per-satellite
