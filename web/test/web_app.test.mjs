@@ -333,3 +333,47 @@ test('visibility command', () => {
   assert.ok(ecef.args.join(' ').includes('--receiver-ecef -3961767.63 3349008.712 3698309.78'));
   assert.throws(() => buildVisibilityCommand({ obs: 'r.obs' }), /navigation file/);
 });
+
+test('RTK + IMU command, IMU sniffing and options round trip', () => {
+  const imuHead = 'GPS TOW (s), GPS Week, Acc X (m/s^2), Acc Y (m/s^2), Acc Z (m/s^2), Ang Rate X (deg/s),  Ang Rate Y (deg/s),  Ang Rate Z (deg/s)\n';
+  assert.equal(sniffKind('imu.csv', new TextEncoder().encode(imuHead)), 'imu');
+  assert.equal(sniffKind('imu.csv', fixture('tests/fixtures/realtime_stress/imu.csv').subarray(0, 4096)), 'imu');
+  // The reference trajectory (attitude and velocity, no accelerations) stays a reference CSV.
+  assert.equal(sniffKind('reference.csv', fixture('tests/fixtures/realtime_stress/reference.csv').subarray(0, 4096)), 'csv');
+
+  const opts = {
+    mode: 'rtk-imu', rover: 'rover.obs', base: 'base.obs', nav: 'base.nav', imu: 'imu.csv',
+    leverArm: ['0.31', '0', '0.55'], tightCoupling: true, imuFormat: 'ppc', preset: 'low-cost', ratio: '2.4', kml: false,
+  };
+  const cmd = buildPostCommand(opts);
+  assert.equal(cmd.tool, 'gnss_fuse');
+  assert.deepEqual(cmd.inputs, ['rover.obs', 'base.obs', 'base.nav', 'imu.csv']);
+  assert.deepEqual(cmd.outputs, ['rover_fused.pos', 'rover_fused_rtk.pos']);
+  assert.equal(cmd.commandLine,
+    'gnss fuse --rover rover.obs --base base.obs --nav base.nav --imu imu.csv --out rover_fused.pos '
+    + '--rtk-pos-out rover_fused_rtk.pos --lever-arm 0.31,0,0.55 --navi776-tc --preset low-cost --ratio 2.4');
+  assert.throws(() => buildPostCommand({ ...opts, imu: '' }), /needs an IMU \(CSV\) file/);
+  const loose = buildPostCommand({ ...opts, leverArm: ['', '', ''], tightCoupling: false, imuFormat: 'rtklibexplorer-sf', kml: true });
+  assert.ok(loose.args.includes('--imu-format') && !loose.args.includes('--lever-arm') && !loose.args.includes('--navi776-tc'));
+  assert.ok(!loose.args.includes('--kml')); // gnss_fuse's KML would be empty (fused epochs report 0 satellites)
+
+  const toml = exportOptionsToml(opts);
+  assert.match(toml, /^\[gnss_fuse\]$/m);
+  assert.deepEqual(parseFlatToml(toml).sections.gnss_fuse, [
+    ['lever_arm', ['0.31', '0', '0.55']], ['navi776_tc', true], ['preset', 'low-cost'], ['ratio', '2.4'],
+  ]);
+  assert.match(toml, /# Use: gnss fuse --config/);
+  const back = importOptionsToml(toml);
+  assert.equal(back.mode, 'rtk-imu');
+  assert.equal(back.tool, 'gnss_fuse');
+  assert.deepEqual([back.fields.leverX, back.fields.leverY, back.fields.leverZ], ['0.31', '0', '0.55']);
+  assert.equal(back.fields.tightCoupling, true);
+  assert.equal(back.fields.preset, 'low-cost');
+  assert.equal(back.extra, '');
+  const fromCli = importOptionsToml('[gnss_fuse]\nimu = "data/run1/imu.csv"\nlever_arm = "0.5,0,1"\nimu_format = "rtklibexplorer-sf"\nzupt = true\n');
+  assert.deepEqual(fromCli.files, { imu: 'imu.csv' });
+  assert.deepEqual([fromCli.fields.leverX, fromCli.fields.leverY, fromCli.fields.leverZ], ['0.5', '0', '1']);
+  assert.equal(fromCli.fields.imuFormat, 'rtklibexplorer-sf');
+  assert.equal(fromCli.fields.tightCoupling, false);
+  assert.equal(fromCli.extra, '--zupt');
+});

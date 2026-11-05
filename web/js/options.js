@@ -4,15 +4,18 @@
 // the tool's --no-* form, arrays only where the tool accepts them. Input and
 // output files are not written, as RTKPOST's options file omits them.
 
-import { POST_MODES, RTK_IONO, RTK_PRESETS, splitArgs } from './commands.js';
+import { IMU_FORMATS, POST_MODES, RTK_IONO, RTK_PRESETS, splitArgs } from './commands.js';
 
 // GUI option -> CLI key per tool. Keys follow the CLI flag names.
 const SOLVE_KEYS = { preset: 'preset', iono: 'iono', ratio: 'ratio', elevationMask: 'elevation_mask_deg', maxEpochs: 'max_epochs' };
 const PPP_KEYS = { elevationMask: 'elevation_mask', maxEpochs: 'max_epochs' };
+const FUSE_KEYS = { preset: 'preset', ratio: 'ratio', elevationMask: 'elevation_mask_deg', maxEpochs: 'max_epochs' };
+const TOOL_KEYS = { gnss_solve: SOLVE_KEYS, gnss_ppp: PPP_KEYS, gnss_fuse: FUSE_KEYS };
+const DISPATCH = { gnss_solve: 'solve', gnss_ppp: 'ppp', gnss_fuse: 'fuse' };
 // `false` values each tool's TOML schema turns into a negative flag.
 const NEGATIVE_FLAG = { enable_ar: 'no-ar', enable_wide_lane_ar: 'no-wide-lane-ar' };
 // Keys naming input/output files: skipped on export, matched to Files on import.
-const FILE_KEYS = ['rover', 'base', 'nav', 'obs', 'sp3', 'clk', 'out', 'data_dir', 'kml'];
+const FILE_KEYS = ['rover', 'base', 'nav', 'obs', 'sp3', 'clk', 'imu', 'out', 'rtk_pos_out', 'data_dir', 'kml'];
 const NUMERIC_FIELDS = ['ratio', 'elevationMask', 'maxEpochs'];
 
 // Whether the form can hold this value (else it goes to Extra arguments).
@@ -60,9 +63,18 @@ export function extraArgsToEntries(text) {
 export function exportOptionsToml(opts, commandHint = '') {
   const mode = POST_MODES[opts.mode];
   if (!mode) throw new Error(`unknown positioning mode: ${opts.mode}`);
-  if (mode.tool === 'gnss_spp') throw new Error('gnss spp has no --config; options files cover the RTK and PPP modes');
+  if (mode.tool === 'gnss_spp') throw new Error('gnss spp has no --config; options files cover the RTK, RTK + IMU and PPP modes');
   const entries = [];
-  if (mode.tool === 'gnss_solve') {
+  if (mode.tool === 'gnss_fuse') {
+    const arm = (opts.leverArm || []).map((v) => (hasValue(v) ? String(v) : '0'));
+    if (arm.length === 3 && arm.some((v) => Number(v) !== 0)) entries.push(['lever_arm', arm]);
+    if (opts.tightCoupling) entries.push(['navi776_tc', true]);
+    if (opts.imuFormat && opts.imuFormat !== 'ppc') entries.push(['imu_format', opts.imuFormat]);
+    for (const [field, key] of Object.entries(FUSE_KEYS)) {
+      if (hasValue(opts[field])) entries.push([key, opts[field]]);
+    }
+    if (opts.baseEcef) entries.push(['base_ecef', opts.baseEcef.map(String)]);
+  } else if (mode.tool === 'gnss_solve') {
     entries.push(['mode', mode.rtkMode]);
     for (const [field, key] of Object.entries(SOLVE_KEYS)) {
       if (field === 'iono' && opts.iono === 'auto') continue;
@@ -81,7 +93,7 @@ export function exportOptionsToml(opts, commandHint = '') {
   entries.push(...extraArgsToEntries(opts.extra));
   const lines = [
     `# libgnss++ options (${mode.label}), written by the libgnss++ browser GUI.`,
-    `# Use: gnss ${mode.tool === 'gnss_solve' ? 'solve' : 'ppp'} --config <this file> <input/output options>`,
+    `# Use: gnss ${DISPATCH[mode.tool]} --config <this file> <input/output options>`,
   ];
   if (commandHint) lines.push(`# Run it came from: ${commandHint}`);
   lines.push('', `[${mode.tool}]`);
@@ -169,25 +181,36 @@ function quoteArg(arg) {
  */
 export function importOptionsToml(text) {
   const { sections } = parseFlatToml(text);
-  const tool = sections.gnss_solve ? 'gnss_solve' : sections.gnss_ppp ? 'gnss_ppp' : null;
+  const tool = ['gnss_solve', 'gnss_ppp', 'gnss_fuse'].find((name) => sections[name]) || null;
   const entries = tool ? sections[tool] : sections[''];
   const isPpp = tool === 'gnss_ppp' || (!tool && entries.some(([k]) => ['kinematic', 'enable_ar', 'sp3', 'clk'].includes(k)));
+  const isFuse = tool === 'gnss_fuse' || (!tool && entries.some(([k]) => ['imu', 'lever_arm', 'navi776_tc'].includes(k)));
   const fields = {};
   const files = {};
   const extra = [];
   const notes = [];
-  let mode = isPpp ? 'ppp-static' : 'kinematic';
-  const keyToField = Object.fromEntries(Object.entries(isPpp ? PPP_KEYS : SOLVE_KEYS).map(([f, k]) => [k, f]));
+  let mode = isFuse ? 'rtk-imu' : isPpp ? 'ppp-static' : 'kinematic';
+  const keys = isFuse ? FUSE_KEYS : isPpp ? PPP_KEYS : SOLVE_KEYS;
+  const keyToField = Object.fromEntries(Object.entries(keys).map(([f, k]) => [k, f]));
   fields.kml = true;
   fields.verbose = false;
   fields.enableAr = false;
   fields.basePos = 'header';
+  if (isFuse) Object.assign(fields, { tightCoupling: false, imuFormat: 'ppc', leverX: '', leverY: '', leverZ: '' });
   for (const [key, value] of entries) {
     if (FILE_KEYS.includes(key) && typeof value === 'string') {
       files[key === 'obs' ? 'rover' : key] = value.split(/[\\/]/).pop();
       continue;
     }
-    if (!isPpp && key === 'mode') {
+    if (isFuse && key === 'lever_arm') {
+      const arm = Array.isArray(value) ? value : String(value).split(',');
+      if (arm.length === 3) [fields.leverX, fields.leverY, fields.leverZ] = arm.map((v) => String(v).trim());
+      else extra.push(...entryToArgs(key, value));
+    } else if (isFuse && key === 'navi776_tc' && typeof value === 'boolean') {
+      fields.tightCoupling = value;
+    } else if (isFuse && key === 'imu_format' && IMU_FORMATS.includes(value)) {
+      fields.imuFormat = value;
+    } else if (!isPpp && !isFuse && key === 'mode') {
       if (['kinematic', 'static', 'moving-base'].includes(value)) mode = value;
       else notes.push(`mode = "${value}" has no GUI equivalent; using kinematic`);
     } else if (isPpp && key === 'kinematic') {

@@ -10,7 +10,7 @@ uploaded to a server.
 
 | GUI tool | RTKLIB counterpart | Runs | Typical command it shows |
 | --- | --- | --- | --- |
-| Post-process | RTKPOST | `gnss_spp`, `gnss_solve`, `gnss_ppp` | `gnss solve --rover rover.obs --base base.obs --nav base.nav --out rover_rtk.pos --mode kinematic` |
+| Post-process | RTKPOST | `gnss_spp`, `gnss_solve`, `gnss_fuse`, `gnss_ppp` | `gnss solve --rover rover.obs --base base.obs --nav base.nav --out rover_rtk.pos --mode kinematic` |
 | Convert | RTKCONV | `gnss_convert` | `gnss convert --input base.rtcm --format rtcm --gps-week 2324 --obs-out base.obs --nav-out base.nav` |
 | Plot | RTKPLOT | (in the page) | ground track, E/N/U or error vs reference, satellites / ratio / PDOP, statistics |
 | Observations | RTKPLOT (observation data, skyplot) | `gnss_visibility` | `gnss visibility --obs rover.obs --nav base.nav --csv rover_vis.csv --summary-json rover_vis_summary.json` |
@@ -46,9 +46,19 @@ RTK preset, ionosphere option, ratio threshold, base position, KML) and an
 file name in Files (an ANTEX or BLQ file, a TOML config) is mounted as an
 input automatically.
 
-**Save options** writes the RTK or PPP settings as the flat TOML that
-`gnss solve --config` and `gnss ppp --config` read (input and output files
-are left out, as in RTKPOST's options file); **Load options**, or *load* on a
+**Kinematic RTK + IMU** runs `gnss fuse` with an IMU CSV (PPC format, or
+rtklibexplorer with *IMU format*), the IMU-to-antenna lever arm in body FLU
+and, by default, the tight-coupling preset (`--navi776-tc`). It writes the
+fused trajectory and the RTK solution the fusion ran on (`*_rtk.pos`); open
+both in Plot (solution 1 / solution 2) to compare. The sample `imu.csv`
+covers the 40 s RTCM3 excerpt and fills in the PPC Tokyo lever arm
+`0.31, 0, 0.55`. The benefit depends on the data and tuning: see
+[RTK only vs RTK + GNSS/IMU on PPC](ppc_rtk_vs_gnss_imu_fusion.md) for the
+full-run comparison and its caveats.
+
+**Save options** writes the RTK, RTK + IMU or PPP settings as the flat TOML
+that `gnss solve --config`, `gnss fuse --config` and `gnss ppp --config`
+read (input and output files are left out, as in RTKPOST's options file); **Load options**, or *load* on a
 `.toml` in Files, reads one back, including the repository examples in
 `configs/examples/`. Options the form has no field for become extra
 arguments. For example, a saved static RTK setup runs natively as:
