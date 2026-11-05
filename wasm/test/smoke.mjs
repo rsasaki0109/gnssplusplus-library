@@ -2,14 +2,14 @@
 // Runs the browser app's demo pipeline against the WebAssembly build in Node,
 // through the same engine and command builders the web GUI uses:
 //
-//   node wasm/test/smoke.mjs build-wasm/wasm/dist [--qzss <samples dir>]
+//   node wasm/test/smoke.mjs build-wasm/wasm/dist [--samples <samples dir>]
 //
 // RTCM3 -> RINEX (gnss_convert), RINEX info, visibility (gnss_visibility),
 // kinematic RTK (gnss_solve), SPP and static PPP on the repository fixtures,
 // with accuracy checks against the fixture reference trajectory. With
-// --qzss, also MADOCA-PPP and CLAS PPP from QZSS L6 logs on the public
-// MADOCALIB / CLASLIB samples (QZSS_SAMPLES below), checked against the
-// native gnss ppp results of the same commands.
+// --samples, also PPP with Galileo HAS (IDD and E6-B pages), MADOCA-PPP and
+// CLAS corrections on public samples (PPP_SAMPLES below), checked against
+// the native gnss ppp results of the same commands.
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -23,6 +23,7 @@ import {
 import { parseSolution, parseVisibilityCsv, Q } from '../../web/js/formats.js';
 import { errorSummary, isFixQuality, referenceErrors } from '../../web/js/analysis.js';
 import { exportOptionsToml } from '../../web/js/options.js';
+import { ecefToLlh, enuFrame } from '../../web/js/geo.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -36,11 +37,13 @@ const FIXTURES = {
   'synthetic_ppp.clk': 'demo/fixtures/synthetic_ppp.clk',
 };
 
-// Public QZSS L6 samples, relative to the --qzss directory: MADOCALIB
-// 0089f7dc (the CI MADOCA matrix pin; IGS station MIZU, 2025-04-01 00:00-01:00)
-// and CLASLIB 4320e844 (2019-08-27). The Docs workflow checks out exactly
-// these files.
-export const QZSS_SAMPLES = {
+// Public PPP correction samples, relative to the --samples directory:
+// MADOCALIB 0089f7dc (the CI MADOCA matrix pin; IGS station MIZU, 2025-04-01
+// 00:00-01:00), CLASLIB 4320e844 (2019-08-27) and hirokawa/cssrlib-data
+// ec1dfa2c (Galileo HAS: OBE4 IDD hour 2023-08-17, the has-idd-ppp lane;
+// Kamakura E6-B hour 2025-02-15 with the receiver's own NAV). The Docs
+// workflow checks out exactly these files.
+export const PPP_SAMPLES = {
   madocalib: [
     'sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx',
     'sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx',
@@ -51,12 +54,20 @@ export const QZSS_SAMPLES = {
     'sample_data/data/l6/2025/091/2025091A.201.l6',
   ],
   claslib: ['data/0627239Q.obs', 'data/sept_2019239.nav', 'data/2019239Q.l6'],
+  'cssrlib-data': [
+    'data/doy2023-229/OBE42023229c.obs',
+    'data/doy2023-229/OBE42023229c.nav',
+    'data/doy2023-229/idd2023229c.rtc',
+    'data/doy2025-046/046r_rnx.obs',
+    'data/doy2025-046/046r_rnx.nav',
+    'data/doy2025-046/046r_gale6.txt',
+  ],
 };
 
 /**
  * factoryFor(tool) -> Emscripten module factory. Exported so the pipeline can
  * also be driven by another backend (e.g. a native shim during development).
- * options.qzss: directory holding the QZSS_SAMPLES trees (madocalib/, claslib/).
+ * options.samples: directory holding the PPP_SAMPLES trees (madocalib/, claslib/, cssrlib-data/).
  */
 export async function runSmoke(factoryFor, log = console.log, options = {}) {
   const files = new Map(Object.entries(FIXTURES).map(([name, path]) => [name, readFileSync(join(ROOT, path))]));
@@ -183,11 +194,38 @@ export async function runSmoke(factoryFor, log = console.log, options = {}) {
   // The synthetic receiver sits at 35N 139E.
   assert.ok(Math.abs(ppp.lat[ppp.n - 1] - 35) < 1e-4 && Math.abs(ppp.lon[ppp.n - 1] - 139) < 1e-4);
 
-  if (options.qzss) {
-    for (const [tree, paths] of Object.entries(QZSS_SAMPLES)) {
-      for (const path of paths) files.set(basename(path), readFileSync(join(options.qzss, tree, path)));
+  if (options.samples) {
+    for (const [tree, paths] of Object.entries(PPP_SAMPLES)) {
+      for (const path of paths) files.set(basename(path), readFileSync(join(options.samples, tree, path)));
     }
     const ecefDistance = (s, xyz) => Math.hypot(s.x[s.n - 1] - xyz[0], s.y[s.n - 1] - xyz[1], s.z[s.n - 1] - xyz[2]);
+    const horizontalError = (s, xyz) => {
+      const [e, n] = enuFrame(...ecefToLlh(...xyz))(s.x[s.n - 1], s.y[s.n - 1], s.z[s.n - 1]);
+      return Math.hypot(e, n);
+    };
+
+    // Galileo HAS, 30 min static each. Native gnss ppp: final positions below
+    // (IDD: H 0.08 m from the OBE4 coordinate; E6-B: H 0.10 m from Kamakura's).
+    await run(buildPostCommand({
+      mode: 'ppp-static', rover: 'OBE42023229c.obs', nav: 'OBE42023229c.nav', corrections: 'has-idd',
+      hasIdd: 'idd2023229c.rtc', maxEpochs: '1800', out: 'has_idd.pos',
+    }));
+    const hasIdd = parseSolution('has_idd.pos', text('has_idd.pos'));
+    const hasIddDelta = ecefDistance(hasIdd, [4186704.203967, 834903.839670, 4723665.003940]);
+    log(`HAS IDD: ${hasIdd.n} epochs, H ${horizontalError(hasIdd, [4186704.2262, 834903.7677, 4723664.9337]).toFixed(3)} m, `
+      + `final ${(hasIddDelta * 1000).toFixed(2)} mm from native`);
+    assert.equal(hasIdd.n, 1800);
+    assert.ok(hasIddDelta < 0.05, `HAS IDD final position ${hasIddDelta} m from native`);
+    await run(buildPostCommand({
+      mode: 'ppp-static', rover: '046r_rnx.obs', nav: '046r_rnx.nav', corrections: 'has-sis',
+      hasPages: '046r_gale6.txt', hasPagesFormat: 'cssrlib', maxEpochs: '1800', out: 'has_sis.pos',
+    }));
+    const hasSis = parseSolution('has_sis.pos', text('has_sis.pos'));
+    const hasSisDelta = ecefDistance(hasSis, [-3962108.617472, 3381309.628437, 3668678.695392]);
+    log(`HAS E6-B: ${hasSis.n} epochs, H ${horizontalError(hasSis, [-3962108.6836, 3381309.5672, 3668678.6720]).toFixed(3)} m, `
+      + `final ${(hasSisDelta * 1000).toFixed(2)} mm from native`);
+    assert.equal(hasSis.n, 1800);
+    assert.ok(hasSisDelta < 0.05, `HAS E6-B final position ${hasSisDelta} m from native`);
 
     // MADOCA PPP-AR with L6D ionosphere, 1 h kinematic (the matrix's pppar-ion
     // case). Native gnss ppp: 91 PPP FIX / 27 float, final position below.
@@ -233,8 +271,8 @@ export async function runSmoke(factoryFor, log = console.log, options = {}) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
-  const qzssAt = args.indexOf('--qzss');
-  const qzss = qzssAt >= 0 ? resolve(args.splice(qzssAt, 2)[1]) : null;
+  const samplesAt = args.indexOf('--samples');
+  const samples = samplesAt >= 0 ? resolve(args.splice(samplesAt, 2)[1]) : null;
   const dist = resolve(args[0] || 'build-wasm/wasm/dist');
-  await runSmoke(async (tool) => (await import(pathToFileURL(join(dist, `${tool}.js`)).href)).default, console.log, { qzss });
+  await runSmoke(async (tool) => (await import(pathToFileURL(join(dist, `${tool}.js`)).href)).default, console.log, { samples });
 }

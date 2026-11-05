@@ -50,19 +50,23 @@ export function l6Service(headBytes) {
 
 /**
  * Guess what a file is from its name and first bytes.
- * Returns one of: obs, nav, sp3, clk, atx, l6e, l6d, clas, l6, rtcm, ubx,
- * pos, vis, imu, csv, kml, json, toml, other.
+ * Returns one of: obs, nav, sp3, clk, atx, l6e, l6d, clas, l6, has, rtcm,
+ * ubx, sbf, pos, vis, imu, csv, kml, json, toml, other.
  */
 export function sniffKind(name, headBytes) {
   const lower = name.toLowerCase();
   const bytes = headBytes instanceof Uint8Array ? headBytes : new Uint8Array(headBytes || []);
   if (bytes.length >= 2 && bytes[0] === 0xb5 && bytes[1] === 0x62) return 'ubx';
   if (bytes.length >= 1 && bytes[0] === 0xd3) return 'rtcm';
+  if (bytes.length >= 2 && bytes[0] === 0x24 && bytes[1] === 0x40) return 'sbf';
   const l6 = l6Service(bytes);
   if (l6) return l6;
   const text = new TextDecoder('latin1').decode(bytes.subarray(0, 4096));
   const firstLine = text.split(/\r?\n/, 1)[0] || '';
   if (firstLine.includes('ANTEX VERSION / SYST')) return 'atx';
+  // Galileo E6-B (HAS) pages as cssrlib logs them: week, tow, PRN, ... and
+  // the page in hex, tab separated.
+  if (/^\d+\t\d+(\.\d+)?\t *\d+\t *\d+\t *\d+\t[0-9a-fA-F]{100,}\s*$/.test(firstLine)) return 'has';
   if (firstLine.includes('RINEX VERSION / TYPE')) {
     const type = firstLine.charAt(20).toUpperCase();
     if (type === 'O') return 'obs';
@@ -82,6 +86,7 @@ export function sniffKind(name, headBytes) {
   if (/\.clk(_\d+s)?$/.test(lower)) return 'clk';
   if (/\.atx$/.test(lower)) return 'atx';
   if (/\.l6$/.test(lower)) return 'l6';
+  if (/\.sbf$/.test(lower)) return 'sbf';
   if (/\.csv$/.test(lower)) return 'csv';
   if (/\.kml$/.test(lower)) return 'kml';
   if (/\.json$/.test(lower)) return 'json';

@@ -15,7 +15,8 @@ const DISPATCH = { gnss_solve: 'solve', gnss_ppp: 'ppp', gnss_fuse: 'fuse' };
 // `false` values each tool's TOML schema turns into a negative flag.
 const NEGATIVE_FLAG = { enable_ar: 'no-ar', enable_wide_lane_ar: 'no-wide-lane-ar' };
 // Keys naming input/output files: skipped on export, matched to Files on import.
-const FILE_KEYS = ['rover', 'base', 'nav', 'obs', 'sp3', 'clk', 'imu', 'out', 'rtk_pos_out', 'data_dir', 'kml', 'antex'];
+const FILE_KEYS = ['rover', 'base', 'nav', 'obs', 'sp3', 'clk', 'imu', 'out', 'rtk_pos_out', 'data_dir', 'kml', 'antex',
+  'ssr_rtcm', 'has_pages'];
 // The MADOCA PPP-AR convergence settings the GUI adds (commands.js), as TOML.
 const MADOCA_CONVERGENCE = Object.fromEntries(
   Array.from({ length: MADOCA_AR.convergence.length / 2 }, (_, i) => [
@@ -102,6 +103,10 @@ export function exportOptionsToml(opts, commandHint = '') {
     }
     if (corrections === 'clas') {
       entries.push(['clas_osr', true]);
+    } else if (corrections === 'has-idd') {
+      entries.push(['ssr_rtcm_profile', 'has-idd']);
+    } else if (corrections === 'has-sis') {
+      entries.push(['has_pages_format', opts.hasPagesFormat || 'cssrlib']);
     } else if (corrections === 'madoca') {
       if (opts.enableAr || l6d.length) entries.push(['ar_method', 'per-freq']);
       if (opts.enableAr) {
@@ -256,6 +261,10 @@ export function importOptionsToml(text) {
       fields.enableAr = value;
     } else if (isPpp && key === 'clas_osr' && value === true) {
       fields.pppCorr = 'clas';
+    } else if (isPpp && key === 'ssr_rtcm_profile' && value === 'has-idd') {
+      fields.pppCorr = 'has-idd';
+    } else if (isPpp && key === 'has_pages_format' && ['cssrlib', 'ubx', 'sbf'].includes(value)) {
+      fields.pppCorr = 'has-sis'; // the format follows the page log chosen in Files
     } else if (madocaAr && key === 'ar_method') {
       fields.pppCorr = 'madoca';
     } else if (madocaAr && key in MADOCA_CONVERGENCE && String(value) === MADOCA_CONVERGENCE[key]) {

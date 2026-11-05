@@ -1,14 +1,14 @@
 // Browser end-to-end test of the GUI with the real WebAssembly tools.
 //
-//   node wasm/test/browser.mjs <site dir> [--qzss <samples dir>] [--screenshots <dir>]
+//   node wasm/test/browser.mjs <site dir> [--samples <samples dir>] [--screenshots <dir>]
 //
 // <site dir> is the output of wasm/assemble_site.py's parent (the GUI under
 // <site dir>/app/). The site is served on localhost and driven in headless
 // Chromium with Playwright: the demo pipeline, RTK + IMU, FGO, SPP and PPP
 // runs, the Observations and Plot views (map tiles answered locally, error
-// colouring, PNG export) and "Keep files after reload"; with --qzss, also
-// MADOCA-PPP and CLAS on the public QZSS L6 samples (smoke.mjs QZSS_SAMPLES)
-// added through the file input. It fails on any page error, console error or
+// colouring, PNG export) and "Keep files after reload"; with --samples, also
+// Galileo HAS (IDD and E6-B pages), MADOCA-PPP and CLAS on the public samples
+// (smoke.mjs PPP_SAMPLES) added through the file input. It fails on any page error, console error or
 // request to another site than the map tile hosts.
 // Playwright is resolved from $PLAYWRIGHT_PREFIX/node_modules when set (CI
 // installs it there), else from the usual module paths.
@@ -19,14 +19,14 @@ import { createRequire } from 'node:module';
 import { extname, join, normalize, resolve } from 'node:path';
 import { deflateSync } from 'node:zlib';
 
-import { QZSS_SAMPLES } from './smoke.mjs';
+import { PPP_SAMPLES } from './smoke.mjs';
 
 const args = process.argv.slice(2);
 const siteDir = resolve(args[0] || 'site');
 const shotsAt = args.indexOf('--screenshots');
 const shotsDir = shotsAt >= 0 ? resolve(args[shotsAt + 1]) : null;
-const qzssAt = args.indexOf('--qzss');
-const qzssDir = qzssAt >= 0 ? resolve(args[qzssAt + 1]) : null;
+const samplesAt = args.indexOf('--samples');
+const samplesDir = samplesAt >= 0 ? resolve(args[samplesAt + 1]) : null;
 if (!existsSync(join(siteDir, 'app', 'index.html'))) throw new Error(`no app/index.html under ${siteDir}`);
 if (shotsDir) mkdirSync(shotsDir, { recursive: true });
 
@@ -189,9 +189,9 @@ try {
   await page.waitForTimeout(500);
   log(`keep files: ${before.length} files restored after reload`);
 
-  if (qzssDir) {
-    // QZSS L6 PPP: the samples go in through the file input like a user's files.
-    const paths = Object.entries(QZSS_SAMPLES).flatMap(([tree, list]) => list.map((path) => join(qzssDir, tree, path)));
+  if (samplesDir) {
+    // PPP corrections: the samples go in through the file input like a user's files.
+    const paths = Object.entries(PPP_SAMPLES).flatMap(([tree, list]) => list.map((path) => join(samplesDir, tree, path)));
     const names = paths.map((path) => path.split('/').pop());
     await page.setInputFiles('#file-input', paths);
     await page.waitForFunction((want) => {
@@ -229,6 +229,27 @@ try {
       assert.ok(await page.isHidden('#post-form input[name="enableAr"]'), 'AR hidden for CLAS');
     }, ['0627239Q_clas.pos']);
     assert.match(await text('#tool-post [data-cmd]'), /--ssr 2019239Q\.l6 --clas-osr/);
+
+    await post('Galileo HAS (IDD)', async () => {
+      await mode('ppp-static');
+      await page.selectOption('#post-form select[name="pppCorr"]', 'has-idd');
+      await page.selectOption('#post-form select[name="rover"]', 'OBE42023229c.obs');
+      await page.selectOption('#post-form select[name="nav"]', 'OBE42023229c.nav');
+      await page.selectOption('#post-form select[name="hasIdd"]', 'idd2023229c.rtc');
+      await page.fill('#post-form input[name="maxEpochs"]', '600');
+      assert.ok(await page.isHidden('#post-form input[name="enableAr"]'), 'AR hidden for HAS');
+    }, ['OBE42023229c_has.pos']);
+    assert.match(await text('#tool-post [data-cmd]'), /--ssr-rtcm idd2023229c\.rtc --ssr-rtcm-profile has-idd/);
+
+    await post('Galileo HAS (E6-B pages)', async () => {
+      await page.selectOption('#post-form select[name="pppCorr"]', 'has-sis');
+      await page.selectOption('#post-form select[name="rover"]', '046r_rnx.obs');
+      await page.selectOption('#post-form select[name="nav"]', '046r_rnx.nav');
+      await page.selectOption('#post-form select[name="hasPages"]', '046r_gale6.txt');
+      await page.fill('#post-form input[name="maxEpochs"]', '600');
+    }, ['046r_rnx_has.pos']);
+    assert.match(await text('#tool-post [data-cmd]'), /--has-pages 046r_gale6\.txt --has-pages-format cssrlib/);
+    await shot('web_app_has.png');
   }
 
   assert.deepEqual(external, [], `requests to other sites: ${external.join(', ')}`);

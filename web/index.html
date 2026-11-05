@@ -79,6 +79,8 @@
             <label data-show="ppp">PPP corrections
               <select name="pppCorr">
                 <option value="products">Broadcast / precise products (NAV, SP3, CLK)</option>
+                <option value="has-idd">Galileo HAS, internet (IDD RTCM 3 SSR)</option>
+                <option value="has-sis">Galileo HAS, signal in space (E6-B page log)</option>
                 <option value="madoca">QZSS MADOCA-PPP (L6E, L6D logs)</option>
                 <option value="clas">QZSS CLAS (L6 log, experimental)</option>
               </select></label>
@@ -100,8 +102,13 @@
             </div>
             <label data-show="ppp" data-show-corr="clas">CLAS L6 log
               <select name="clasL6" data-kinds="clas l6"></select></label>
+            <label data-show="ppp" data-show-corr="has-idd">HAS corrections (IDD, RTCM 3 SSR)
+              <select name="hasIdd" data-kinds="rtcm"></select></label>
+            <label data-show="ppp" data-show-corr="has-sis">HAS E6-B page log <span class="opt">cssrlib text, u-blox RXM-SFRBX or Septentrio SBF</span>
+              <select name="hasPages" data-kinds="has ubx sbf"></select></label>
             <label data-show="ppp">Antenna model (ANTEX) <span class="opt">optional</span>
               <select name="antex" data-kinds="atx" data-optional></select></label>
+            <p class="hint" data-show="ppp" data-show-corr="has-idd has-sis">Galileo HAS gives float PPP (no phase biases, so no ambiguity resolution) with GPS and Galileo; use the broadcast NAV of the same day, with Galileo I/NAV. East Asia and the Pacific (90°E–180°E) are outside its service area.</p>
             <p class="hint" data-show="ppp" data-show-corr="madoca clas">QZSS L6 logs are the 250-byte frames of an L6 receiver or the hourly files of the QZSS archive; use the broadcast NAV of the same day.</p>
             <label data-show="imu">IMU samples (CSV)
               <select name="imu" data-kinds="imu"></select></label>
