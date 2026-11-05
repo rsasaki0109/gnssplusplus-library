@@ -126,6 +126,7 @@ struct Options {
     bool fix_all_ambiguities = false;
     bool use_lambda_ambiguity_fix = true;
     bool use_epoch_lambda_fixed_output = false;
+    bool epoch_lambda_fixed_output_explicit = false;
     bool report_batch_fix_as_float = false;
     bool use_integer_constrained_reoptimization = false;
     double integer_constrained_prior_sigma_cycles = 1e-3;
@@ -260,7 +261,11 @@ void printUsage(const char* program_name) {
         << "  --fix-all-ambiguities         Include non-DD carrier ambiguities in fixed pass\n"
         << "  --no-lambda-ambiguity-fix     Use nearest-integer fixed pass instead of LAMBDA\n"
         << "  --epoch-lambda-fixed-output   Apply per-epoch LAMBDA fixed position output\n"
+        << "                                (default with --preset real-data-fixed on the\n"
+        << "                                Eigen backend without --imu, together with\n"
+        << "                                --report-batch-fix-as-float)\n"
         << "  --no-epoch-lambda-fixed-output\n"
+        << "                                Keep the batch fix labels (every epoch FIXED)\n"
         << "  --report-batch-fix-as-float   Report the Eigen batch fix as FLOAT\n"
         << "                                Keep optimized float positions in output\n"
         << "  --no-partial-lambda-ambiguity-fix\n"
@@ -673,8 +678,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_lambda_ambiguity_fix = false;
         } else if (arg == "--epoch-lambda-fixed-output") {
             options.use_epoch_lambda_fixed_output = true;
+            options.epoch_lambda_fixed_output_explicit = true;
         } else if (arg == "--no-epoch-lambda-fixed-output") {
             options.use_epoch_lambda_fixed_output = false;
+            options.epoch_lambda_fixed_output_explicit = true;
         } else if (arg == "--report-batch-fix-as-float") {
             options.report_batch_fix_as_float = true;
         } else if (arg == "--integer-constrained-reoptimization") {
@@ -881,6 +888,18 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.double_difference_reference_min_snr_dbhz < -1.0) {
         argumentError("--dd-reference-min-snr must be >= -1", argv[0]);
+    }
+    // real-data-fixed on the Eigen batch path (no --imu): the batch fix labels
+    // every epoch FIXED while the positions stay float-level (the carrier-only
+    // Eigen caveat in docs/ppc_rtk_vs_gnss_imu_fusion.md; on PPC Tokyo run1 64 %
+    // of those epochs are > 0.5 m off). Report the per-epoch conditional LAMBDA
+    // fixes instead and never the batch label. An explicit
+    // --[no-]epoch-lambda-fixed-output keeps the caller's choice, and the
+    // GTSAM paths (--imu, --backend gtsam-pc) are left as they are.
+    if (options.preset == "real-data-fixed" && options.imu_path.empty() &&
+        options.backend == "eigen" && !options.epoch_lambda_fixed_output_explicit) {
+        options.use_epoch_lambda_fixed_output = true;
+        options.report_batch_fix_as_float = true;
     }
     return options;
 }
@@ -1937,6 +1956,8 @@ void writeSummaryJson(const Options& options,
            << ",\n";
     output << "  \"use_epoch_lambda_fixed_output\": "
            << jsonBool(options.use_epoch_lambda_fixed_output) << ",\n";
+    output << "  \"report_batch_fix_as_float\": "
+           << jsonBool(options.report_batch_fix_as_float) << ",\n";
     output << "  \"use_integer_constrained_reoptimization\": "
            << jsonBool(options.use_integer_constrained_reoptimization) << ",\n";
     output << "  \"integer_constrained_prior_sigma_cycles\": "

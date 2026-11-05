@@ -754,14 +754,18 @@ The correct-fix rate is route-dependent (tokyo1 is the hard one); raising it
 further needs the upstream AR strengths (continuity priors, SD Doppler,
 fix-and-hold), not a looser ratio.
 
-**Carrier-only Eigen caveat**: the Eigen batch path (no `--imu`) still
-reports FIX 100% with ~93% wrong fixes even with LAMBDA ratio 29.7 and a
-tighter carrier sigma — its integer-constrained batch solution is
-meter-level, so its FIXED status is not trustworthy. Pass
-`--report-batch-fix-as-float` to report FLOAT instead (opt-in; the batch
-FIXED behaviour is covered by the frozen tests), or use
-`--epoch-lambda-fixed-output`, whose per-epoch conditional update does yield
-cm-level fixes (wrong-fix 2.8% on tokyo1). The fixed-lag path is the one
+**Carrier-only Eigen caveat**: the Eigen batch path (no `--imu`) reports
+FIX 100% with ~93% wrong fixes even with LAMBDA ratio 29.7 and a tighter
+carrier sigma — its integer-constrained batch solution is meter-level, so
+its batch FIXED label is not trustworthy. `--epoch-lambda-fixed-output`,
+whose per-epoch conditional update yields cm-level fixes (wrong-fix 2.8% on
+tokyo1), and `--report-batch-fix-as-float`, which reports the batch fix as
+FLOAT, are therefore the default for `--preset real-data-fixed` on this path
+(no `--imu`, `--backend eigen`): on the tokyo1 first 400 s that is 22 FIX
+epochs at a 0.03 m median 3D error instead of all 2000 epochs FIX at
+0.98 m. `--no-epoch-lambda-fixed-output` restores the batch labels; the
+`FGOConfig` defaults and the GTSAM paths are unchanged (the batch FIXED
+behaviour stays covered by the frozen tests). The fixed-lag path is the one
 with genuine fixes at a useful rate.
 
 Of the other upstream levers, NHC/ZUPT factors (`--nhc --zupt`),
@@ -832,10 +836,13 @@ python3 scripts/plot_ppc_rtk_vs_imu_fusion.py \
   --demote-max-ratio 4 --demote-nis-per-obs 2 \
   --title "PPC Tokyo run1 — RTK only vs RTK + tightly-coupled GNSS/IMU"
 
-# Carrier-phase FGO arms (gnss_fgo)
+# Carrier-phase FGO arms (gnss_fgo). The published figures used the batch
+# FIX labels; --no-epoch-lambda-fixed-output reproduces them (without it the
+# carrier-only arm reports per-epoch fixes, see the caveat above).
 P=data/PPC-Dataset/tokyo/run1
 build/apps/gnss_fgo --obs $P/rover.obs --base $P/base.obs --nav $P/base.nav \
-  --preset real-data-fixed --out output/ppc_fgo/tokyo1_carrier.pos
+  --preset real-data-fixed --no-epoch-lambda-fixed-output \
+  --out output/ppc_fgo/tokyo1_carrier.pos
 # --imu defaults to static-window noise calibration + 20 s fixed-lag
 build/apps/gnss_fgo --obs $P/rover.obs --base $P/base.obs --nav $P/base.nav \
   --preset real-data-fixed --imu $P/imu.csv \
