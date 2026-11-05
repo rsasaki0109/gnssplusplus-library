@@ -246,6 +246,15 @@ std::vector<std::string> entryArguments(const TomlEntry& entry,
             throw std::invalid_argument(context + ": arrays are not supported for " +
                                         entry.key);
         }
+        if (style->second == TomlArrayStyle::REPEATED_OPTION) {
+            std::vector<std::string> arguments;
+            arguments.reserve(2 * array.size());
+            for (const auto& item : array) {
+                arguments.push_back(option);
+                arguments.push_back(item);
+            }
+            return arguments;
+        }
         if (array.size() != 3) {
             throw std::invalid_argument(context + ": " + entry.key +
                                         " requires exactly 3 values");
