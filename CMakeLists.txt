@@ -26,6 +26,11 @@ if(EMSCRIPTEN)
     # throw/catch at link time.
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fwasm-exceptions>)
     add_link_options(-fwasm-exceptions)
+    # 128-bit WebAssembly SIMD (Chrome / Edge 91+, Firefox 89+, Safari 16.4+):
+    # lets the compiler vectorize loops. Without -ffast-math the vector code
+    # rounds exactly like the scalar code, so results are unchanged.
+    add_compile_options(-msimd128)
+    add_link_options(-msimd128)
     set(GNSSPP_PYTHON_BINDINGS_DEFAULT OFF)
 else()
     set(GNSSPP_PYTHON_BINDINGS_DEFAULT ON)
