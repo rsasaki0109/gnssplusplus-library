@@ -5,11 +5,12 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import {
-  buildConvertCommand, buildInfoCommand, buildPostCommand, defaultPosName, splitArgs,
+  buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultPosName, splitArgs,
 } from '../js/commands.js';
-import { parseSolution, Q, rinexObsTimeSpan, sniffKind } from '../js/formats.js';
+import { parseSolution, parseVisibilityCsv, Q, rinexObsTimeSpan, sniffKind } from '../js/formats.js';
 import { exportOptionsToml, extraArgsToEntries, importOptionsToml, parseFlatToml } from '../js/options.js';
 import { errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu } from '../js/analysis.js';
+import { addWorkerfsReadAhead } from '../js/engine.js';
 import { calendarToGpsSeconds, ecefToLlh, formatGpst, gpsSeconds, llhToEcef } from '../js/geo.js';
 
 const root = new URL('../../', import.meta.url);
@@ -248,4 +249,87 @@ test('options import reads the repository example configs', () => {
   assert.equal(odd.mode, 'kinematic');
   assert.deepEqual(odd.notes, ['mode = "auto" has no GUI equivalent; using kinematic']);
   assert.equal(odd.extra, '--ratio sat-count --preset unknown');
+});
+
+test('WORKERFS read-ahead returns the same bytes with far fewer blob reads', () => {
+  // Stand-ins for Emscripten's WORKERFS: Blob-backed nodes read with a
+  // synchronous FileReader (FileReaderSync exists only in browser workers).
+  class BytesBlob extends Blob {
+    constructor(bytes) { super([bytes]); this.bytes = bytes; }
+    slice(start, end) { return new BytesBlob(this.bytes.subarray(start, end)); }
+  }
+  const data = new Uint8Array(1_000_003).map((_, i) => (i * 7919) % 251);
+  const blob = new BytesBlob(data);
+  let reads = 0;
+  const workerfs = {
+    reader: { readAsArrayBuffer(b) { reads += 1; return b.bytes.slice().buffer; } },
+    stream_ops: {
+      read(stream, buffer, offset, length, position) {
+        if (position >= stream.node.size) return 0;
+        const chunk = stream.node.contents.slice(position, position + length);
+        buffer.set(new Uint8Array(workerfs.reader.readAsArrayBuffer(chunk)), offset);
+        return chunk.size;
+      },
+    },
+  };
+  const stream = { node: { contents: blob, size: data.length } };
+  assert.ok(addWorkerfsReadAhead(workerfs, 65536));
+  assert.equal(addWorkerfsReadAhead(workerfs, 65536), false); // patched once
+  // Sequential 4 KiB reads, a seek back, an unaligned tail and a large read.
+  const out = new Uint8Array(data.length + 16);
+  let pos = 0;
+  while (pos < data.length) {
+    const n = workerfs.stream_ops.read(stream, out, pos, 4096, pos);
+    assert.ok(n > 0);
+    pos += n;
+  }
+  assert.deepEqual(out.subarray(0, data.length), data);
+  assert.equal(workerfs.stream_ops.read(stream, out, 0, 10, data.length), 0);
+  const seek = new Uint8Array(300);
+  assert.equal(workerfs.stream_ops.read(stream, seek, 0, 300, 12345), 300);
+  assert.deepEqual(seek, data.subarray(12345, 12645));
+  assert.equal(workerfs.stream_ops.read(stream, seek, 0, 300, data.length - 7), 7);
+  assert.deepEqual(seek.subarray(0, 7), data.subarray(data.length - 7));
+  const big = new Uint8Array(200_000);
+  assert.equal(workerfs.stream_ops.read(stream, big, 0, big.length, 5), big.length);
+  assert.deepEqual(big, data.subarray(5, 200_005));
+  // ~1 MB in 4 KiB reads: 16 chunk reads instead of ~245.
+  assert.ok(reads < 25, `blob reads: ${reads}`);
+});
+
+// Rows from `gnss visibility` on the converted realtime_stress rover file.
+const VIS_CSV = `epoch_index,week,tow,satellite,system,signal,azimuth_deg,elevation_deg,snr_dbhz,has_pseudorange,has_carrier_phase,has_doppler,lli
+1,2324,187470.000,G05,GPS,GPS_L1CA,293.612610,39.445566,41.500000,1,1,1,0
+1,2324,187470.000,E11,Galileo,GAL_E1,125.958785,44.705874,38.375000,1,1,1,0
+1,2324,187470.000,G13,GPS,GPS_L1CA,80.1,20.2,,1,0,1,0
+2,2324,187470.200,G05,GPS,GPS_L1CA,293.613000,39.445000,41.250000,1,1,1,1
+`;
+
+test('visibility CSV: sniffing, parsing and satellite order', () => {
+  assert.equal(sniffKind('rover_vis.csv', new TextEncoder().encode(VIS_CSV)), 'vis');
+  const vis = parseVisibilityCsv('rover_vis.csv', VIS_CSV);
+  assert.equal(vis.n, 4);
+  assert.deepEqual(vis.sats, ['G05', 'G13', 'E11']); // GPS before Galileo, PRN order
+  assert.deepEqual([...vis.sat], [0, 2, 1, 0]);
+  assert.deepEqual([...vis.sys], [0, 2, 0, 0]);
+  assert.deepEqual([...vis.lli], [0, 0, 0, 1]);
+  assert.ok(Number.isNaN(vis.snr[2]));
+  assert.equal(vis.epochs.length, 2);
+  assert.equal(vis.t[0], gpsSeconds(2324, 187470));
+  assert.ok(vis.hasLli);
+  // Older CSVs without the lli column still parse.
+  const legacy = VIS_CSV.replace(/,lli\n/, '\n').replace(/,(0|1)\n/g, '\n');
+  assert.equal(parseVisibilityCsv('old.csv', legacy).hasLli, false);
+  assert.throws(() => parseVisibilityCsv('x.csv', 'a,b\n1,2\n'), /not a gnss visibility CSV/);
+});
+
+test('visibility command', () => {
+  const vis = buildVisibilityCommand({ obs: 'rover.obs', nav: 'base.nav', minElevation: '10' });
+  assert.equal(vis.commandLine,
+    'gnss visibility --obs rover.obs --nav base.nav --csv rover_vis.csv --summary-json rover_vis_summary.json '
+    + '--min-elevation-deg 10 --quiet');
+  assert.deepEqual(vis.outputs, ['rover_vis.csv', 'rover_vis_summary.json']);
+  const ecef = buildVisibilityCommand({ obs: 'r.obs', nav: 'n.nav', receiverEcef: ['-3961767.63', '3349008.712', '3698309.78'] });
+  assert.ok(ecef.args.join(' ').includes('--receiver-ecef -3961767.63 3349008.712 3698309.78'));
+  assert.throws(() => buildVisibilityCommand({ obs: 'r.obs' }), /navigation file/);
 });

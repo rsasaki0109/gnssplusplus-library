@@ -2,13 +2,13 @@
 // WebAssembly. Each run executes the unchanged native main() in a worker.
 
 import {
-  buildConvertCommand, buildInfoCommand, buildPostCommand, defaultConvertNames, defaultPosName, POST_MODES,
+  buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultConvertNames, defaultPosName, POST_MODES,
 } from './commands.js';
-import { parseSolution, Q_LABELS, rinexObsTimeSpan } from './formats.js';
+import { parseSolution, parseVisibilityCsv, Q_LABELS, rinexObsTimeSpan, SYSTEMS } from './formats.js';
 import { chooseOrigin, errorSummary, isFixQuality, nearestIndex, referenceErrors, solutionSummary, toEnu } from './analysis.js';
 import { formatGpst, splitGpsSeconds, SECONDS_PER_WEEK } from './geo.js';
 import { exportOptionsToml, importOptionsToml } from './options.js';
-import { cssVar, PlotPanel } from './plot.js';
+import { cssVar, PlotPanel, SkyPlot } from './plot.js';
 import { startJob, wasmAvailable } from './runner.js';
 import { Workspace } from './workspace.js';
 
@@ -62,6 +62,7 @@ function showTool(tool) {
   for (const section of $$('section.tool')) section.hidden = section.dataset.tool !== tool;
   if (location.hash !== `#${tool}`) history.replaceState(null, '', `#${tool}`);
   if (tool === 'plot') plotView.render();
+  if (tool === 'obs') obsView.render();
 }
 
 // ---------------------------------------------------------------- files
@@ -105,6 +106,13 @@ function renderFiles(fresh) {
       load.title = 'Load into Post-process options';
       load.onclick = () => f.blob.text().then((text) => applyOptionsToml(f.name, text)).catch((e) => setStatus(`Options: ${e.message}`));
       acts.append(load);
+    }
+    if (f.kind === 'vis') {
+      const view = document.createElement('button');
+      view.textContent = 'view';
+      view.title = 'Open in Observations';
+      view.onclick = () => obsView.open(f.name);
+      acts.append(view);
     }
     const save = document.createElement('button');
     save.textContent = '⤓';
@@ -857,6 +865,376 @@ class PlotView {
 
 const plotView = new PlotView();
 
+// ---------------------------------------------------------------- observations
+const obsForm = $('#obs-form');
+const obsRunView = new RunView($('#tool-obs [data-run]'), 'Choose observation and navigation files and press Analyze.');
+
+function updateObsVisibility() {
+  const ecef = obsForm.elements.receiverPos.value === 'ecef';
+  for (const el of $$('[data-show-receiver]', obsForm)) el.hidden = !ecef;
+}
+
+function obsOptions() {
+  const v = formValues(obsForm);
+  return {
+    obs: v.obs,
+    nav: v.nav,
+    minElevation: v.minElevation,
+    maxEpochs: v.maxEpochs,
+    receiverEcef: v.receiverPos === 'ecef' ? [v.receiverX, v.receiverY, v.receiverZ] : null,
+    extra: v.extra,
+    workspaceNames: workspace.names(),
+  };
+}
+
+function updateObsPreview() {
+  try {
+    obsRunView.preview(buildVisibilityCommand(obsOptions()).commandLine);
+  } catch (error) {
+    obsRunView.preview(`# ${error.message}`);
+  }
+}
+
+async function runObs() {
+  const cmd = buildVisibilityCommand(obsOptions());
+  const result = await runCommand(cmd, obsRunView, obsForm);
+  const csv = cmd.outputs.find((name) => name.endsWith('_vis.csv'));
+  if (result.exitCode === 0 && workspace.get(csv)) obsView.open(csv);
+  return result;
+}
+
+obsForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  Promise.resolve().then(runObs).catch(reportTo(obsRunView));
+});
+obsForm.addEventListener('input', updateObsPreview);
+obsForm.addEventListener('change', () => { updateObsVisibility(); updateObsPreview(); });
+
+const SNR_BINS = [25, 30, 35, 40, 45];
+const SNR_LABELS = ['< 25', '25–30', '30–35', '35–40', '40–45', '≥ 45'];
+const SYS_VARS = ['--sys-gps', '--sys-glo', '--sys-gal', '--sys-bds', '--sys-qzs', '--sys-sbas', '--sys-irn'];
+
+function snrClass(snr) {
+  if (!Number.isFinite(snr)) return 0;
+  let k = 0;
+  while (k < SNR_BINS.length && snr >= SNR_BINS[k]) k += 1;
+  return k;
+}
+
+class ObsView {
+  constructor() {
+    this.cache = new Map();
+    this.hiddenSys = new Set();
+    this.dataSelect = $('#obs-data');
+    this.colorSelect = $('#obs-color');
+    const leave = () => this.frame(() => this.clearCursor());
+    this.sky = new SkyPlot($('#cv-sky'), { onHover: (i) => (i >= 0 ? this.frame(() => this.showSample(i)) : null) });
+    this.track = new PlotPanel($('#cv-track'), {
+      timeAxis: true, integerY: true, yTickFormat: (v) => this.rowLabel(v),
+      onHover: (x, y) => this.frame(() => this.hoverTrack(x, y)), onLeave: leave,
+    });
+    this.snrEl = new PlotPanel($('#cv-snr-el'), { xLabel: 'elevation (deg)', yLabel: 'SNR (dB-Hz)', onLeave: leave });
+    this.nsat = new PlotPanel($('#cv-obs-nsat'), {
+      timeAxis: true, integerY: true, yLabel: 'Nsat', onHover: (x) => this.frame(() => this.hoverEpoch(x)), onLeave: leave,
+    });
+    this.track.opts.onViewChange = (view) => this.nsat.setXRange(view.x0, view.x1);
+    this.nsat.opts.onViewChange = (view) => this.track.setXRange(view.x0, view.x1);
+    this.dataSelect.addEventListener('change', () => this.reload());
+    this.colorSelect.addEventListener('change', () => { this.keepView = true; this.render(); });
+    new MutationObserver(() => this.render()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.render());
+  }
+
+  open(name) {
+    this.dataSelect.value = name;
+    showTool('obs');
+    this.reload();
+  }
+
+  // Run at most one hover update per animation frame (the latest one).
+  frame(update) {
+    this.pendingUpdate = update;
+    if (this.frameId) return;
+    this.frameId = requestAnimationFrame(() => {
+      this.frameId = 0;
+      const next = this.pendingUpdate;
+      this.pendingUpdate = null;
+      if (next && this.data) next();
+    });
+  }
+
+  // Row indices per satellite (time order) and per epoch, for hover lookups.
+  buildIndex(d) {
+    this.satRows = d.sats.map(() => []);
+    this.epochRows = new Map();
+    for (let i = 0; i < d.n; i += 1) {
+      this.satRows[d.sat[i]].push(i);
+      const rows = this.epochRows.get(d.t[i]);
+      if (rows) rows.push(i); else this.epochRows.set(d.t[i], [i]);
+    }
+    for (const rows of this.satRows) rows.sort((a, b) => d.t[a] - d.t[b]);
+  }
+
+  async reload() {
+    $('#obs-cursor').textContent = '';
+    const name = this.dataSelect.value;
+    const entry = name && workspace.get(name);
+    this.error = null;
+    this.data = null;
+    if (entry) {
+      try {
+        const key = `${name}:${entry.added}`;
+        if (!this.cache.has(key)) this.cache.set(key, parseVisibilityCsv(name, await entry.blob.text()));
+        this.data = this.cache.get(key);
+        const summaryName = name.replace(/\.csv$/, '_summary.json');
+        const summary = workspace.get(summaryName);
+        this.summary = summary ? JSON.parse(await summary.blob.text()) : null;
+      } catch (error) {
+        this.error = error;
+      }
+    }
+    this.render();
+  }
+
+  rowLabel(v) {
+    if (!this.data) return '';
+    const i = this.data.sats.length - 1 - Math.round(v);
+    return Math.abs(v - Math.round(v)) < 1e-6 && this.data.sats[i] ? this.data.sats[i] : '';
+  }
+
+  colors() {
+    if (this.colorSelect.value === 'sys') {
+      return { cls: this.data.sys, colors: Object.fromEntries(SYS_VARS.map((v, k) => [k, cssVar(v, '#888')])) };
+    }
+    if (!this.snrCls || this.snrCls.length !== this.data.n) {
+      this.snrCls = Uint8Array.from(this.data.snr, snrClass);
+    }
+    return { cls: this.snrCls, colors: Object.fromEntries(SNR_LABELS.map((_, k) => [k, cssVar(`--snr-${k}`, '#888')])) };
+  }
+
+  render() {
+    const grid = $('#obs-grid');
+    const empty = $('#obs-empty');
+    if (this.error || !this.data) {
+      grid.hidden = true;
+      empty.hidden = false;
+      if (this.error) empty.textContent = String(this.error.message);
+      $('#obs-sysfilter').replaceChildren();
+      return;
+    }
+    if ($('#tool-obs').hidden) return;
+    grid.hidden = false;
+    empty.hidden = true;
+    const d = this.data;
+    if (this.rowY?.length !== d.n || this.rowsFor !== d) {
+      this.rowsFor = d;
+      this.rowY = Float64Array.from(d.sat, (s) => d.sats.length - 1 - s);
+      this.snrCls = null;
+      this.buildIndex(d);
+    }
+    const { cls, colors } = this.colors();
+    // System filter: drop hidden systems from the class -> colour map via a mask class.
+    const visible = new Uint8Array(d.n);
+    for (let i = 0; i < d.n; i += 1) visible[i] = this.hiddenSys.has(d.sys[i]) ? 0 : 1;
+    const shownCls = Uint8Array.from(cls, (c, i) => (visible[i] ? c : 255));
+
+    // One labelled row per satellite where it fits; at least as tall as the skyplot.
+    const trackHeight = Math.max($('#cv-sky').clientHeight || 0, Math.min(900, d.sats.length * 14 + 40), 220);
+    $('#cv-track').style.height = `${trackHeight}px`;
+    this.track.opts.yStep = Math.max(1, Math.ceil((14 * d.sats.length) / Math.max(1, trackHeight - 40)));
+    const slipX = [];
+    const slipY = [];
+    for (let i = 0; i < d.n; i += 1) {
+      if (visible[i] && (d.lli[i] & 1)) { slipX.push(d.t[i]); slipY.push(this.rowY[i]); }
+    }
+    this.track.setLayers([
+      { type: 'points', x: d.t, y: this.rowY, cls: shownCls, colors, size: 3, order: 1 },
+      { type: 'vticks', x: Float64Array.from(slipX), y: Float64Array.from(slipY), colors: cssVar('--slip', '#111'), size: 11, width: 2, order: 2 },
+    ], { keepView: this.keepView });
+
+    this.sky.setData({
+      az: d.az, el: d.el, cls: shownCls, colors,
+      labels: this.lastPositions().filter((p) => visible[p.index]).map((p) => ({ az: d.az[p.index], el: d.el[p.index], text: p.sat })),
+    });
+
+    this.snrEl.setLayers([{ type: 'points', x: d.el, y: d.snr, cls: shownCls, colors, size: 2 }], { keepView: this.keepView });
+
+    // Satellites per epoch (visible systems).
+    const counts = new Map();
+    for (let i = 0; i < d.n; i += 1) if (visible[i]) counts.set(d.t[i], (counts.get(d.t[i]) || 0) + 1);
+    const et = Float64Array.from(counts.keys()).sort();
+    const ec = Float64Array.from(et, (t) => counts.get(t));
+    this.nsat.setLayers([{ type: 'points', x: et, y: ec, colors: cssVar('--accent', '#0f766e'), size: 3 }], { keepView: this.keepView });
+    this.epochTimes = et;
+    this.keepView = false;
+
+    this.renderFilter();
+    this.renderLegend(colors);
+    this.renderStats(visible);
+  }
+
+  lastPositions() {
+    const d = this.data;
+    const last = new Map();
+    for (let i = 0; i < d.n; i += 1) last.set(d.sat[i], i);
+    return [...last.entries()].map(([s, index]) => ({ sat: d.sats[s], index }));
+  }
+
+  renderFilter() {
+    const box = $('#obs-sysfilter');
+    box.replaceChildren();
+    const counts = {};
+    for (const s of this.data.sys) counts[s] = (counts[s] || 0) + 1;
+    for (const s of Object.keys(counts).map(Number).sort((a, b) => a - b)) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      const on = !this.hiddenSys.has(s);
+      button.className = on ? 'on' : '';
+      if (on) button.style.background = cssVar(SYS_VARS[s], '#888');
+      const sats = new Set();
+      for (let i = 0; i < this.data.n; i += 1) if (this.data.sys[i] === s) sats.add(this.data.sat[i]);
+      button.textContent = `${SYSTEMS[s]} ${sats.size}`;
+      button.setAttribute('aria-pressed', String(on));
+      button.onclick = () => {
+        if (this.hiddenSys.has(s)) this.hiddenSys.delete(s); else this.hiddenSys.add(s);
+        this.keepView = true;
+        this.render();
+      };
+      box.append(button);
+    }
+  }
+
+  renderLegend(colors) {
+    const legend = $('#obs-legend');
+    legend.replaceChildren();
+    const labels = this.colorSelect.value === 'sys' ? SYSTEMS : SNR_LABELS.map((l) => `${l} dB-Hz`);
+    const present = new Set(this.colorSelect.value === 'sys' ? this.data.sys : this.snrCls);
+    labels.forEach((label, k) => {
+      if (!present.has(k)) return;
+      const span = document.createElement('span');
+      const sw = document.createElement('span');
+      sw.className = 'sw';
+      sw.style.background = colors[k];
+      span.append(sw, document.createTextNode(label));
+      legend.append(span);
+    });
+    const slip = document.createElement('span');
+    const sw = document.createElement('span');
+    sw.className = 'sw';
+    sw.style.background = cssVar('--slip', '#111');
+    slip.append(sw, document.createTextNode(this.data.hasLli ? 'LLI slip' : 'no LLI column in this CSV'));
+    legend.append(slip);
+  }
+
+  renderStats(visible) {
+    const d = this.data;
+    const perSat = new Map();
+    for (let i = 0; i < d.n; i += 1) {
+      if (!visible[i]) continue;
+      const s = perSat.get(d.sat[i]) || { rows: 0, slips: 0, snr: 0, snrN: 0, maxEl: -90 };
+      s.rows += 1;
+      if (d.lli[i] & 1) s.slips += 1;
+      if (Number.isFinite(d.snr[i]) && d.snr[i] > 0) { s.snr += d.snr[i]; s.snrN += 1; }
+      s.maxEl = Math.max(s.maxEl, d.el[i]);
+      perSat.set(d.sat[i], s);
+    }
+    const fmt = (v, k = 1) => (Number.isFinite(v) ? v.toFixed(k) : '–');
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const sum = this.summary;
+    const head = [
+      ['Data', esc(d.name)],
+      ['Epochs', d.epochs.length],
+      ['Span (GPST)', `${formatGpst(d.epochs[0])} – ${formatGpst(d.epochs[d.epochs.length - 1])}`],
+      ['Satellites', perSat.size],
+      ['Rows', d.n],
+      ['LLI slips', [...perSat.values()].reduce((a, s) => a + s.slips, 0)],
+    ];
+    if (sum) {
+      head.push(['Receiver position', `${esc(sum.receiver_position_source || '')} (${(sum.receiver_position_ecef_m || []).map((v) => v.toFixed(1)).join(', ')})`]);
+      head.push(['Mean SNR (dB-Hz)', fmt(sum.mean_snr_dbhz)]);
+      head.push(['Skipped (no ephemeris)', sum.skipped_without_nav]);
+    }
+    const sats = [...perSat.entries()].sort((a, b) => a[0] - b[0]);
+    const satRows = sats.map(([s, v]) => `<tr><td>${esc(d.sats[s])}</td><td>${v.rows}</td><td>${fmt(v.snrN ? v.snr / v.snrN : NaN)}</td><td>${fmt(v.maxEl)}</td><td>${v.slips}</td></tr>`).join('');
+    $('#obs-stats').innerHTML = `<table>${head.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>`
+      + `<table><tr><th>Sat</th><th>Epochs</th><th>Mean SNR</th><th>Max el (deg)</th><th>LLI slips</th></tr>${satRows}</table>`;
+  }
+
+  // Satellites at the epoch nearest to t, highlighted on the skyplot.
+  cursorAt(t) {
+    const d = this.data;
+    const j = nearestIndex(d.epochs, t);
+    const te = d.epochs[j];
+    const marks = [];
+    const sysColors = SYS_VARS.map((v) => cssVar(v, '#888'));
+    for (const i of this.epochRows.get(te) || []) {
+      if (!this.hiddenSys.has(d.sys[i])) marks.push({ az: d.az[i], el: d.el[i], text: d.sats[d.sat[i]].slice(1), color: sysColors[d.sys[i]] });
+    }
+    this.sky.setCursor(marks);
+    this.track.setCursor({ x: te });
+    this.nsat.setCursor({ x: te });
+    return { te, count: marks.length };
+  }
+
+  hoverEpoch(x) {
+    if (!this.data) return;
+    const { te, count } = this.cursorAt(x);
+    const { week, tow } = splitGpsSeconds(te);
+    $('#obs-cursor').textContent = `${formatGpst(te, 2)} GPST (week ${week} tow ${tow.toFixed(3)})  |  ${count} satellites`;
+  }
+
+  hoverTrack(x, y) {
+    const d = this.data;
+    if (!d) return;
+    const row = Math.round(y);
+    const s = d.sats.length - 1 - row;
+    const rows = this.satRows[s] || [];
+    let best = -1;
+    if (rows.length) {
+      // Binary search for the satellite's sample nearest in time.
+      let lo = 0;
+      let hi = rows.length - 1;
+      while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (d.t[rows[mid]] < x) lo = mid; else hi = mid;
+      }
+      best = Math.abs(d.t[rows[lo]] - x) <= Math.abs(d.t[rows[hi]] - x) ? rows[lo] : rows[hi];
+    }
+    if (best < 0) { this.hoverEpoch(x); return; }
+    this.cursorAt(d.t[best]);
+    this.describe(best);
+  }
+
+  showSample(i) {
+    this.cursorAt(this.data.t[i]);
+    this.describe(i);
+  }
+
+  describe(i) {
+    const d = this.data;
+    const { week, tow } = splitGpsSeconds(d.t[i]);
+    $('#obs-cursor').textContent = [
+      `${formatGpst(d.t[i], 2)} GPST (week ${week} tow ${tow.toFixed(3)})`,
+      `${d.sats[d.sat[i]]} ${d.signal[i]}`,
+      `az ${d.az[i].toFixed(1)}° el ${d.el[i].toFixed(1)}°`,
+      `SNR ${fmtNum(d.snr[i])} dB-Hz`,
+      `LLI ${d.lli[i]}${d.lli[i] & 1 ? ' (slip)' : ''}`,
+    ].join('  |  ');
+  }
+
+  clearCursor() {
+    this.sky.setCursor([]);
+    this.track.setCursor(null);
+    this.nsat.setCursor(null);
+  }
+}
+
+function fmtNum(v) {
+  return Number.isFinite(v) ? v.toFixed(1) : '–';
+}
+
+const obsView = new ObsView();
+
 // ---------------------------------------------------------------- samples
 async function loadSamples() {
   setStatus('Loading sample data…');
@@ -893,6 +1271,16 @@ async function runSamplePipeline() {
       const result = await runCommand(cmd, convView, convForm);
       if (result.exitCode !== 0) throw new Error(`${cmd.commandLine} failed`);
     }
+    // Observation viewer on the converted rover (position from SPP: no 1005 in the rover stream).
+    showTool('obs');
+    refreshFileSelectors();
+    obsForm.elements.obs.value = 'rover.obs';
+    obsForm.elements.nav.value = 'base.nav';
+    obsForm.elements.receiverPos.value = 'auto';
+    obsForm.elements.extra.value = '';
+    updateObsVisibility();
+    const vis = await runObs();
+    if (vis.exitCode !== 0) throw new Error('gnss visibility failed');
     showTool('post');
     postForm.elements.mode.value = 'kinematic';
     updatePostVisibility();
@@ -913,7 +1301,7 @@ async function runSamplePipeline() {
     plotView.errorsBox.checked = true;
     showTool('plot');
     await plotView.reload();
-    setStatus('Demo pipeline finished: RTCM3 → RINEX → kinematic RTK → plot vs reference');
+    setStatus('Demo pipeline finished: RTCM3 → RINEX → observation view → kinematic RTK → plot vs reference');
   } catch (error) {
     setStatus(`Demo pipeline stopped: ${error.message}`);
   } finally {
@@ -929,6 +1317,8 @@ workspace.addEventListener('change', (event) => {
   updateConv();
   updateInfo();
   if (!$('#tool-plot').hidden) plotView.reload();
+  updateObsPreview();
+  if (!$('#tool-obs').hidden) obsView.reload();
 });
 
 for (const button of $$('.tools button')) button.onclick = () => showTool(button.dataset.tool);
@@ -959,14 +1349,17 @@ window.addEventListener('drop', (event) => {
 
 persistForm(postForm, 'post');
 persistForm(convForm, 'conv');
+persistForm(obsForm, 'obs');
 renderFiles();
 refreshFileSelectors();
 updatePostVisibility();
 updatePostPreview();
 updateConv();
 updateInfo();
+updateObsVisibility();
+updateObsPreview();
 const initialTool = location.hash.slice(1);
-showTool(['post', 'conv', 'plot', 'info'].includes(initialTool) ? initialTool : 'post');
+showTool(['post', 'conv', 'plot', 'obs', 'info'].includes(initialTool) ? initialTool : 'post');
 
 (async () => {
   engineReady = await wasmAvailable();

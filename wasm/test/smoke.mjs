@@ -4,9 +4,9 @@
 //
 //   node wasm/test/smoke.mjs build-wasm/wasm/dist
 //
-// RTCM3 -> RINEX (gnss_convert), RINEX info, kinematic RTK (gnss_solve), SPP
-// and static PPP on the repository fixtures, with accuracy checks against
-// the fixture reference trajectory.
+// RTCM3 -> RINEX (gnss_convert), RINEX info, visibility (gnss_visibility),
+// kinematic RTK (gnss_solve), SPP and static PPP on the repository fixtures,
+// with accuracy checks against the fixture reference trajectory.
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -14,8 +14,10 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { runTool } from '../../web/js/engine.js';
-import { buildConvertCommand, buildInfoCommand, buildPostCommand } from '../../web/js/commands.js';
-import { parseSolution, Q } from '../../web/js/formats.js';
+import {
+  buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand,
+} from '../../web/js/commands.js';
+import { parseSolution, parseVisibilityCsv, Q } from '../../web/js/formats.js';
 import { errorSummary, isFixQuality, referenceErrors } from '../../web/js/analysis.js';
 import { exportOptionsToml } from '../../web/js/options.js';
 
@@ -69,6 +71,17 @@ export async function runSmoke(factoryFor, log = console.log) {
   const info = await run(buildInfoCommand({ files: ['rover.obs', 'base.nav'], countRecords: true }));
   assert.match(info.stdout, /epoch count: 201/);
   assert.match(info.stdout, /ephemeris count: \d+/);
+
+  // Observation viewer input: the rover header has no position, so the tool seeds it from SPP.
+  await run(buildVisibilityCommand({ obs: 'rover.obs', nav: 'base.nav' }));
+  const vis = parseVisibilityCsv('rover_vis.csv', text('rover_vis.csv'));
+  const visSummary = JSON.parse(text('rover_vis_summary.json'));
+  log(`Visibility: ${vis.n} rows, ${vis.sats.length} satellites, position ${visSummary.receiver_position_source}`);
+  assert.match(visSummary.receiver_position_source, /^spp-epoch-\d+$/);
+  assert.equal(visSummary.epochs_processed, 201);
+  assert.equal(vis.n, visSummary.rows_written);
+  assert.ok(vis.sats.length >= 8);
+  assert.ok(vis.lli.some((v) => v & 1), 'expected LLI slip flags in the rover data');
 
   const reference = parseSolution('reference.csv', text('reference.csv'));
   const origin = [reference.lat[0], reference.lon[0], reference.h[0]];
