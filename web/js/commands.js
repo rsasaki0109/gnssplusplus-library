@@ -215,7 +215,15 @@ export function buildPostCommand(opts) {
     // and DD carrier factors; real-data-fixed adds LAMBDA ambiguity fixing.
     cmd.input('--obs', opts.rover).input('--base', opts.base).input('--nav', opts.nav);
     cmd.output('--out', out);
-    cmd.flag('--preset', opts.fgoPreset || 'real-data-float');
+    const preset = opts.fgoPreset || 'real-data-float';
+    cmd.flag('--preset', preset);
+    if (preset === 'real-data-fixed') {
+      // The batch fix alone labels every epoch FIXED while the positions stay
+      // float-level (docs/ppc_rtk_vs_gnss_imu_fusion.md, carrier-only Eigen
+      // caveat): take the per-epoch conditional LAMBDA output instead, and
+      // never report the batch label.
+      cmd.flag('--epoch-lambda-fixed-output').flag('--report-batch-fix-as-float');
+    }
     const ratio = finite(opts.ratio);
     if (ratio !== null) cmd.flag('--lambda-ratio-threshold', ratio);
     if (elevation !== null) cmd.flag('--min-elevation', elevation);
