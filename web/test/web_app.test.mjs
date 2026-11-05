@@ -9,7 +9,9 @@ import {
 } from '../js/commands.js';
 import { parseSolution, parseVisibilityCsv, Q, rinexObsTimeSpan, sniffKind } from '../js/formats.js';
 import { exportOptionsToml, extraArgsToEntries, importOptionsToml, parseFlatToml } from '../js/options.js';
-import { errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu } from '../js/analysis.js';
+import {
+  ERROR_BINS_M, errorClasses, errorClassLabels, errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu,
+} from '../js/analysis.js';
 import { addWorkerfsReadAhead } from '../js/engine.js';
 import { calendarToGpsSeconds, ecefToLlh, formatGpst, gpsSeconds, llhToEcef } from '../js/geo.js';
 import { chooseZoom, enuPlane, TILE_SOURCES, tileCorner, tilesForView, tileUrl, tileXY } from '../js/tiles.js';
@@ -439,4 +441,16 @@ test('map tiles: ENU placement, tile choice and coverage', () => {
   assert.equal(chooseZoom(res16 / 2, origin[0], 19, 2), 18);
   assert.equal(chooseZoom(0.001, origin[0], TILE_SOURCES['gsi-std'].maxZoom), 18);
   assert.equal(chooseZoom(1e7, origin[0], 19), 0);
+});
+
+test('horizontal error classes for colouring a track', () => {
+  const err = {
+    e: Float64Array.from([0.03, 0.2, 0.6, -2, 30, NaN, 0.1]),
+    n: Float64Array.from([0.04, 0, 0, 0, 0, NaN, 0]),
+  };
+  // 0.05 m, 0.2, 0.6, 2, 30, unmatched, exactly on the 0.1 m edge (goes up).
+  assert.deepEqual([...errorClasses(err)], [0, 1, 2, 3, 4, 5, 1]);
+  assert.deepEqual(errorClassLabels(), ['< 0.1 m', '0.1–0.3 m', '0.3–1 m', '1–3 m', '≥ 3 m', 'no reference']);
+  assert.equal(errorClassLabels().length, ERROR_BINS_M.length + 2);
+  assert.deepEqual([...errorClasses({ e: [0.5], n: [0] }, [1])], [0]);
 });

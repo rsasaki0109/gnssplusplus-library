@@ -207,6 +207,11 @@
               <option value="reference">Mean of reference</option>
             </select></label>
           <label class="check"><input type="checkbox" id="plot-errors"> Errors vs reference</label>
+          <label>Colour solution 1 by
+            <select id="plot-color">
+              <option value="quality">Quality (FIX / FLOAT / ...)</option>
+              <option value="error">Horizontal error vs reference</option>
+            </select></label>
           <div class="qfilter" id="plot-qfilter" aria-label="Quality filter"></div>
         </div>
         <div class="plot-empty panel" id="plot-empty">Load or compute a <code>.pos</code> solution (libgnss++ or RTKLIB format) to plot it.</div>
@@ -221,13 +226,15 @@
                   <option value="gsi-photo">GSI aerial photo (Japan)</option>
                 </select></span>
               <span class="hint">E/N (m) · wheel zoom · drag pan · double-click fit</span>
+              <button type="button" class="btn small" data-png="gt" title="Save this plot as PNG">PNG</button>
             </div>
             <canvas id="cv-gt"></canvas>
             <div class="legend" id="plot-legend"></div>
             <div class="map-note" id="plot-map-note" hidden></div>
           </div>
           <div class="card ts">
-            <div class="card-title"><span id="ts-title">Position E / N / U (m)</span> <span class="hint">wheel zoom time · shift+wheel zoom value</span></div>
+            <div class="card-title"><span id="ts-title">Position E / N / U (m)</span> <span class="hint">wheel zoom time · shift+wheel zoom value</span>
+              <button type="button" class="btn small" data-png="ts" title="Save these plots as PNG">PNG</button></div>
             <canvas id="cv-e"></canvas>
             <canvas id="cv-n"></canvas>
             <canvas id="cv-u"></canvas>
@@ -239,6 +246,7 @@
                 <option value="ratio">AR ratio</option>
                 <option value="pdop">PDOP</option>
               </select>
+              <button type="button" class="btn small" data-png="aux" title="Save this plot as PNG">PNG</button>
             </div>
             <canvas id="cv-aux"></canvas>
           </div>
