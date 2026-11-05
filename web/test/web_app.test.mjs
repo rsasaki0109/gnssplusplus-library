@@ -12,6 +12,7 @@ import { exportOptionsToml, extraArgsToEntries, importOptionsToml, parseFlatToml
 import { errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu } from '../js/analysis.js';
 import { addWorkerfsReadAhead } from '../js/engine.js';
 import { calendarToGpsSeconds, ecefToLlh, formatGpst, gpsSeconds, llhToEcef } from '../js/geo.js';
+import { chooseZoom, enuPlane, TILE_SOURCES, tileCorner, tilesForView, tileUrl, tileXY } from '../js/tiles.js';
 
 const root = new URL('../../', import.meta.url);
 const fixture = (path) => readFileSync(new URL(path, root));
@@ -377,4 +378,65 @@ test('RTK + IMU command, IMU sniffing and options round trip', () => {
   assert.equal(fromCli.fields.imuFormat, 'rtklibexplorer-sf');
   assert.equal(fromCli.fields.tightCoupling, false);
   assert.equal(fromCli.extra, '--zupt');
+});
+
+test('map tiles: ENU placement, tile choice and coverage', () => {
+  const origin = [35.667552644, 139.791093447, 40.19];
+  const plane = enuPlane(origin);
+  const near = (a, b, tol) => assert.ok(Math.abs(a - b) < tol, `${a} vs ${b}`);
+  const [e0, n0] = plane.toEnu(origin[0], origin[1]);
+  near(e0, 0, 1e-6); near(n0, 0, 1e-6);
+  // toLatLon() takes the tangent-plane point, which rises above the origin
+  // height by d^2 / 2R (57 m at 27 km); that is all the round trip loses.
+  for (const [e, n, tol] of [[1234.5, -678.9, 0.01], [-15000, 22000, 0.5]]) {
+    const [lat, lon] = plane.toLatLon(e, n);
+    const [e2, n2] = plane.toEnu(lat, lon);
+    near(e2, e, tol); near(n2, n, tol);
+  }
+  // Tile corners land where toEnu() of the solution points does.
+  const sol = parseSolution('t.pos', `% GPS_Week GPS_TOW Lat(deg) Lon(deg) Height(m) Status
+2324 0.0 ${origin[0] + 0.009} ${origin[1] + 0.011} ${origin[2]} 1
+`);
+  const enu = toEnu(sol, origin);
+  const [pe, pn] = plane.toEnu(sol.lat[0], sol.lon[0]);
+  near(pe, enu.e[0], 1e-6); near(pn, enu.n[0], 1e-6);
+
+  // The tile under a point matches the standard slippy-map formula.
+  const z = 16;
+  const n = 2 ** z;
+  const rad = (origin[0] * Math.PI) / 180;
+  const expectX = Math.floor(((origin[1] + 180) / 360) * n);
+  const expectY = Math.floor(((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n);
+  const [one] = tilesForView({ x0: -1, x1: 1, y0: -1, y1: 1 }, plane, z);
+  assert.deepEqual([one.z, one.x, one.y], [z, expectX, expectY]);
+  assert.ok(one.x0 <= 0 && one.x1 >= 0 && one.y0 <= 0 && one.y1 >= 0);
+  const [cLat, cLon] = tileCorner(expectX, expectY, z);
+  const [fx, fy] = tileXY(cLat, cLon, z);
+  near(fx, expectX, 1e-6); near(fy, expectY, 1e-6);
+  assert.equal(tileUrl(TILE_SOURCES.osm, one.z, one.x, one.y), `https://tile.openstreetmap.org/16/${expectX}/${expectY}.png`);
+  assert.equal(tileUrl(TILE_SOURCES['gsi-photo'], 16, 1, 2), 'https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/16/1/2.jpg');
+
+  // A view is covered. Neighbouring tiles meet to within the curvature of
+  // meridians / parallels across one tile in the ENU plane: under 0.1 m here,
+  // where a 600 px plot shows ~2.7 m per pixel.
+  const view = { x0: -900, x1: 700, y0: -400, y1: 650 };
+  const tiles = tilesForView(view, plane, 15);
+  assert.ok(tiles.length > 1);
+  assert.ok(Math.min(...tiles.map((t) => t.x0)) <= view.x0 && Math.max(...tiles.map((t) => t.x1)) >= view.x1);
+  assert.ok(Math.min(...tiles.map((t) => t.y0)) <= view.y0 && Math.max(...tiles.map((t) => t.y1)) >= view.y1);
+  for (const a of tiles) {
+    const right = tiles.find((b) => b.y === a.y && b.x === a.x + 1);
+    if (right) near(right.x0, a.x1, 0.1);
+    const below = tiles.find((b) => b.x === a.x && b.y === a.y + 1);
+    if (below) near(below.y1, a.y0, 0.1);
+  }
+  assert.deepEqual(tilesForView({ x0: -1e5, x1: 1e5, y0: -1e5, y1: 1e5 }, plane, 18), [], 'too many tiles');
+
+  // One tile pixel per screen pixel: ~1.94 m/px is zoom 16 at Tokyo; clamped to the source range.
+  const res16 = (156543.03392 * Math.cos(rad)) / 2 ** 16;
+  assert.equal(chooseZoom(res16, origin[0], 19), 16);
+  assert.equal(chooseZoom(res16 / 2, origin[0], 19), 17);
+  assert.equal(chooseZoom(res16 / 2, origin[0], 19, 2), 18);
+  assert.equal(chooseZoom(0.001, origin[0], TILE_SOURCES['gsi-std'].maxZoom), 18);
+  assert.equal(chooseZoom(1e7, origin[0], 19), 0);
 });

@@ -212,9 +212,19 @@
         <div class="plot-empty panel" id="plot-empty">Load or compute a <code>.pos</code> solution (libgnss++ or RTKLIB format) to plot it.</div>
         <div class="plot-grid" id="plot-grid" hidden>
           <div class="card gt">
-            <div class="card-title">Ground track <span class="hint">E/N (m) · wheel zoom · drag pan · double-click fit</span></div>
+            <div class="card-title">
+              <span class="title-group">Ground track
+                <select id="plot-map" aria-label="Map background" title="Map tiles are downloaded from the chosen server, which then sees the area you view. Solution files never leave the browser.">
+                  <option value="">No map</option>
+                  <option value="osm">OpenStreetMap</option>
+                  <option value="gsi-std">GSI map (Japan)</option>
+                  <option value="gsi-photo">GSI aerial photo (Japan)</option>
+                </select></span>
+              <span class="hint">E/N (m) · wheel zoom · drag pan · double-click fit</span>
+            </div>
             <canvas id="cv-gt"></canvas>
             <div class="legend" id="plot-legend"></div>
+            <div class="map-note" id="plot-map-note" hidden></div>
           </div>
           <div class="card ts">
             <div class="card-title"><span id="ts-title">Position E / N / U (m)</span> <span class="hint">wheel zoom time · shift+wheel zoom value</span></div>

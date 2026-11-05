@@ -41,6 +41,9 @@
   --q-dr: #6b7280;
   --sol2: #7c3aed;
   --ref: #111827;
+  /* Map background (Plot ground track): veil over the tiles and grid on top */
+  --map-veil: rgba(255, 255, 255, 0.18);
+  --map-grid: rgba(31, 41, 55, 0.16);
   color-scheme: light;
 }
 
@@ -63,6 +66,8 @@
     --sol2: #c4b5fd;
     --ref: #f3f4f6;
     --slip: #f9fafb;
+    --map-veil: rgba(15, 20, 18, 0.42);
+    --map-grid: rgba(229, 231, 235, 0.16);
     color-scheme: dark;
   }
 }
@@ -85,6 +90,8 @@
   --sol2: #c4b5fd;
   --ref: #f3f4f6;
   --slip: #f9fafb;
+  --map-veil: rgba(15, 20, 18, 0.42);
+  --map-grid: rgba(229, 231, 235, 0.16);
   color-scheme: dark;
 }
 
@@ -221,6 +228,10 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 #cv-aux { height: 150px; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 6px 2px 0; font-size: 0.75rem; color: var(--muted); }
 .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.card-title .title-group { display: inline-flex; gap: 8px; align-items: center; }
+.map-note { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; padding: 4px 2px 0; font-size: 0.72rem; color: var(--muted); }
+.map-note a { color: inherit; }
+.map-note .warn { color: var(--danger); }
 .stats-body { font-size: 0.8rem; overflow-x: auto; }
 .stats-body table { border-collapse: collapse; width: 100%; }
 .stats-body th, .stats-body td { text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }

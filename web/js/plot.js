@@ -39,19 +39,33 @@ function prepareCanvas(canvas) {
   return { dpr, w, h };
 }
 
-function cachedBase(owner, key, paint) {
+// Offscreen layer `slot` of owner (same size as owner.canvas), repainted only
+// when its key changes.
+function cachedLayer(owner, slot, key, paint) {
   const canvas = owner.canvas;
-  if (!owner.base) owner.base = document.createElement('canvas');
-  if (owner.baseKey !== key || owner.base.width !== canvas.width || owner.base.height !== canvas.height) {
-    owner.base.width = canvas.width;
-    owner.base.height = canvas.height;
-    paint(owner.base.getContext('2d'));
-    owner.baseKey = key;
+  owner.layerCache = owner.layerCache || {};
+  let entry = owner.layerCache[slot];
+  if (!entry) {
+    entry = { canvas: document.createElement('canvas'), key: null };
+    owner.layerCache[slot] = entry;
   }
+  if (entry.key !== key || entry.canvas.width !== canvas.width || entry.canvas.height !== canvas.height) {
+    entry.canvas.width = canvas.width;
+    entry.canvas.height = canvas.height;
+    paint(entry.canvas.getContext('2d'));
+    entry.key = key;
+  }
+  return entry.canvas;
+}
+
+function cachedBase(owner, key, paint, under = null) {
+  const canvas = owner.canvas;
+  const base = cachedLayer(owner, 'base', key, paint);
   const ctx = canvas.getContext('2d');
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(owner.base, 0, 0);
+  if (under) ctx.drawImage(under, 0, 0);
+  ctx.drawImage(base, 0, 0);
   return ctx;
 }
 
@@ -70,6 +84,10 @@ export function cssVar(name, fallback) {
  *   opts.yStep        fixed y tick step (overrides the automatic one)
  *   opts.onHover(x, y) / onLeave()
  *   opts.onViewChange(view)  after user zoom/pan (used to link time axes)
+ *   opts.background  { active() -> bool, key() -> string,
+ *                      paint(ctx, view, rect, toPixel, dpr) }  a layer under the
+ *                    grid and data (map tiles), cached separately so it can
+ *                    repaint without repainting the data
  */
 export class PlotPanel {
   constructor(canvas, opts = {}) {
@@ -181,10 +199,27 @@ export class PlotPanel {
     if (!size) return;
     if (!this.view) this.fit();
     const v = this.effectiveView();
-    const key = [size.w, size.h, size.dpr, this.version, this.yStepKey(), v.x0, v.x1, v.y0, v.y1].join('|');
-    const ctx = cachedBase(this, key, (base) => this.paintBase(base, size));
+    const bg = this.opts.background && this.opts.background.active() ? this.opts.background : null;
+    const viewKey = [size.w, size.h, size.dpr, v.x0, v.x1, v.y0, v.y1].join('|');
+    const key = [viewKey, this.version, this.yStepKey(), bg ? 'bg' : ''].join('|');
+    const under = bg ? cachedLayer(this, 'background', `${viewKey}|${bg.key()}`, (layer) => this.paintBackground(layer, size, bg)) : null;
+    const ctx = cachedBase(this, key, (base) => this.paintBase(base, size, Boolean(bg)), under);
     ctx.setTransform(size.dpr, 0, 0, size.dpr, 0, 0);
     this.paintCursor(ctx);
+  }
+
+  paintBackground(ctx, { dpr, w, h }, bg) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = cssVar('--plot-bg', '#fff');
+    ctx.fillRect(0, 0, w, h);
+    const r = this.plotRect();
+    const v = this.effectiveView();
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(r.left, r.top, r.width, r.height);
+    ctx.clip();
+    bg.paint(ctx, v, r, this.toPixel(v, r), dpr);
+    ctx.restore();
   }
 
   yStepKey() {
@@ -212,11 +247,13 @@ export class PlotPanel {
     ctx.restore();
   }
 
-  paintBase(ctx, { dpr, w, h }) {
+  // With a background layer the plot area is left transparent so the layer
+  // painted under this one shows through.
+  paintBase(ctx, { dpr, w, h }, transparentPlot = false) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const colors = {
       bg: cssVar('--plot-bg', '#fff'),
-      grid: cssVar('--plot-grid', '#e5e7eb'),
+      grid: transparentPlot ? cssVar('--map-grid', 'rgba(0, 0, 0, 0.12)') : cssVar('--plot-grid', '#e5e7eb'),
       axis: cssVar('--plot-axis', '#6b7280'),
       text: cssVar('--muted', '#6b7280'),
     };
@@ -225,6 +262,7 @@ export class PlotPanel {
     const r = this.plotRect();
     const v = this.effectiveView();
     const t = this.toPixel(v, r);
+    if (transparentPlot) ctx.clearRect(r.left, r.top, r.width, r.height);
 
     // Grid and tick labels.
     ctx.font = '11px system-ui, sans-serif';
@@ -263,6 +301,14 @@ export class PlotPanel {
     if (this.opts.xLabel) {
       ctx.textAlign = 'right';
       ctx.textBaseline = 'bottom';
+      if (transparentPlot) { // keep the label legible over map tiles
+        ctx.save();
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = colors.bg;
+        ctx.strokeText(this.opts.xLabel, r.left + r.width - 4, r.top + r.height - 3);
+        ctx.restore();
+      }
       ctx.fillText(this.opts.xLabel, r.left + r.width - 4, r.top + r.height - 3);
     }
 
