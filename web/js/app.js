@@ -10,6 +10,7 @@ import { formatGpst, splitGpsSeconds, SECONDS_PER_WEEK } from './geo.js';
 import { exportOptionsToml, importOptionsToml } from './options.js';
 import { cssVar, PlotPanel, SkyPlot } from './plot.js';
 import { startJob, wasmAvailable } from './runner.js';
+import { enuPlane, MAX_SPAN_M, TILE_SOURCES, TileLayer } from './tiles.js';
 import { Workspace } from './workspace.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -630,6 +631,15 @@ infoForm.addEventListener('change', updateInfo);
 const Q_COLOR_VARS = {
   0: '--q-dr', 1: '--q-fix', 2: '--q-float', 3: '--q-sbas', 4: '--q-dgps', 5: '--q-single', 6: '--q-ppp', 7: '--q-pppfix', 8: '--q-dr',
 };
+const MAP_SETTING = 'gnsspp.plotMap';
+
+function readSetting(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function writeSetting(key, value) {
+  try { localStorage.setItem(key, value); } catch { /* private mode: keep it for this page only */ }
+}
 
 class PlotView {
   constructor() {
@@ -639,12 +649,24 @@ class PlotView {
     this.originSelect = $('#plot-origin');
     this.errorsBox = $('#plot-errors');
     this.auxSelect = $('#plot-aux');
+    this.mapSelect = $('#plot-map');
+    const savedMap = readSetting(MAP_SETTING);
+    if (savedMap && TILE_SOURCES[savedMap]) this.mapSelect.value = savedMap;
+    this.mapEpoch = 0;
+    this.tiles = new TileLayer({ onChange: () => this.gt.draw() });
     const linkTime = (source) => (view) => {
       for (const p of this.timePanels) if (p !== source) p.setXRange(view.x0, view.x1);
     };
     const hover = (x) => this.hoverTime(x);
     const leave = () => this.clearCursor();
-    this.gt = new PlotPanel($('#cv-gt'), { equalAspect: true, xLabel: 'E (m)', yLabel: 'N (m)', onHover: (x, y) => this.hoverGround(x, y), onLeave: leave });
+    this.gt = new PlotPanel($('#cv-gt'), {
+      equalAspect: true, xLabel: 'E (m)', yLabel: 'N (m)', onHover: (x, y) => this.hoverGround(x, y), onLeave: leave,
+      background: {
+        active: () => Boolean(this.mapSource() && this.plane),
+        key: () => `${this.mapSelect.value}:${this.tiles.version}:${this.mapEpoch}`,
+        paint: (ctx, v, r, t) => this.paintMap(ctx, v, r, t),
+      },
+    });
     this.pe = new PlotPanel($('#cv-e'), { timeAxis: true, yLabel: 'E (m)', onHover: hover, onLeave: leave });
     this.pn = new PlotPanel($('#cv-n'), { timeAxis: true, yLabel: 'N (m)', onHover: hover, onLeave: leave });
     this.pu = new PlotPanel($('#cv-u'), { timeAxis: true, yLabel: 'U (m)', onHover: hover, onLeave: leave });
@@ -655,6 +677,11 @@ class PlotView {
       el.addEventListener('change', () => this.reload());
     }
     this.auxSelect.addEventListener('change', () => this.render());
+    this.mapSelect.addEventListener('change', () => {
+      writeSetting(MAP_SETTING, this.mapSelect.value);
+      this.keepView = true; // the track itself does not move
+      this.render();
+    });
     new MutationObserver(() => this.render()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.render());
   }
@@ -710,6 +737,8 @@ class PlotView {
     this.enuRef = this.ref ? toEnu(this.ref, this.origin) : null;
     this.err1 = this.ref ? referenceErrors(this.sol1, this.ref, this.origin) : null;
     this.err2 = this.ref && this.sol2 ? referenceErrors(this.sol2, this.ref, this.origin) : null;
+    this.plane = enuPlane(this.origin); // map tiles are placed in this ENU frame
+    this.mapEpoch += 1;
     const showErrors = this.errorsBox.checked && this.ref;
     $('#ts-title').textContent = showErrors ? 'Error vs reference E / N / U (m)' : 'Position E / N / U (m)';
 
@@ -728,6 +757,7 @@ class PlotView {
     if (this.sol2) gtLayers.push(sol2Layer(this.enu2.e, this.enu2.n));
     if (this.ref) gtLayers.push(refLayer(this.enuRef.e, this.enuRef.n));
     this.gt.setLayers(gtLayers, { keepView: this.keepView });
+    this.updateMapNote();
 
     for (const [panel, key] of [[this.pe, 'e'], [this.pn, 'n'], [this.pu, 'u']]) {
       const layers = [];
@@ -752,6 +782,48 @@ class PlotView {
     this.renderFilter();
     this.renderLegend(qColors, sol2Color, refColor);
     this.renderStats();
+  }
+
+  mapSource() {
+    return TILE_SOURCES[this.mapSelect.value] || null;
+  }
+
+  paintMap(ctx, v, r, t) {
+    const source = this.mapSource();
+    if (!source || !this.plane) return;
+    this.mapStatus = this.tiles.paint(ctx, source, this.plane, v, r, t);
+    if (this.mapStatus.tooWide) {
+      this.updateMapNote();
+      return;
+    }
+    ctx.fillStyle = cssVar('--map-veil', 'rgba(255, 255, 255, 0.18)');
+    ctx.fillRect(r.left, r.top, r.width, r.height);
+    this.updateMapNote();
+  }
+
+  updateMapNote() {
+    const note = $('#plot-map-note');
+    const source = this.mapSource();
+    note.hidden = !source;
+    if (!source) return;
+    const status = document.createElement('span');
+    if (this.tiles.failed > 0 && this.tiles.loaded === 0) {
+      status.className = 'warn';
+      status.textContent = 'Map tiles could not be loaded (offline or blocked); the track is drawn without a map.';
+    } else if (this.mapStatus && this.mapStatus.tooWide) {
+      status.textContent = `Zoom in to see the map (shown for views up to ${MAX_SPAN_M / 1000} km across).`;
+    } else if (this.mapStatus) {
+      status.textContent = `Map zoom ${this.mapStatus.zoom}`
+        + (this.mapStatus.missing ? ` · loading ${this.mapStatus.missing} of ${this.mapStatus.requested} tiles` : '');
+    }
+    const credit = document.createElement('span');
+    const link = document.createElement('a');
+    link.href = source.link;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = source.attribution;
+    credit.append('Map: ', link);
+    note.replaceChildren(status, credit);
   }
 
   renderFilter() {

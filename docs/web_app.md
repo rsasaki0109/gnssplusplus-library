@@ -6,7 +6,8 @@ An RTKLIB-style GUI that runs entirely in the browser. The libgnss++
 command-line tools are compiled to WebAssembly unchanged, so a run in the
 browser executes the same `main()` as the native CLI, with the same
 options and output formats. Files stay in the browser tab; nothing is
-uploaded to a server.
+uploaded to a server. The only requests the page makes to other sites are
+map tiles, and only after you choose a map background in Plot.
 
 | GUI tool | RTKLIB counterpart | Runs | Typical command it shows |
 | --- | --- | --- | --- |
@@ -30,7 +31,8 @@ be repeated natively, for example on a larger dataset or in a script.
    files are recognised from their content.
 3. Outputs (`.pos`, `.kml`, RINEX, summary JSON) appear in Files; download
    them or open `.pos` files in Plot. Solution 2 and a reference trajectory
-   can be overlaid, as in RTKPLOT.
+   can be overlaid, as in RTKPLOT. The ground track can be drawn over a map
+   (see [Map backgrounds](#map-backgrounds)).
 4. **Observations** shows the data before you solve: a skyplot, one tracking
    row per satellite coloured by SNR (or system) with loss-of-lock (LLI)
    slip ticks, SNR against elevation, the satellite count and a per-satellite
@@ -69,6 +71,28 @@ gnss solve --config rover_rtk_options.toml --rover rover.obs --base base.obs --n
 ```
 
 `gnss spp` has no `--config`, so SPP settings are not saved.
+
+## Map backgrounds
+
+The selector next to *Ground track* in Plot puts web map tiles under the
+trajectory: OpenStreetMap, or, for Japan, the GSI standard map or GSI
+aerial photos (地理院タイル). Wheel zoom, drag and double-click fit work as
+without a map, and the map follows.
+
+- The track stays in the same E/N metres around the plot origin as the time
+  series and statistics; each tile is placed by converting its corner
+  latitude / longitude to that frame, so switching the map on or off does
+  not move the track. The map is drawn for views up to 300 km across.
+- Tiles are fetched from the chosen server directly by the browser (no
+  solution data is sent, but the server sees which area you view). The
+  choice is remembered in this browser; *No map*, the default, makes no
+  requests.
+- The tile servers' attribution is shown under the plot. Use the public
+  servers for interactive viewing only; their usage policies
+  ([OpenStreetMap](https://operations.osmfoundation.org/policies/tiles/),
+  [GSI](https://maps.gsi.go.jp/development/ichiran.html)) apply.
+- Offline, or when the tiles are blocked, the plot says so and draws the
+  track without a map.
 
 ## What runs where
 

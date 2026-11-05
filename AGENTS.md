@@ -88,6 +88,9 @@ compiled unchanged with Emscripten (`wasm/CMakeLists.txt`,
 - The wasm link sets mirror `apps/CMakeLists.txt`; keep them in step, and do
   not add `Threads::Threads` / `-pthread` there (static hosting has no
   cross-origin isolation, so no SharedArrayBuffer).
+- The page makes no requests to other sites except map tiles in Plot
+  (`web/js/tiles.js`), and only after the user picks a map background;
+  keep it that way (no CDNs or analytics; vendor anything the GUI needs).
 
 ## Conventions
 
