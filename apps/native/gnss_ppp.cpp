@@ -936,8 +936,12 @@ int main(int argc, char* argv[]) {
                 {"--progress", ""},
             },
             {
-                {"--madoca-l6", libgnss_apps::TomlArrayStyle::SEPARATE_ARGUMENTS},
-                {"--madoca-l6d", libgnss_apps::TomlArrayStyle::SEPARATE_ARGUMENTS},
+                // One L6 log per channel and hour: one flag per array item.
+                {"--madoca-l6", libgnss_apps::TomlArrayStyle::REPEATED_OPTION},
+                {"--madoca-l6d", libgnss_apps::TomlArrayStyle::REPEATED_OPTION},
+                {"--madoca-l6d-shadow", libgnss_apps::TomlArrayStyle::REPEATED_OPTION},
+                {"--madocalib-l6", libgnss_apps::TomlArrayStyle::REPEATED_OPTION},
+                {"--madocalib-mdciono", libgnss_apps::TomlArrayStyle::REPEATED_OPTION},
             },
         };
         std::vector<std::string> expanded_arguments =

@@ -456,6 +456,40 @@ class PPPProcessingCases:
             _, summary_off = run("off", "--config", str(config_off))
             self.assertEqual(summary_off["mode"], "static")
             self.assertFalse(summary_off["ambiguity_resolution_enabled"])
+    def test_ppp_cli_config_arrays_repeat_the_l6_options(self) -> None:
+        # In gnss ppp --config, `madoca_l6 = [a, b, ...]` passes
+        # --madoca-l6 a --madoca-l6 b ... like the flags. The dummy logs do not
+        # decode, so both runs stop at the same load error, not at an argument
+        # error.
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_config_array_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+            obs_path = temp_root / "rover.obs"
+            nav_path = temp_root / "base.nav"
+            for args in (["--input", str(fixture / "rover.rtcm"), "--obs-out", str(obs_path)],
+                         ["--input", str(fixture / "base.rtcm"), "--nav-out", str(nav_path)]):
+                converted = self.run_gnss("convert", *args, "--format", "rtcm",
+                                          "--gps-week", "2324", "--quiet")
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            logs = []
+            for prn in (204, 206, 209):
+                log_path = temp_root / f"2025091A.{prn}.l6"
+                log_path.write_bytes(bytes.fromhex("1acffc1d") + bytes([prn, 0x41]) + bytes(244))
+                logs.append(log_path)
+            common = ["ppp", "--obs", str(obs_path), "--nav", str(nav_path), "--max-epochs", "1",
+                      "--out", str(temp_root / "out.pos")]
+            for count in (2, 3):
+                with self.subTest(logs=count):
+                    flags = [arg for log in logs[:count] for arg in ("--madoca-l6", str(log))]
+                    by_flags = self.run_gnss(*common, *flags)
+                    config_path = temp_root / f"l6_{count}.toml"
+                    items = ", ".join(json.dumps(str(log)) for log in logs[:count])
+                    config_path.write_text(f"[gnss_ppp]\nmadoca_l6 = [{items}]\n", encoding="utf-8")
+                    by_config = self.run_gnss(*common, "--config", str(config_path))
+                    self.assertNotEqual(by_flags.returncode, 0)
+                    self.assertIn("failed to load MADOCA L6E corrections", by_flags.stderr)
+                    self.assertEqual(by_config.returncode, by_flags.returncode)
+                    self.assertEqual(by_config.stderr, by_flags.stderr)
     def test_nav_products_cli_generates_sp3_and_clk_from_static_sample(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_nav_products_cli_") as temp_dir:
             temp_root = Path(temp_dir)

@@ -8,8 +8,9 @@
 namespace libgnss_apps {
 
 enum class TomlArrayStyle {
-    COMMA_JOINED,
-    SEPARATE_ARGUMENTS,
+    COMMA_JOINED,        ///< [x, y, z] -> --opt x,y,z (exactly 3 values)
+    SEPARATE_ARGUMENTS,  ///< [x, y, z] -> --opt x y z (exactly 3 values)
+    REPEATED_OPTION,     ///< [a, b, ...] -> --opt a --opt b ... (a repeatable option)
 };
 
 struct TomlCliSchema {
