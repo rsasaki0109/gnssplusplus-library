@@ -76,7 +76,7 @@ over the whole span (or *Max epochs*) with code, TDCP and double-difference
 carrier factors, solved with the Eigen backend (the GTSAM backend and the
 IMU factors are not in the browser build). *FGO preset* picks
 `real-data-float` (default), `real-data-fixed` (adds LAMBDA ambiguity
-fixing) or `default`; *AR ratio threshold* maps to
+fixing, see below) or `default`; *AR ratio threshold* maps to
 `--lambda-ratio-threshold`. It gives a solution at every epoch but is not
 more accurate than RTK on the PPC data checked, so treat it as a comparison
 tool:
@@ -87,12 +87,21 @@ tool:
 | Tokyo run1 first 400 s | 39 % FIX, 0.43 m (FIX 0.04 m) | all FLOAT, 0.83 m |
 | Tokyo run1 full (11 866 epochs) | 10 755 epochs solved, 2.7 m (H95 6.7 m) | all 11 866, 3.6 m (H95 7.5 m) |
 
-On the 400 s window `real-data-fixed` labels every epoch FIX but the
-positions are the same as with `real-data-float` (0.83 m), so check FIX
-epochs against a reference before trusting them. Memory grows with the
-span: about 0.25 GB plus 0.17 MB per epoch (2.3 GB natively for the full
-Tokyo run1, 28 s), within the 4 GB of a browser run. `gnss fgo` has no
-`--config`, so FGO settings are not saved.
+`real-data-fixed` runs with `--epoch-lambda-fixed-output
+--report-batch-fix-as-float`: an epoch is FIX only when its own conditional
+LAMBDA update passes. The batch fix on its own labels every epoch FIX while
+the positions stay float-level (the carrier-only Eigen caveat in
+[RTK only vs RTK + GNSS/IMU on PPC](ppc_rtk_vs_gnss_imu_fusion.md)); on the
+Tokyo run1 400 s window it marked all 2000 epochs FIX with a median 3D
+error of 0.98 m (64 % over 0.5 m). With the per-epoch output, 22 epochs are
+FIX there (median 3D 0.03 m, none over 0.5 m) and 138 over the full run
+(1.2 %, median 0.05 m, max 0.31 m). The per-epoch updates make long spans
+much slower (full Tokyo run1: 268 s natively against 28 s for
+`real-data-float`), so use *Max epochs* to try it on a window first.
+
+Memory grows with the span: about 0.25 GB plus 0.17 MB per epoch (2.3 GB
+natively for the full Tokyo run1), within the 4 GB of a browser run.
+`gnss fgo` has no `--config`, so FGO settings are not saved.
 
 **Save options** writes the RTK, RTK + IMU or PPP settings as the flat TOML
 that `gnss solve --config`, `gnss fuse --config` and `gnss ppp --config`

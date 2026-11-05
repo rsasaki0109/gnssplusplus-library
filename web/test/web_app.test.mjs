@@ -489,10 +489,12 @@ test('FGO command and options', () => {
   assert.deepEqual(cmd.outputs, ['rover_fgo.pos', 'rover_fgo_summary.json']);
   assert.equal(cmd.commandLine,
     'gnss fgo --obs rover.obs --base base.obs --nav base.nav --out rover_fgo.pos --preset real-data-fixed '
+    + '--epoch-lambda-fixed-output --report-batch-fix-as-float '
     + '--lambda-ratio-threshold 2.5 --min-elevation 15 --max-epochs 400 --summary-json rover_fgo_summary.json');
   assert.equal(defaultPosName('rover.obs', 'fgo'), 'rover_fgo.pos');
   const plain = buildPostCommand({ mode: 'fgo', rover: 'r.obs', base: 'b.obs', nav: 'n.nav' });
   assert.ok(plain.args.join(' ').includes('--preset real-data-float'), 'float preset by default');
+  assert.ok(!plain.args.includes('--epoch-lambda-fixed-output'), 'no AR flags for the float preset');
   assert.throws(() => buildPostCommand({ ...opts, base: '' }), /needs a base file/);
   assert.throws(() => exportOptionsToml(opts), /gnss fgo has no --config/);
 });
