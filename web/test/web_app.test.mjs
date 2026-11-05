@@ -13,6 +13,8 @@ import {
   ERROR_BINS_M, errorClasses, errorClassLabels, errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu,
 } from '../js/analysis.js';
 import { addWorkerfsReadAhead } from '../js/engine.js';
+import { describeStored } from '../js/store.js';
+import { Workspace } from '../js/workspace.js';
 import { calendarToGpsSeconds, ecefToLlh, formatGpst, gpsSeconds, llhToEcef } from '../js/geo.js';
 import { chooseZoom, enuPlane, TILE_SOURCES, tileCorner, tilesForView, tileUrl, tileXY } from '../js/tiles.js';
 
@@ -441,6 +443,27 @@ test('map tiles: ENU placement, tile choice and coverage', () => {
   assert.equal(chooseZoom(res16 / 2, origin[0], 19, 2), 18);
   assert.equal(chooseZoom(0.001, origin[0], TILE_SOURCES['gsi-std'].maxZoom), 18);
   assert.equal(chooseZoom(1e7, origin[0], 19), 0);
+});
+
+test('workspace keeps a restored file\'s time stamp; stored-files summary', async () => {
+  const ws = new Workspace();
+  const events = [];
+  ws.addEventListener('change', (e) => events.push(e.detail));
+  const restored = await ws.add('rover.obs', new Blob(['     3.04           OBSERVATION DATA    M                   RINEX VERSION / TYPE\n']), 'sample', { added: 1234 });
+  assert.equal(restored.added, 1234);
+  assert.equal(restored.kind, 'obs');
+  const fresh = await ws.add('later.pos', '% x\n', 'output');
+  assert.ok(fresh.added > 1234);
+  assert.deepEqual(ws.list().map((f) => f.name), ['later.pos', 'rover.obs']);
+  ws.remove('rover.obs');
+  ws.clear();
+  assert.deepEqual(events, [{ added: 'rover.obs' }, { added: 'later.pos' }, { removed: 'rover.obs' }, {}]);
+
+  const blob = (n) => ({ blob: { size: n } });
+  assert.equal(describeStored([]), '0 files, 0 kB');
+  assert.equal(describeStored([blob(1500)]), '1 file, 2 kB');
+  assert.equal(describeStored([blob(90e6), blob(36e6)]), '2 files, 126.0 MB');
+  assert.equal(describeStored([blob(2.5e9)]), '1 file, 2.50 GB');
 });
 
 test('horizontal error classes for colouring a track', () => {

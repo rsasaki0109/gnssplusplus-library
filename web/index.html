@@ -30,9 +30,12 @@
     <aside class="files" aria-label="Files">
       <div class="files-head">
         <h2>Files</h2>
+        <button type="button" class="btn small" id="clear-files" title="Remove every file">Clear</button>
         <label class="btn small">Add files<input type="file" id="file-input" multiple hidden></label>
       </div>
-      <p class="hint">Drop files anywhere on the page. They stay in this browser tab; nothing is uploaded.</p>
+      <p class="hint">Drop files anywhere on the page. They stay in this browser; nothing is uploaded.</p>
+      <label class="check keep-files"><input type="checkbox" id="keep-files"> Keep files after reload
+        <span class="opt" id="keep-files-note">(stored in this browser only)</span></label>
       <ul id="file-list" class="file-list"></ul>
       <div class="sample">
         <h3>Sample data</h3>

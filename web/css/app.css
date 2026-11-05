@@ -160,8 +160,10 @@ main { min-width: 0; }
 
 /* Files */
 .files { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; position: sticky; top: 60px; max-height: calc(100vh - 110px); overflow: auto; }
-.files-head { display: flex; align-items: center; justify-content: space-between; }
-.files-head h2 { margin: 0; }
+.files-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.files-head h2 { margin: 0 auto 0 0; }
+.keep-files { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 0.8rem; margin: 0 0 8px; }
+.keep-files .opt { color: var(--muted); font-size: 0.75rem; }
 .file-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .file-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 5px 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); }
 .file-list li.fresh { border-color: var(--accent); }
