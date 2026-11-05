@@ -48,7 +48,7 @@ needed:
 mkdir -p output
 docker run --rm \
   -v "$PWD/output:/workspace/output" \
-  ghcr.io/rsasaki0109/gnssplusplus-library:v0.4.0 \
+  ghcr.io/rsasaki0109/gnssplusplus-library:v0.5.0 \
   demo --output-dir /workspace/output/self-contained-demo
 ```
 
@@ -102,7 +102,7 @@ Build the complete exported library set before installing it:
 [public API header](include/libgnss++/gnss.hpp), and the
 [interface notes](docs/interfaces.md).
 
-See the [v0.4.0 release highlights](docs/releases/v0.4.0.md) and
+See the [v0.5.0 release highlights](docs/releases/v0.5.0.md) and
 [maintainer release runbook](docs/release_runbook.md) for distribution details.
 
 ## Results And Validation Status
