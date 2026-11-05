@@ -49,8 +49,9 @@ input automatically.
 **Kinematic RTK + IMU** runs `gnss fuse` with an IMU CSV (PPC format, or
 rtklibexplorer with *IMU format*), the IMU-to-antenna lever arm in body FLU
 and, by default, the tight-coupling preset (`--navi776-tc`). It writes the
-fused trajectory and the RTK solution the fusion ran on (`*_rtk.pos`); open
-both in Plot (solution 1 / solution 2) to compare. The sample `imu.csv`
+fused trajectory, the RTK solution the fusion ran on (`*_rtk.pos`) and,
+with *Write KML*, the fused trajectory as KML; open both `.pos` files in Plot
+(solution 1 / solution 2) to compare. The sample `imu.csv`
 covers the 40 s RTCM3 excerpt and fills in the PPC Tokyo lever arm
 `0.31, 0, 0.55`. The benefit depends on the data and tuning: see
 [RTK only vs RTK + GNSS/IMU on PPC](ppc_rtk_vs_gnss_imu_fusion.md) for the

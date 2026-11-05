@@ -160,6 +160,65 @@ TEST_F(TypesTest, SolutionFileRoundTripsFgoQualityColumns) {
     EXPECT_EQ(loaded_sol.iterations, sol.iterations);
 }
 
+TEST_F(TypesTest, MapOutputsKeepFusedEpochsWithoutSatellites) {
+    // gnss fuse writes IMU-fused epochs as FLOAT with num_satellites = 0;
+    // isValid() rejects those (< 4 satellites), but they carry a position and
+    // belong on the map. Epochs without a status or a finite position do not.
+    const auto make = [](double tow, SolutionStatus status, int satellites,
+                         double lat_deg) {
+        PositionSolution sol;
+        sol.time = GNSSTime(2324, tow);
+        sol.status = status;
+        sol.num_satellites = satellites;
+        sol.position_geodetic =
+            GeodeticCoord(lat_deg * M_PI / 180.0, 139.79 * M_PI / 180.0, 40.0);
+        sol.position_ecef = geodetic2ecef(sol.position_geodetic.latitude,
+                                          sol.position_geodetic.longitude,
+                                          sol.position_geodetic.height);
+        return sol;
+    };
+    Solution solution;
+    solution.addSolution(make(1.0, SolutionStatus::FIXED, 12, 35.10));
+    const PositionSolution fused = make(1.2, SolutionStatus::FLOAT, 0, 35.20);
+    EXPECT_FALSE(fused.isValid());
+    solution.addSolution(fused);
+    solution.addSolution(make(1.4, SolutionStatus::NONE, 0, 35.30));
+    PositionSolution no_position = make(1.6, SolutionStatus::FLOAT, 0, 35.40);
+    no_position.position_ecef.x() = std::numeric_limits<double>::quiet_NaN();
+    solution.addSolution(no_position);
+
+    const std::filesystem::path dir(GNSSPP_BINARY_DIR);
+    const auto read = [](const std::filesystem::path& path) {
+        std::ifstream file(path);
+        std::stringstream text;
+        text << file.rdbuf();
+        return text.str();
+    };
+
+    const std::filesystem::path kml_path = dir / "solution_map_fused_test.kml";
+    ASSERT_TRUE(solution.writeKML(kml_path.string()));
+    const std::string kml = read(kml_path);
+    std::filesystem::remove(kml_path);
+    EXPECT_NE(kml.find("<name>Fixed</name>"), std::string::npos);
+    EXPECT_NE(kml.find("<name>Float</name>"), std::string::npos);
+    EXPECT_NE(kml.find("35.10000000"), std::string::npos);
+    EXPECT_NE(kml.find("35.20000000"), std::string::npos);
+    EXPECT_EQ(kml.find("35.30000000"), std::string::npos);
+    EXPECT_EQ(kml.find("35.40000000"), std::string::npos);
+
+    const std::filesystem::path geojson_path = dir / "solution_map_fused_test.geojson";
+    ASSERT_TRUE(solution.writeGeoJSON(geojson_path.string()));
+    const std::string geojson = read(geojson_path);
+    std::filesystem::remove(geojson_path);
+    size_t features = 0;
+    for (size_t at = geojson.find("\"Feature\""); at != std::string::npos;
+         at = geojson.find("\"Feature\"", at + 1)) {
+        ++features;
+    }
+    EXPECT_EQ(features, 2u);
+    EXPECT_NE(geojson.find("\"num_satellites\":0"), std::string::npos);
+}
+
 TEST_F(TypesTest, SolutionLoaderMapsNamedOptionalColumns) {
     const std::filesystem::path path =
         std::filesystem::path(GNSSPP_BINARY_DIR) / "solution_named_optional_columns_test.pos";

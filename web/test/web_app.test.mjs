@@ -355,7 +355,8 @@ test('RTK + IMU command, IMU sniffing and options round trip', () => {
   assert.throws(() => buildPostCommand({ ...opts, imu: '' }), /needs an IMU \(CSV\) file/);
   const loose = buildPostCommand({ ...opts, leverArm: ['', '', ''], tightCoupling: false, imuFormat: 'rtklibexplorer-sf', kml: true });
   assert.ok(loose.args.includes('--imu-format') && !loose.args.includes('--lever-arm') && !loose.args.includes('--navi776-tc'));
-  assert.ok(!loose.args.includes('--kml')); // gnss_fuse's KML would be empty (fused epochs report 0 satellites)
+  assert.deepEqual(loose.outputs, ['rover_fused.pos', 'rover_fused_rtk.pos', 'rover_fused.kml']);
+  assert.ok(loose.commandLine.endsWith('--kml rover_fused.kml'));
 
   const toml = exportOptionsToml(opts);
   assert.match(toml, /^\[gnss_fuse\]$/m);

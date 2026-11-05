@@ -273,8 +273,10 @@ public:
      * @brief Write solutions in KML format for visualization.
      *
      * Outputs separate placemarks for PPP_FIXED/FIXED (green), PPP_FLOAT/FLOAT
-     * (yellow), and all other valid epochs (grey), making fix/float status
-     * immediately visible in Google Earth and similar tools.
+     * (yellow), and all other epochs (grey), making fix/float status
+     * immediately visible in Google Earth and similar tools. Every epoch with
+     * a status other than NONE and a finite position is drawn, including
+     * IMU-fused epochs that report no satellites (isValid() is not used).
      */
     bool writeKML(const std::string& filename) const;
 
@@ -298,7 +300,7 @@ public:
      * Emits a FeatureCollection with one LineString per status group
      * (fixed/float/other) and individual Point features carrying fix status,
      * satellite count, and PDOP as properties. Compatible with QGIS, Mapbox,
-     * Leaflet, and any GeoJSON-aware tool.
+     * Leaflet, and any GeoJSON-aware tool. Selects epochs like writeKML().
      */
     bool writeGeoJSON(const std::string& filename) const;
     

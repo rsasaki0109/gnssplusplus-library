@@ -495,6 +495,18 @@ bool isFloatStatus(SolutionStatus s) {
     return s == SolutionStatus::FLOAT || s == SolutionStatus::PPP_FLOAT;
 }
 
+// Map outputs (KML / GeoJSON) draw every epoch that carries a position.
+// PositionSolution::isValid() also asks for >= 4 satellites, a GNSS-only
+// notion: IMU-fused epochs (gnss fuse) report num_satellites = 0 because the
+// position comes from the filter, so isValid() would drop all of them.
+bool hasMapPosition(const PositionSolution& sol) {
+    if (sol.status == SolutionStatus::NONE) return false;
+    return sol.position_ecef.allFinite() &&
+           std::isfinite(sol.position_geodetic.latitude) &&
+           std::isfinite(sol.position_geodetic.longitude) &&
+           std::isfinite(sol.position_geodetic.height);
+}
+
 void writeKmlLineString(std::ofstream& file,
                         const std::string& name,
                         const std::string& color_abgr,
@@ -523,7 +535,7 @@ bool Solution::writeKML(const std::string& filename) const {
 
     std::vector<const PositionSolution*> fixed_pts, float_pts, other_pts;
     for (const auto& sol : solutions) {
-        if (!sol.isValid()) continue;
+        if (!hasMapPosition(sol)) continue;
         if (isFixedStatus(sol.status))      fixed_pts.push_back(&sol);
         else if (isFloatStatus(sol.status)) float_pts.push_back(&sol);
         else                                other_pts.push_back(&sol);
@@ -566,7 +578,7 @@ bool Solution::writeGeoJSON(const std::string& filename) const {
 
     bool first = true;
     for (const auto& sol : solutions) {
-        if (!sol.isValid()) continue;
+        if (!hasMapPosition(sol)) continue;
         const double lon = sol.position_geodetic.longitude * 180.0 / M_PI;
         const double lat = sol.position_geodetic.latitude  * 180.0 / M_PI;
         const double alt = sol.position_geodetic.height;
