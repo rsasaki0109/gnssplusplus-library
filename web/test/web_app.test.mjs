@@ -13,6 +13,7 @@ import {
   ERROR_BINS_M, errorClasses, errorClassLabels, errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu,
 } from '../js/analysis.js';
 import { addWorkerfsReadAhead } from '../js/engine.js';
+import { wasmSimdSupported } from '../js/runner.js';
 import { describeStored } from '../js/store.js';
 import { Workspace } from '../js/workspace.js';
 import { calendarToGpsSeconds, ecefToLlh, formatGpst, gpsSeconds, llhToEcef } from '../js/geo.js';
@@ -497,4 +498,11 @@ test('FGO command and options', () => {
   assert.ok(!plain.args.includes('--epoch-lambda-fixed-output'), 'no AR flags for the float preset');
   assert.throws(() => buildPostCommand({ ...opts, base: '' }), /needs a base file/);
   assert.throws(() => exportOptionsToml(opts), /gnss fgo has no --config/);
+});
+
+test('WebAssembly SIMD probe', () => {
+  // Node (V8) supports 128-bit SIMD; a module with an unknown SIMD opcode is rejected.
+  assert.equal(wasmSimdSupported(), true);
+  const bad = Uint8Array.from([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 250, 11]);
+  assert.equal(wasmSimdSupported(bad), false);
 });

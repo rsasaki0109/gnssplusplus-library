@@ -11,7 +11,7 @@ import {
 import { formatGpst, splitGpsSeconds, SECONDS_PER_WEEK } from './geo.js';
 import { exportOptionsToml, importOptionsToml } from './options.js';
 import { canvasesToPng, cssVar, PlotPanel, SkyPlot } from './plot.js';
-import { startJob, wasmAvailable } from './runner.js';
+import { startJob, wasmAvailable, wasmSimdSupported } from './runner.js';
 import { describeStored, FileStore } from './store.js';
 import { enuPlane, MAX_SPAN_M, TILE_SOURCES, TileLayer } from './tiles.js';
 import { Workspace } from './workspace.js';
@@ -1610,14 +1610,19 @@ const initialTool = location.hash.slice(1);
 showTool(['post', 'conv', 'plot', 'obs', 'info'].includes(initialTool) ? initialTool : 'post');
 
 (async () => {
-  engineReady = await wasmAvailable();
+  const deployed = await wasmAvailable();
+  const simd = wasmSimdSupported();
+  engineReady = deployed && simd;
   for (const button of $$('form button[type="submit"], #run-sample')) button.disabled = !engineReady;
   if (!engineReady) {
     const banner = $('#banner');
     banner.hidden = false;
-    banner.textContent = 'The WebAssembly tools were not found next to this page (wasm/*.wasm). '
-      + 'Build them with Emscripten (see wasm/README.md). Plot still works for local .pos files.';
-    $('#engine').textContent = 'engine: unavailable';
+    banner.textContent = deployed
+      ? 'This browser does not support WebAssembly SIMD, which the tools are built with '
+        + '(Chrome / Edge 91+, Firefox 89+, Safari 16.4+). Plot still works for local .pos files.'
+      : 'The WebAssembly tools were not found next to this page (wasm/*.wasm). '
+        + 'Build them with Emscripten (see wasm/README.md). Plot still works for local .pos files.';
+    $('#engine').textContent = deployed ? 'engine: needs WebAssembly SIMD' : 'engine: unavailable';
     return;
   }
   try {

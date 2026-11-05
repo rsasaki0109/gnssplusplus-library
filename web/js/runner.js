@@ -41,6 +41,21 @@ export function startJob(job, hooks = {}) {
   };
 }
 
+// Smallest module that uses a 128-bit SIMD instruction (i8x16.splat +
+// i8x16.popcnt); the tools are built with -msimd128.
+const SIMD_PROBE = new Uint8Array([
+  0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11,
+]);
+
+/** True when this browser's WebAssembly engine supports 128-bit SIMD. */
+export function wasmSimdSupported(probe = SIMD_PROBE) {
+  try {
+    return typeof WebAssembly === 'object' && WebAssembly.validate(probe);
+  } catch {
+    return false;
+  }
+}
+
 /** True when the wasm build was deployed next to the app. */
 export async function wasmAvailable(tool = 'gnss_solve') {
   try {
