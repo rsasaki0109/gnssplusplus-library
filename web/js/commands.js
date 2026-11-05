@@ -14,6 +14,7 @@ export const DISPATCH_NAMES = {
   gnss_rinex_info: 'rinex-info',
   gnss_visibility: 'visibility',
   gnss_fuse: 'fuse',
+  gnss_fgo: 'fgo',
 };
 
 export const POST_MODES = {
@@ -22,6 +23,7 @@ export const POST_MODES = {
   static: { tool: 'gnss_solve', label: 'Static RTK', rtkMode: 'static', needs: ['rover', 'base', 'nav'] },
   'moving-base': { tool: 'gnss_solve', label: 'Moving-base RTK', rtkMode: 'moving-base', needs: ['rover', 'base', 'nav'] },
   'rtk-imu': { tool: 'gnss_fuse', label: 'Kinematic RTK + IMU', needs: ['rover', 'base', 'nav', 'imu'] },
+  fgo: { tool: 'gnss_fgo', label: 'Kinematic FGO (batch, experimental)', needs: ['rover', 'base', 'nav'] },
   'ppp-kinematic': { tool: 'gnss_ppp', label: 'PPP Kinematic', pppMotion: '--kinematic', needs: ['rover'] },
   'ppp-static': { tool: 'gnss_ppp', label: 'PPP Static', pppMotion: '--static', needs: ['rover'] },
 };
@@ -29,6 +31,7 @@ export const POST_MODES = {
 export const RTK_PRESETS = ['survey', 'low-cost', 'moving-base', 'odaiba', 'urban'];
 export const RTK_IONO = ['auto', 'off', 'iflc', 'est'];
 export const IMU_FORMATS = ['ppc', 'rtklibexplorer-sf'];
+export const FGO_PRESETS = ['real-data-float', 'real-data-fixed', 'default'];
 
 /** Shell-like split: whitespace separated, '...' and "..." group, \ escapes. */
 export function splitArgs(text) {
@@ -131,7 +134,7 @@ function stem(name) {
 
 /** Default solution file name for a rover observation file. */
 export function defaultPosName(rover, mode) {
-  const suffix = { single: 'spp', 'ppp-kinematic': 'ppp', 'ppp-static': 'ppp', 'rtk-imu': 'fused' }[mode] || 'rtk';
+  const suffix = { single: 'spp', 'ppp-kinematic': 'ppp', 'ppp-static': 'ppp', 'rtk-imu': 'fused', fgo: 'fgo' }[mode] || 'rtk';
   return `${stem(rover || 'solution')}_${suffix}.pos`;
 }
 
@@ -140,7 +143,7 @@ export function defaultPosName(rover, mode) {
  * opts: { mode, rover, base, nav, sp3, clk, out, elevationMask, maxEpochs,
  *         preset, iono, ratio, baseEcef: [x,y,z] | null, kml, verbose,
  *         ionoFree, enableAr, imu, leverArm: [x,y,z] | null, tightCoupling,
- *         imuFormat, extra, workspaceNames }
+ *         imuFormat, fgoPreset, extra, workspaceNames }
  */
 export function buildPostCommand(opts) {
   const mode = POST_MODES[opts.mode];
@@ -207,6 +210,17 @@ export function buildPostCommand(opts) {
       cmd.flag('--base-ecef', ...xyz);
     }
     if (opts.kml) cmd.output('--kml', `${stem(out)}.kml`);
+  } else if (mode.tool === 'gnss_fgo') {
+    // Batch factor graph over the whole (or --max-epochs) span: code, TDCP
+    // and DD carrier factors; real-data-fixed adds LAMBDA ambiguity fixing.
+    cmd.input('--obs', opts.rover).input('--base', opts.base).input('--nav', opts.nav);
+    cmd.output('--out', out);
+    cmd.flag('--preset', opts.fgoPreset || 'real-data-float');
+    const ratio = finite(opts.ratio);
+    if (ratio !== null) cmd.flag('--lambda-ratio-threshold', ratio);
+    if (elevation !== null) cmd.flag('--min-elevation', elevation);
+    if (maxEpochs) cmd.flag('--max-epochs', maxEpochs);
+    cmd.output('--summary-json', `${stem(out)}_summary.json`);
   } else {
     cmd.input('--obs', opts.rover);
     if (opts.nav) cmd.input('--nav', opts.nav);
