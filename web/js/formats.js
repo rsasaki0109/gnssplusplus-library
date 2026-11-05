@@ -14,17 +14,55 @@ export const Q_LABELS = Object.freeze({
 // libgnss::SolutionStatus (include/libgnss++/core/types.hpp) -> Q.
 const LIBGNSS_STATUS_TO_Q = [Q.NONE, Q.SINGLE, Q.DGPS, Q.FLOAT, Q.FIX, Q.PPP, Q.PPP_FIX, Q.DR];
 
+const L6_PREAMBLE = [0x1a, 0xcf, 0xfc, 0x1d];
+const L6_FRAME_BYTES = 250;
+
+/**
+ * Correction service of a raw QZSS L6 log (250-byte frames) from its first
+ * frames, or null when the bytes do not start with an L6 frame. The frame
+ * header is the preamble, the PRN and the message type ID, whose bits are
+ * vendor ID (3), generation facility (2), correction service ID (1), ...
+ * (IS-QZSS-L6 / IS-QZSS-MDC): vendor 5 is CLAS, vendor 2 MADOCA-PPP with
+ * service 0 for orbit / clock / bias (L6E) and 1 for ionosphere (L6D).
+ * Returns 'clas', 'l6e', 'l6d', or 'l6' for other L6 data.
+ */
+export function l6Service(headBytes) {
+  const bytes = headBytes instanceof Uint8Array ? headBytes : new Uint8Array(headBytes || []);
+  let frames = 0;
+  let clas = false;
+  let madoca = false;
+  let iono = false;
+  for (let i = 0; i + 6 <= bytes.length; i += L6_FRAME_BYTES) {
+    if (!L6_PREAMBLE.every((b, k) => bytes[i + k] === b)) break;
+    frames += 1;
+    const type = bytes[i + 5];
+    if (type >> 5 === 5) clas = true;
+    if (type >> 5 === 2) {
+      madoca = true;
+      if (type & 0x04) iono = true;
+    }
+  }
+  if (frames === 0) return null;
+  if (clas) return 'clas';
+  if (madoca) return iono ? 'l6d' : 'l6e';
+  return 'l6';
+}
+
 /**
  * Guess what a file is from its name and first bytes.
- * Returns one of: obs, nav, sp3, clk, rtcm, ubx, pos, vis, imu, csv, kml, json, toml, other.
+ * Returns one of: obs, nav, sp3, clk, atx, l6e, l6d, clas, l6, rtcm, ubx,
+ * pos, vis, imu, csv, kml, json, toml, other.
  */
 export function sniffKind(name, headBytes) {
   const lower = name.toLowerCase();
   const bytes = headBytes instanceof Uint8Array ? headBytes : new Uint8Array(headBytes || []);
   if (bytes.length >= 2 && bytes[0] === 0xb5 && bytes[1] === 0x62) return 'ubx';
   if (bytes.length >= 1 && bytes[0] === 0xd3) return 'rtcm';
+  const l6 = l6Service(bytes);
+  if (l6) return l6;
   const text = new TextDecoder('latin1').decode(bytes.subarray(0, 4096));
   const firstLine = text.split(/\r?\n/, 1)[0] || '';
+  if (firstLine.includes('ANTEX VERSION / SYST')) return 'atx';
   if (firstLine.includes('RINEX VERSION / TYPE')) {
     const type = firstLine.charAt(20).toUpperCase();
     if (type === 'O') return 'obs';
@@ -42,6 +80,8 @@ export function sniffKind(name, headBytes) {
   if (/\.(nav|\d\d[nglpfhq])$/.test(lower) || /_[a-z]n\.rnx$/.test(lower)) return 'nav';
   if (/\.(sp3|eph)$/.test(lower)) return 'sp3';
   if (/\.clk(_\d+s)?$/.test(lower)) return 'clk';
+  if (/\.atx$/.test(lower)) return 'atx';
+  if (/\.l6$/.test(lower)) return 'l6';
   if (/\.csv$/.test(lower)) return 'csv';
   if (/\.kml$/.test(lower)) return 'kml';
   if (/\.json$/.test(lower)) return 'json';

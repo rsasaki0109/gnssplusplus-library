@@ -2,15 +2,18 @@
 // Runs the browser app's demo pipeline against the WebAssembly build in Node,
 // through the same engine and command builders the web GUI uses:
 //
-//   node wasm/test/smoke.mjs build-wasm/wasm/dist
+//   node wasm/test/smoke.mjs build-wasm/wasm/dist [--qzss <samples dir>]
 //
 // RTCM3 -> RINEX (gnss_convert), RINEX info, visibility (gnss_visibility),
 // kinematic RTK (gnss_solve), SPP and static PPP on the repository fixtures,
-// with accuracy checks against the fixture reference trajectory.
+// with accuracy checks against the fixture reference trajectory. With
+// --qzss, also MADOCA-PPP and CLAS PPP from QZSS L6 logs on the public
+// MADOCALIB / CLASLIB samples (QZSS_SAMPLES below), checked against the
+// native gnss ppp results of the same commands.
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { runTool } from '../../web/js/engine.js';
@@ -33,11 +36,29 @@ const FIXTURES = {
   'synthetic_ppp.clk': 'demo/fixtures/synthetic_ppp.clk',
 };
 
+// Public QZSS L6 samples, relative to the --qzss directory: MADOCALIB
+// 0089f7dc (the CI MADOCA matrix pin; IGS station MIZU, 2025-04-01 00:00-01:00)
+// and CLASLIB 4320e844 (2019-08-27). The Docs workflow checks out exactly
+// these files.
+export const QZSS_SAMPLES = {
+  madocalib: [
+    'sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx',
+    'sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx',
+    'sample_data/data/igs20.atx',
+    'sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.204.l6',
+    'sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.206.l6',
+    'sample_data/data/l6/2025/091/2025091A.200.l6',
+    'sample_data/data/l6/2025/091/2025091A.201.l6',
+  ],
+  claslib: ['data/0627239Q.obs', 'data/sept_2019239.nav', 'data/2019239Q.l6'],
+};
+
 /**
  * factoryFor(tool) -> Emscripten module factory. Exported so the pipeline can
  * also be driven by another backend (e.g. a native shim during development).
+ * options.qzss: directory holding the QZSS_SAMPLES trees (madocalib/, claslib/).
  */
-export async function runSmoke(factoryFor, log = console.log) {
+export async function runSmoke(factoryFor, log = console.log, options = {}) {
   const files = new Map(Object.entries(FIXTURES).map(([name, path]) => [name, readFileSync(join(ROOT, path))]));
   const text = (name) => new TextDecoder().decode(files.get(name));
 
@@ -162,6 +183,47 @@ export async function runSmoke(factoryFor, log = console.log) {
   // The synthetic receiver sits at 35N 139E.
   assert.ok(Math.abs(ppp.lat[ppp.n - 1] - 35) < 1e-4 && Math.abs(ppp.lon[ppp.n - 1] - 139) < 1e-4);
 
+  if (options.qzss) {
+    for (const [tree, paths] of Object.entries(QZSS_SAMPLES)) {
+      for (const path of paths) files.set(basename(path), readFileSync(join(options.qzss, tree, path)));
+    }
+    const ecefDistance = (s, xyz) => Math.hypot(s.x[s.n - 1] - xyz[0], s.y[s.n - 1] - xyz[1], s.z[s.n - 1] - xyz[2]);
+
+    // MADOCA PPP-AR with L6D ionosphere, 1 h kinematic (the matrix's pppar-ion
+    // case). Native gnss ppp: 91 PPP FIX / 27 float, final position below.
+    const madocaOpts = {
+      mode: 'ppp-kinematic', rover: 'MIZU00JPN_R_20250910000_01D_30S_MO.rnx', nav: 'BRDM00DLR_S_20250910000_01D_MN.rnx',
+      corrections: 'madoca', l6e: ['2025091A.204.l6', '2025091A.206.l6'], l6d: ['2025091A.200.l6', '2025091A.201.l6'],
+      antex: 'igs20.atx', enableAr: true, maxEpochs: '120', out: 'mizu_madoca.pos',
+    };
+    await run(buildPostCommand(madocaOpts));
+    const madoca = parseSolution('mizu_madoca.pos', text('mizu_madoca.pos'));
+    const madocaFix = madoca.q.filter((q) => q === Q.PPP_FIX).length;
+    const madocaDelta = ecefDistance(madoca, [-3857171.260557, 3108692.773214, 4004040.105784]);
+    log(`MADOCA-PPP: ${madoca.n} epochs, ${madocaFix} PPP FIX (native 91), final ${(madocaDelta * 1000).toFixed(2)} mm from native`);
+    assert.equal(madoca.n, 118);
+    assert.ok(madocaFix >= 85, `MADOCA PPP FIX epochs: ${madocaFix}`);
+    assert.ok(madocaDelta < 0.05, `MADOCA final position ${madocaDelta} m from native`);
+    files.set('madoca.toml', new TextEncoder().encode(exportOptionsToml(madocaOpts)));
+    // Options from the TOML (AR, ratio, convergence), inputs on the command line.
+    await run(buildPostCommand({
+      ...madocaOpts, enableAr: false, out: 'mizu_madoca_config.pos',
+      extra: '--config madoca.toml', workspaceNames: [...files.keys()],
+    }));
+    assert.equal(text('mizu_madoca_config.pos'), text('mizu_madoca.pos'), 'MADOCA --config TOML and flags differ');
+
+    // CLAS from the raw L6 log (native Compact SSR decoder), 300 epochs static.
+    await run(buildPostCommand({
+      mode: 'ppp-static', rover: '0627239Q.obs', nav: 'sept_2019239.nav', corrections: 'clas', clasL6: '2019239Q.l6',
+      maxEpochs: '300', out: 'clas.pos',
+    }));
+    const clas = parseSolution('clas.pos', text('clas.pos'));
+    const clasDelta = ecefDistance(clas, [-3957234.628684, 3310366.314382, 3737530.126659]);
+    log(`CLAS: ${clas.n} epochs, final ${(clasDelta * 1000).toFixed(2)} mm from native`);
+    assert.equal(clas.n, 300);
+    assert.ok(clasDelta < 0.05, `CLAS final position ${clasDelta} m from native`);
+  }
+
   // Argument errors come back as a non-zero exit code, not a crash.
   const bad = await runTool(await factoryFor('gnss_solve'), { args: ['--no-such-option'] });
   process.exitCode = 0;
@@ -170,6 +232,9 @@ export async function runSmoke(factoryFor, log = console.log) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const dist = resolve(process.argv[2] || 'build-wasm/wasm/dist');
-  await runSmoke(async (tool) => (await import(pathToFileURL(join(dist, `${tool}.js`)).href)).default);
+  const args = process.argv.slice(2);
+  const qzssAt = args.indexOf('--qzss');
+  const qzss = qzssAt >= 0 ? resolve(args.splice(qzssAt, 2)[1]) : null;
+  const dist = resolve(args[0] || 'build-wasm/wasm/dist');
+  await runSmoke(async (tool) => (await import(pathToFileURL(join(dist, `${tool}.js`)).href)).default, console.log, { qzss });
 }

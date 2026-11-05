@@ -76,14 +76,33 @@
             <legend>Input files</legend>
             <label>Rover observation (RINEX OBS)
               <select name="rover" data-kinds="obs" data-prefer="rover"></select></label>
+            <label data-show="ppp">PPP corrections
+              <select name="pppCorr">
+                <option value="products">Broadcast / precise products (NAV, SP3, CLK)</option>
+                <option value="madoca">QZSS MADOCA-PPP (L6E, L6D logs)</option>
+                <option value="clas">QZSS CLAS (L6 log, experimental)</option>
+              </select></label>
             <label data-show="rtk imu fgo">Base observation (RINEX OBS)
               <select name="base" data-kinds="obs" data-prefer="base"></select></label>
-            <label>Navigation (RINEX NAV)<span data-show="ppp" class="opt"> optional</span>
+            <label>Navigation (RINEX NAV)<span data-show="ppp" data-show-corr="products" class="opt"> optional</span>
               <select name="nav" data-kinds="nav" data-optional-modes="ppp"></select></label>
-            <label data-show="spp ppp">Precise orbit (SP3) <span class="opt">optional</span>
+            <label data-show="spp ppp" data-show-corr="products">Precise orbit (SP3) <span class="opt">optional</span>
               <select name="sp3" data-kinds="sp3" data-optional></select></label>
-            <label data-show="spp ppp">Precise clock (CLK) <span class="opt">optional</span>
+            <label data-show="spp ppp" data-show-corr="products">Precise clock (CLK) <span class="opt">optional</span>
               <select name="clk" data-kinds="clk" data-optional></select></label>
+            <div data-show="ppp" data-show-corr="madoca" class="file-list">
+              <span>MADOCA L6E logs <span class="opt">orbit / clock / bias: every channel and hour of the run</span></span>
+              <div id="post-l6e" class="checklist" data-kinds="l6e l6" data-primary="l6e" data-empty="No L6E logs in Files yet."></div>
+            </div>
+            <div data-show="ppp" data-show-corr="madoca" class="file-list">
+              <span>MADOCA L6D logs <span class="opt">optional: ionosphere over Japan and Australia</span></span>
+              <div id="post-l6d" class="checklist" data-kinds="l6d" data-primary="l6d" data-empty="No L6D logs in Files."></div>
+            </div>
+            <label data-show="ppp" data-show-corr="clas">CLAS L6 log
+              <select name="clasL6" data-kinds="clas l6"></select></label>
+            <label data-show="ppp">Antenna model (ANTEX) <span class="opt">optional</span>
+              <select name="antex" data-kinds="atx" data-optional></select></label>
+            <p class="hint" data-show="ppp" data-show-corr="madoca clas">QZSS L6 logs are the 250-byte frames of an L6 receiver or the hourly files of the QZSS archive; use the broadcast NAV of the same day.</p>
             <label data-show="imu">IMU samples (CSV)
               <select name="imu" data-kinds="imu"></select></label>
           </fieldset>
@@ -114,7 +133,7 @@
                   <option value="real-data-fixed">real-data-fixed (per-epoch LAMBDA fixes)</option>
                   <option value="default">default</option>
                 </select></label>
-              <label data-show="rtk imu fgo">AR ratio threshold<input name="ratio" type="number" step="any" min="1" placeholder="default"></label>
+              <label data-show="rtk imu fgo ppp" data-show-corr="products madoca">AR ratio threshold<input name="ratio" type="number" step="any" min="1" placeholder="default"></label>
             </div>
             <div data-show="imu" class="imu-opts">
               <label>IMU to antenna lever arm, body FLU (m) <span class="opt">x forward, y left, z up</span></label>
@@ -145,7 +164,7 @@
             </div>
             <div class="checks">
               <label data-show="spp" class="check"><input type="checkbox" name="ionoFree"> Ionosphere-free code (dual frequency)</label>
-              <label data-show="ppp" class="check"><input type="checkbox" name="enableAr"> PPP ambiguity resolution</label>
+              <label data-show="ppp" data-show-corr="products madoca" class="check"><input type="checkbox" name="enableAr"> PPP ambiguity resolution</label>
               <label data-show="imu" class="check"><input type="checkbox" name="tightCoupling" checked> Tight coupling (<code>--navi776-tc</code>)</label>
               <label data-show="rtk imu ppp" class="check"><input type="checkbox" name="kml" checked> Write KML</label>
               <label data-show="rtk" class="check"><input type="checkbox" name="verbose" checked> Progress (<code>--verbose</code>)</label>
@@ -347,7 +366,7 @@
           <h2>RINEX header and record summary</h2>
           <fieldset>
             <legend>Files</legend>
-            <div id="info-files" class="checklist" data-kinds="obs nav clk"></div>
+            <div id="info-files" class="checklist" data-kinds="obs nav clk" data-empty="No RINEX files in Files yet."></div>
             <label class="check"><input type="checkbox" name="countRecords" checked> Count epochs / ephemerides</label>
           </fieldset>
           <div class="actions">

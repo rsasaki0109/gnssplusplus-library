@@ -208,6 +208,8 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .btn:disabled { opacity: 0.5; cursor: default; }
 .btn.small { padding: 4px 12px; font-size: 0.82rem; }
 .checklist { display: flex; flex-direction: column; gap: 4px; }
+.file-list { display: flex; flex-direction: column; gap: 4px; }
+.file-list .checklist { max-height: 9.5em; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; }
 
 /* Run view */
 .run { display: flex; flex-direction: column; gap: 8px; min-height: 200px; }

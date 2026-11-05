@@ -7,7 +7,9 @@ import { test } from 'node:test';
 import {
   buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultPosName, splitArgs,
 } from '../js/commands.js';
-import { parseSolution, parseVisibilityCsv, Q, rinexFirstEpoch, rinexObsTimeSpan, sniffKind } from '../js/formats.js';
+import {
+  l6Service, parseSolution, parseVisibilityCsv, Q, rinexFirstEpoch, rinexObsTimeSpan, sniffKind,
+} from '../js/formats.js';
 import { exportOptionsToml, extraArgsToEntries, importOptionsToml, parseFlatToml } from '../js/options.js';
 import {
   ERROR_BINS_M, errorClasses, errorClassLabels, errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu,
@@ -248,7 +250,9 @@ test('options import reads the repository example configs', () => {
   const ppp = importOptionsToml(fixture('configs/examples/ppp_static.toml').toString());
   assert.equal(ppp.mode, 'ppp-static');
   assert.equal(ppp.fields.enableAr, true);
-  assert.equal(ppp.extra, '--estimate-troposphere --ar-ratio-threshold 3.0');
+  assert.equal(ppp.fields.ratio, '3.0');
+  assert.equal(ppp.fields.pppCorr, 'products');
+  assert.equal(ppp.extra, '--estimate-troposphere');
 
   const odd = importOptionsToml('[gnss_solve]\nmode = "auto"\nratio = "sat-count"\npreset = "unknown"\n');
   assert.equal(odd.mode, 'kinematic');
@@ -516,4 +520,99 @@ test('rinexFirstEpoch reads OBS / NAV first epochs (RINEX 2 and 3)', () => {
   assert.equal(rinexFirstEpoch(`${withFirst}${header('OBSERVATION DATA')}> 2030 01 01 00 00 00.0  0  1\n`), at(2024, 7, 23, 4, 4, 30));
   assert.equal(rinexFirstEpoch('no header here'), null);
   assert.equal(rinexFirstEpoch(`${header('NAVIGATION DATA')}     6.800000000000D+01-1.349687500000D+02\n`), null);
+});
+
+// Raw QZSS L6 frames: preamble, PRN, message type ID (vendor / facility /
+// correction service / ... bits), then the data part (zeros here).
+function l6Frames(...headers) {
+  const out = new Uint8Array(250 * headers.length);
+  headers.forEach(([prn, type], i) => out.set([0x1a, 0xcf, 0xfc, 0x1d, prn, type], 250 * i));
+  return out;
+}
+
+test('QZSS L6 logs and ANTEX files are recognised', () => {
+  // Header bytes as in the MADOCALIB / CLASLIB sample logs.
+  assert.equal(l6Service(l6Frames([204, 0x41], [204, 0x61], [204, 0x40])), 'l6e');
+  assert.equal(l6Service(l6Frames([201, 0x45], [201, 0x44])), 'l6d');
+  assert.equal(l6Service(l6Frames([193, 0xa1], [193, 0xa0])), 'clas');
+  assert.equal(l6Service(l6Frames([199, 0x61])), 'l6');
+  assert.equal(l6Service(new Uint8Array([0x1a, 0xcf, 0xfc])), null);
+  assert.equal(l6Service(new TextEncoder().encode('     3.04           OBSERVATION DATA')), null);
+  assert.equal(sniffKind('2025091A.204.l6', l6Frames([204, 0x40])), 'l6e');
+  assert.equal(sniffKind('2025091A.200.l6', l6Frames([200, 0x45])), 'l6d');
+  assert.equal(sniffKind('2019239Q.l6', l6Frames([193, 0xa0])), 'clas');
+  assert.equal(sniffKind('capture.bin', l6Frames([193, 0xb1])), 'clas');
+  assert.equal(sniffKind('empty.l6', new Uint8Array()), 'l6');
+  const antex = '     1.4            M                                       ANTEX VERSION / SYST\n';
+  assert.equal(sniffKind('igs20.txt', new TextEncoder().encode(antex)), 'atx');
+  assert.equal(sniffKind('igs20.atx', new Uint8Array()), 'atx');
+});
+
+test('MADOCA-PPP and CLAS commands mirror gnss ppp', () => {
+  const common = { mode: 'ppp-kinematic', rover: 'MIZU.rnx', nav: 'BRDM.rnx', kml: false };
+  const madoca = buildPostCommand({
+    ...common, corrections: 'madoca', l6e: ['2025091A.204.l6', '2025091A.206.l6'],
+    l6d: ['2025091A.200.l6', '2025091A.201.l6'], antex: 'igs20.atx', enableAr: true, maxEpochs: '120',
+    sp3: 'ignored.sp3',
+  });
+  assert.equal(madoca.tool, 'gnss_ppp');
+  assert.equal(madoca.commandLine,
+    'gnss ppp --obs MIZU.rnx --nav BRDM.rnx --madoca-l6 2025091A.204.l6 --madoca-l6 2025091A.206.l6 '
+    + '--madoca-l6d 2025091A.200.l6 --madoca-l6d 2025091A.201.l6 --antex igs20.atx --out MIZU_madoca.pos '
+    + '--kinematic --max-epochs 120 --ar-method per-freq --enable-ar --ar-ratio-threshold 1.5 '
+    + '--convergence-policy local-enu --convergence-threshold-horizontal 0.75 --convergence-threshold-vertical 1.25 '
+    + '--summary-json MIZU_madoca_summary.json');
+  assert.deepEqual(madoca.inputs, [
+    'MIZU.rnx', 'BRDM.rnx', '2025091A.204.l6', '2025091A.206.l6', '2025091A.200.l6', '2025091A.201.l6', 'igs20.atx',
+  ]);
+  // L6D needs the per-frequency filter even without AR; L6E alone needs neither.
+  const float = buildPostCommand({ ...common, corrections: 'madoca', l6e: ['e.l6'], l6d: ['d.l6'], ratio: '2' });
+  assert.match(float.commandLine, /--madoca-l6d d\.l6 --out MIZU_madoca\.pos --kinematic --ar-method per-freq --summary-json/);
+  const l6eOnly = buildPostCommand({ ...common, mode: 'ppp-static', corrections: 'madoca', l6e: ['e.l6'] });
+  assert.doesNotMatch(l6eOnly.commandLine, /--ar-method|--enable-ar/);
+  assert.match(l6eOnly.commandLine, /--static/);
+  assert.match(buildPostCommand({ ...common, corrections: 'madoca', l6e: ['e.l6'], enableAr: true, ratio: '2' }).commandLine,
+    /--enable-ar --ar-ratio-threshold 2 --convergence-policy/);
+
+  const clas = buildPostCommand({ ...common, mode: 'ppp-static', corrections: 'clas', clasL6: '2019239Q.l6', enableAr: true });
+  assert.equal(clas.commandLine,
+    'gnss ppp --obs MIZU.rnx --nav BRDM.rnx --ssr 2019239Q.l6 --clas-osr --out MIZU_clas.pos --static '
+    + '--summary-json MIZU_clas_summary.json');
+
+  const products = buildPostCommand({ mode: 'ppp-static', rover: 'r.obs', nav: 'n.nav', enableAr: true, ratio: '2.5', l6e: ['e.l6'] });
+  assert.match(products.commandLine, /--static --enable-ar --ar-ratio-threshold 2\.5 --summary-json r_ppp_summary\.json$/);
+  assert.doesNotMatch(products.commandLine, /madoca/);
+
+  assert.throws(() => buildPostCommand({ ...common, nav: '', corrections: 'madoca', l6e: ['e.l6'] }), /MADOCA-PPP needs a navigation file/);
+  assert.throws(() => buildPostCommand({ ...common, corrections: 'madoca', l6e: [] }), /at least one L6E file/);
+  assert.throws(() => buildPostCommand({ ...common, corrections: 'clas' }), /CLAS needs an L6 file/);
+  assert.throws(() => buildPostCommand({ ...common, corrections: 'ssr' }), /unknown PPP corrections/);
+  assert.equal(defaultPosName('MIZU.rnx', 'ppp-static', 'madoca'), 'MIZU_madoca.pos');
+  assert.equal(defaultPosName('MIZU.rnx', 'kinematic', 'madoca'), 'MIZU_rtk.pos');
+});
+
+test('MADOCA-PPP and CLAS options round-trip through TOML', () => {
+  const madoca = exportOptionsToml({
+    mode: 'ppp-kinematic', corrections: 'madoca', l6e: ['e.l6'], l6d: ['d.l6'], enableAr: true, elevationMask: '10', extra: '',
+  });
+  assert.deepEqual(parseFlatToml(madoca).sections.gnss_ppp, [
+    ['kinematic', true], ['elevation_mask', '10'], ['ar_method', 'per-freq'], ['enable_ar', true],
+    ['ar_ratio_threshold', '1.5'], ['convergence_policy', 'local-enu'],
+    ['convergence_threshold_horizontal', '0.75'], ['convergence_threshold_vertical', '1.25'],
+  ]);
+  assert.doesNotMatch(madoca, /\.l6/); // correction logs are inputs, not options
+  const back = importOptionsToml(madoca);
+  assert.equal(back.mode, 'ppp-kinematic');
+  assert.equal(back.fields.pppCorr, 'madoca');
+  assert.equal(back.fields.enableAr, true);
+  assert.equal(back.fields.ratio, '1.5');
+  assert.equal(back.extra, '');
+
+  const custom = importOptionsToml('[gnss_ppp]\nar_method = "per-freq"\nconvergence_policy = "legacy-3d"\n');
+  assert.equal(custom.fields.pppCorr, 'madoca');
+  assert.equal(custom.extra, '--convergence-policy legacy-3d');
+
+  const clas = exportOptionsToml({ mode: 'ppp-static', corrections: 'clas', clasL6: 'x.l6', enableAr: true, extra: '' });
+  assert.deepEqual(parseFlatToml(clas).sections.gnss_ppp, [['kinematic', false], ['clas_osr', true]]);
+  assert.equal(importOptionsToml(clas).fields.pppCorr, 'clas');
 });

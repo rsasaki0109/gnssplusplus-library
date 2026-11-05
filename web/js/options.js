@@ -4,18 +4,23 @@
 // the tool's --no-* form, arrays only where the tool accepts them. Input and
 // output files are not written, as RTKPOST's options file omits them.
 
-import { IMU_FORMATS, POST_MODES, RTK_IONO, RTK_PRESETS, splitArgs } from './commands.js';
+import { IMU_FORMATS, MADOCA_AR, POST_MODES, RTK_IONO, RTK_PRESETS, splitArgs } from './commands.js';
 
 // GUI option -> CLI key per tool. Keys follow the CLI flag names.
 const SOLVE_KEYS = { preset: 'preset', iono: 'iono', ratio: 'ratio', elevationMask: 'elevation_mask_deg', maxEpochs: 'max_epochs' };
-const PPP_KEYS = { elevationMask: 'elevation_mask', maxEpochs: 'max_epochs' };
+const PPP_KEYS = { elevationMask: 'elevation_mask', maxEpochs: 'max_epochs', ratio: 'ar_ratio_threshold' };
 const FUSE_KEYS = { preset: 'preset', ratio: 'ratio', elevationMask: 'elevation_mask_deg', maxEpochs: 'max_epochs' };
 const TOOL_KEYS = { gnss_solve: SOLVE_KEYS, gnss_ppp: PPP_KEYS, gnss_fuse: FUSE_KEYS };
 const DISPATCH = { gnss_solve: 'solve', gnss_ppp: 'ppp', gnss_fuse: 'fuse' };
 // `false` values each tool's TOML schema turns into a negative flag.
 const NEGATIVE_FLAG = { enable_ar: 'no-ar', enable_wide_lane_ar: 'no-wide-lane-ar' };
 // Keys naming input/output files: skipped on export, matched to Files on import.
-const FILE_KEYS = ['rover', 'base', 'nav', 'obs', 'sp3', 'clk', 'imu', 'out', 'rtk_pos_out', 'data_dir', 'kml'];
+const FILE_KEYS = ['rover', 'base', 'nav', 'obs', 'sp3', 'clk', 'imu', 'out', 'rtk_pos_out', 'data_dir', 'kml', 'antex'];
+// The MADOCA PPP-AR convergence settings the GUI adds (commands.js), as TOML.
+const MADOCA_CONVERGENCE = Object.fromEntries(
+  Array.from({ length: MADOCA_AR.convergence.length / 2 }, (_, i) => [
+    MADOCA_AR.convergence[2 * i].slice(2).replace(/-/g, '_'), MADOCA_AR.convergence[2 * i + 1]]),
+);
 const NUMERIC_FIELDS = ['ratio', 'elevationMask', 'maxEpochs'];
 
 // Whether the form can hold this value (else it goes to Extra arguments).
@@ -86,11 +91,27 @@ export function exportOptionsToml(opts, commandHint = '') {
     if (!opts.kml) entries.push(['kml', false]);
     if (opts.verbose) entries.push(['verbose', true]);
   } else {
+    // Correction inputs (L6 logs, like NAV / SP3 / CLK) are not written; the
+    // options that select their processing are.
+    const corrections = opts.corrections || 'products';
+    const l6d = opts.l6d || [];
     entries.push(['kinematic', mode.pppMotion === '--kinematic']);
     for (const [field, key] of Object.entries(PPP_KEYS)) {
+      if (field === 'ratio') continue;
       if (hasValue(opts[field])) entries.push([key, opts[field]]);
     }
-    if (opts.enableAr) entries.push(['enable_ar', true]);
+    if (corrections === 'clas') {
+      entries.push(['clas_osr', true]);
+    } else if (corrections === 'madoca') {
+      if (opts.enableAr || l6d.length) entries.push(['ar_method', 'per-freq']);
+      if (opts.enableAr) {
+        entries.push(['enable_ar', true], ['ar_ratio_threshold', hasValue(opts.ratio) ? opts.ratio : MADOCA_AR.ratio]);
+        entries.push(...Object.entries(MADOCA_CONVERGENCE));
+      }
+    } else if (opts.enableAr) {
+      entries.push(['enable_ar', true]);
+      if (hasValue(opts.ratio)) entries.push(['ar_ratio_threshold', opts.ratio]);
+    }
   }
   entries.push(...extraArgsToEntries(opts.extra));
   const lines = [
@@ -198,6 +219,9 @@ export function importOptionsToml(text) {
   fields.verbose = false;
   fields.enableAr = false;
   fields.basePos = 'header';
+  if (isPpp) fields.pppCorr = 'products';
+  // MADOCA PPP-AR convergence keys equal to the GUI's are implied by the mode.
+  const madocaAr = isPpp && entries.some(([k, v]) => k === 'ar_method' && v === 'per-freq');
   if (isFuse) Object.assign(fields, { tightCoupling: false, imuFormat: 'ppc', leverX: '', leverY: '', leverZ: '' });
   for (const [key, value] of entries) {
     if (FILE_KEYS.includes(key) && typeof value === 'string') {
@@ -230,6 +254,12 @@ export function importOptionsToml(text) {
       fields.verbose = true;
     } else if (isPpp && key === 'enable_ar' && typeof value === 'boolean') {
       fields.enableAr = value;
+    } else if (isPpp && key === 'clas_osr' && value === true) {
+      fields.pppCorr = 'clas';
+    } else if (madocaAr && key === 'ar_method') {
+      fields.pppCorr = 'madoca';
+    } else if (madocaAr && key in MADOCA_CONVERGENCE && String(value) === MADOCA_CONVERGENCE[key]) {
+      // implied by MADOCA PPP-AR
     } else {
       extra.push(...entryToArgs(key, value));
     }

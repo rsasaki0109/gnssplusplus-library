@@ -1,13 +1,15 @@
 // Browser end-to-end test of the GUI with the real WebAssembly tools.
 //
-//   node wasm/test/browser.mjs <site dir> [--screenshots <dir>]
+//   node wasm/test/browser.mjs <site dir> [--qzss <samples dir>] [--screenshots <dir>]
 //
 // <site dir> is the output of wasm/assemble_site.py's parent (the GUI under
 // <site dir>/app/). The site is served on localhost and driven in headless
 // Chromium with Playwright: the demo pipeline, RTK + IMU, FGO, SPP and PPP
 // runs, the Observations and Plot views (map tiles answered locally, error
-// colouring, PNG export) and "Keep files after reload". It fails on any page
-// error, console error or request to another site than the map tile hosts.
+// colouring, PNG export) and "Keep files after reload"; with --qzss, also
+// MADOCA-PPP and CLAS on the public QZSS L6 samples (smoke.mjs QZSS_SAMPLES)
+// added through the file input. It fails on any page error, console error or
+// request to another site than the map tile hosts.
 // Playwright is resolved from $PLAYWRIGHT_PREFIX/node_modules when set (CI
 // installs it there), else from the usual module paths.
 import { strict as assert } from 'node:assert';
@@ -17,10 +19,14 @@ import { createRequire } from 'node:module';
 import { extname, join, normalize, resolve } from 'node:path';
 import { deflateSync } from 'node:zlib';
 
+import { QZSS_SAMPLES } from './smoke.mjs';
+
 const args = process.argv.slice(2);
 const siteDir = resolve(args[0] || 'site');
 const shotsAt = args.indexOf('--screenshots');
 const shotsDir = shotsAt >= 0 ? resolve(args[shotsAt + 1]) : null;
+const qzssAt = args.indexOf('--qzss');
+const qzssDir = qzssAt >= 0 ? resolve(args[qzssAt + 1]) : null;
 if (!existsSync(join(siteDir, 'app', 'index.html'))) throw new Error(`no app/index.html under ${siteDir}`);
 if (shotsDir) mkdirSync(shotsDir, { recursive: true });
 
@@ -182,6 +188,48 @@ try {
   await page.uncheck('#keep-files');
   await page.waitForTimeout(500);
   log(`keep files: ${before.length} files restored after reload`);
+
+  if (qzssDir) {
+    // QZSS L6 PPP: the samples go in through the file input like a user's files.
+    const paths = Object.entries(QZSS_SAMPLES).flatMap(([tree, list]) => list.map((path) => join(qzssDir, tree, path)));
+    const names = paths.map((path) => path.split('/').pop());
+    await page.setInputFiles('#file-input', paths);
+    await page.waitForFunction((want) => {
+      const have = [...document.querySelectorAll('#file-list li:not(.empty) .name')].map((e) => e.firstChild.textContent);
+      return want.every((name) => have.includes(name));
+    }, names, { timeout: 60000 });
+    const fixedSolutions = async () => Number((/PPP fixed solutions: (\d+)/.exec(await text('#tool-post [data-log]')) || [])[1]);
+
+    await post('MADOCA-PPP (L6E + L6D, AR)', async () => {
+      await mode('ppp-kinematic');
+      await page.selectOption('#post-form select[name="pppCorr"]', 'madoca');
+      await page.selectOption('#post-form select[name="rover"]', 'MIZU00JPN_R_20250910000_01D_30S_MO.rnx');
+      await page.selectOption('#post-form select[name="nav"]', 'BRDM00DLR_S_20250910000_01D_MN.rnx');
+      await page.selectOption('#post-form select[name="antex"]', 'igs20.atx');
+      await page.check('#post-form input[name="enableAr"]');
+      await page.fill('#post-form input[name="maxEpochs"]', '120');
+      const ticked = (list) => page.$$eval(`${list} input:checked`, (els) => els.map((e) => e.value));
+      assert.deepEqual(await ticked('#post-l6e'), ['2025091A.204.l6', '2025091A.206.l6'], 'L6E logs ticked by kind');
+      assert.deepEqual(await ticked('#post-l6d'), ['2025091A.200.l6', '2025091A.201.l6'], 'L6D logs ticked by kind');
+      assert.ok(await page.isHidden('#post-form select[name="sp3"]'), 'SP3 hidden for MADOCA');
+    }, ['MIZU00JPN_R_20250910000_01D_30S_MO_madoca.pos', 'MIZU00JPN_R_20250910000_01D_30S_MO_madoca.kml']);
+    const madocaFix = await fixedSolutions();
+    assert.ok(madocaFix >= 85, `MADOCA PPP fixed solutions: ${madocaFix}`);
+    log(`MADOCA-PPP: ${madocaFix} PPP fixed solutions`);
+    await shot('web_app_madoca.png');
+
+    await post('CLAS (L6, experimental)', async () => {
+      await mode('ppp-static');
+      await page.selectOption('#post-form select[name="pppCorr"]', 'clas');
+      await page.selectOption('#post-form select[name="rover"]', '0627239Q.obs');
+      await page.selectOption('#post-form select[name="nav"]', 'sept_2019239.nav');
+      await page.selectOption('#post-form select[name="clasL6"]', '2019239Q.l6');
+      await page.selectOption('#post-form select[name="antex"]', '');
+      await page.fill('#post-form input[name="maxEpochs"]', '60');
+      assert.ok(await page.isHidden('#post-form input[name="enableAr"]'), 'AR hidden for CLAS');
+    }, ['0627239Q_clas.pos']);
+    assert.match(await text('#tool-post [data-cmd]'), /--ssr 2019239Q\.l6 --clas-osr/);
+  }
 
   assert.deepEqual(external, [], `requests to other sites: ${external.join(', ')}`);
   assert.deepEqual(problems, []);

@@ -30,8 +30,9 @@ be repeated natively, for example on a larger dataset or in a script.
    trajectory), converts both streams to RINEX, runs kinematic RTK and opens
    the result in Plot with the errors against the reference.
 2. Or add your own files with **Add files** or drag and drop: RINEX OBS/NAV,
-   SP3, CLK, RTCM3, u-blox UBX, `.pos` (libgnss++ or RTKLIB) and reference CSV
-   files are recognised from their content. Files are lost on reload unless
+   SP3, CLK, ANTEX, QZSS L6 logs (CLAS, MADOCA L6E / L6D), RTCM3, u-blox UBX,
+   `.pos` (libgnss++ or RTKLIB) and reference CSV files are recognised from
+   their content. Files are lost on reload unless
    **Keep files after reload** is ticked: then inputs and outputs are kept in
    this browser's IndexedDB (on this device, for this site only) and come
    back on the next visit; the note next to it shows how much is kept.
@@ -107,9 +108,46 @@ Memory grows with the span: about 0.25 GB plus 0.17 MB per epoch (2.3 GB
 natively for the full Tokyo run1), within the 4 GB of a browser run.
 `gnss fgo` has no `--config`, so FGO settings are not saved.
 
+### QZSS MADOCA-PPP and CLAS
+
+In the PPP modes, *PPP corrections* picks where the corrections come from:
+
+- *Broadcast / precise products*: the NAV, SP3 and CLK files above.
+- *QZSS MADOCA-PPP*: raw L6E logs (orbit, clock and bias; tick every channel
+  and hour of the run, e.g. PRN 204 and 206) and, optionally, L6D logs
+  (ionosphere over Japan and Australia), with the broadcast NAV of the same
+  day: `gnss ppp --madoca-l6 ... --madoca-l6d ...`, decoded natively. L6D
+  needs the per-frequency filter, so it adds `--ar-method per-freq`.
+  *PPP ambiguity resolution* adds the PPP-AR settings of MADOCALIB's `pppar`
+  sample, which the CI MADOCA matrix also uses: ratio 1.5 unless set, and
+  `--convergence-policy local-enu` with 0.75 m / 1.25 m thresholds.
+- *QZSS CLAS (experimental)*: one raw CLAS L6 log, decoded natively for the
+  CLAS OSR PPP-RTK filter (`--ssr <log> --clas-osr`).
+
+The L6 lists recognise each log's service from its frame headers (vendor
+and correction service bits), so they tick the L6E and L6D files on their
+own. An ANTEX file can be added to any PPP mode. The logs are the 250-byte
+frames of an L6 receiver or the hourly files of the QZSS archive; see
+[QZSS L6, CLAS, and MADOCA](use_cases/qzss_l6.md).
+
+On the public samples, the Docs workflow runs both in Node and in Chromium
+and compares them with native `gnss ppp`:
+
+| Public sample | Run | Result |
+| --- | --- | --- |
+| MADOCALIB 0089f7dc: IGS MIZU, 2025-04-01 00–01 h, L6E 204/206, L6D 200/201, ANTEX | kinematic PPP-AR, 120 epochs | 118 solved, 91 FIX (MADOCALIB: 97); without L6D 108 FIX / 10 FLOAT, as MADOCALIB. Same status as native at every epoch, positions within 0.01 mm. 5.8 s in Chromium, 2.5 s natively |
+| CLASLIB 4320e844: 2019-08-27 (`0627239Q.obs`, `2019239Q.l6`) | static, 300 epochs | 298 FLOAT / 2 FIX, horizontal RMS 1.6 m over the last 100 epochs from the station coordinate; byte-identical to native. 9.5 s as WebAssembly in Node, 6–8 s natively |
+
+MIZU's RINEX header position is 4.4 m from its PPP-AR fixed solution
+([MADOCALIB native migration](madocalib_native_migration.md)), so it is not
+a truth for scoring. CLAS is marked experimental: the CLI's `gnss clas-ppp`
+expands L6 with Python, which the browser cannot run, and gives 1.4 m on
+the same window. Its PPC Tokyo run1 decision is *degraded*: FIX in 10.7 %
+of the epochs (see [sub-metre fleet tracking](use_cases/clas_submeter.md)).
+
 **Save options** writes the RTK, RTK + IMU or PPP settings as the flat TOML
 that `gnss solve --config`, `gnss fuse --config` and `gnss ppp --config`
-read (input and output files are left out, as in RTKPOST's options file); **Load options**, or *load* on a
+read (input and output files, including L6 logs, are left out, as in RTKPOST's options file); **Load options**, or *load* on a
 `.toml` in Files, reads one back, including the repository examples in
 `configs/examples/`. Options the form has no field for become extra
 arguments. For example, a saved static RTK setup runs natively as:

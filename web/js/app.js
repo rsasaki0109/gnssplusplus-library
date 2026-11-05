@@ -268,22 +268,34 @@ function refreshFileSelectors() {
       select.value = pick;
     }
   }
-  const checklist = $('#info-files');
+  for (const checklist of $$('.checklist[data-kinds]')) refreshChecklist(checklist);
+}
+
+// Names each checklist has offered, so a refresh keeps the user's ticks and
+// ticks only files new to it (of its data-primary kind, if it has one).
+const checklistOffered = new WeakMap();
+
+function refreshChecklist(checklist) {
+  const offered = checklistOffered.get(checklist) || new Set();
   const checked = new Set($$('input:checked', checklist).map((i) => i.value));
+  const primary = checklist.dataset.primary;
+  const files = workspace.list(...checklist.dataset.kinds.split(/\s+/)).sort((a, b) => a.name.localeCompare(b.name));
   checklist.replaceChildren();
-  const infoNames = workspace.list(...checklist.dataset.kinds.split(/\s+/)).map((f) => f.name).sort();
-  if (infoNames.length === 0) checklist.textContent = 'No RINEX files in Files yet.';
-  for (const name of infoNames) {
+  if (files.length === 0) checklist.textContent = checklist.dataset.empty || 'No matching files in Files yet.';
+  for (const file of files) {
     const label = document.createElement('label');
     label.className = 'check';
     const box = document.createElement('input');
     box.type = 'checkbox';
-    box.value = name;
-    box.checked = checked.size === 0 || checked.has(name);
-    label.append(box, document.createTextNode(` ${name}`));
+    box.value = file.name;
+    box.checked = offered.has(file.name) ? checked.has(file.name) : !primary || file.kind === primary;
+    label.append(box, document.createTextNode(` ${file.name}`));
     checklist.append(label);
   }
+  checklistOffered.set(checklist, new Set(files.map((f) => f.name)));
 }
+
+const checkedIn = (selector) => $$(`${selector} input:checked`).map((i) => i.value);
 
 // ---------------------------------------------------------------- run view
 class RunView {
@@ -487,7 +499,11 @@ function postGroup() {
 
 function updatePostVisibility() {
   const group = postGroup();
-  for (const el of $$('[data-show]', postForm)) el.hidden = !el.dataset.show.split(/\s+/).includes(group);
+  const corrections = postForm.elements.pppCorr.value;
+  for (const el of $$('[data-show]', postForm)) {
+    el.hidden = !el.dataset.show.split(/\s+/).includes(group)
+      || (group === 'ppp' && el.dataset.showCorr !== undefined && !el.dataset.showCorr.split(/\s+/).includes(corrections));
+  }
   const ecef = postForm.elements.basePos.value === 'ecef';
   for (const el of $$('[data-show-base]', postForm)) el.hidden = !ecef || !['rtk', 'imu'].includes(group);
 }
@@ -496,13 +512,20 @@ function postOptions() {
   const v = formValues(postForm);
   const group = postGroup();
   const withBase = group === 'rtk' || group === 'imu' || group === 'fgo';
+  const corrections = group === 'ppp' ? v.pppCorr : 'products';
+  const products = !withBase && corrections === 'products';
   return {
     mode: v.mode,
     rover: v.rover,
     base: withBase ? v.base : '',
     nav: v.nav,
-    sp3: withBase ? '' : v.sp3,
-    clk: withBase ? '' : v.clk,
+    sp3: products ? v.sp3 : '',
+    clk: products ? v.clk : '',
+    corrections,
+    l6e: corrections === 'madoca' ? checkedIn('#post-l6e') : [],
+    l6d: corrections === 'madoca' ? checkedIn('#post-l6d') : [],
+    clasL6: corrections === 'clas' ? v.clasL6 : '',
+    antex: group === 'ppp' ? v.antex : '',
     imu: group === 'imu' ? v.imu : '',
     leverArm: group === 'imu' ? [v.leverX, v.leverY, v.leverZ] : null,
     tightCoupling: v.tightCoupling,
@@ -525,7 +548,8 @@ function postOptions() {
 }
 
 function updatePostPreview() {
-  postForm.elements.out.placeholder = defaultPosName(postForm.elements.rover.value, postForm.elements.mode.value);
+  const el = postForm.elements;
+  el.out.placeholder = defaultPosName(el.rover.value, el.mode.value, postGroup() === 'ppp' ? el.pppCorr.value : '');
   try {
     postView.preview(buildPostCommand(postOptions()).commandLine);
   } catch (error) {
@@ -579,7 +603,7 @@ function applyOptionsToml(name, text) {
   const matched = [];
   for (const [role, base] of Object.entries(imported.files)) {
     if (role === 'out') el.out.value = base;
-    else if (['rover', 'base', 'nav', 'sp3', 'clk'].includes(role) && workspace.get(base)) {
+    else if (['rover', 'base', 'nav', 'sp3', 'clk', 'antex'].includes(role) && workspace.get(base)) {
       el[role].value = base;
       matched.push(base);
     }
@@ -611,7 +635,7 @@ $('#options-save').addEventListener('click', async () => {
     let hint = '';
     try { hint = buildPostCommand(opts).commandLine; } catch { /* inputs not chosen yet */ }
     const text = exportOptionsToml(opts, hint);
-    const stem = (opts.out || defaultPosName(opts.rover, opts.mode)).replace(/\.[^./]*$/, '');
+    const stem = (opts.out || defaultPosName(opts.rover, opts.mode, opts.corrections)).replace(/\.[^./]*$/, '');
     const name = `${stem}_options.toml`;
     await workspace.add(name, new Blob([text], { type: 'text/plain' }), 'output');
     download(name, workspace.get(name).blob);

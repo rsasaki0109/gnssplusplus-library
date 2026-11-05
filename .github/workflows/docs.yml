@@ -93,8 +93,38 @@ jobs:
           && bash wasm/build.sh build-wasm"
       - name: Test browser GUI modules
         run: node --test web/test/web_app.test.mjs
-      - name: Smoke-test WebAssembly tools (demo pipeline in Node)
-        run: node wasm/test/smoke.mjs build-wasm/wasm/dist
+      # Public QZSS L6 samples for the MADOCA-PPP / CLAS checks: only the files
+      # wasm/test/smoke.mjs lists (QZSS_SAMPLES), at pinned commits.
+      - name: Fetch the MADOCALIB sample (MIZU, 2025-04-01 00-01 h)
+        uses: actions/checkout@v7
+        with:
+          repository: QZSS-Strategy-Office/madocalib
+          ref: 0089f7dc97e8e2ba283a40be2edf4b73a140df6c
+          path: qzss-samples/madocalib
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx
+            sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx
+            sample_data/data/igs20.atx
+            sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.204.l6
+            sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.206.l6
+            sample_data/data/l6/2025/091/2025091A.200.l6
+            sample_data/data/l6/2025/091/2025091A.201.l6
+      - name: Fetch the CLASLIB sample (2019-08-27)
+        uses: actions/checkout@v7
+        with:
+          repository: QZSS-Strategy-Office/claslib
+          ref: 4320e84498efe5faeb1f3433949de40d972e745a
+          path: qzss-samples/claslib
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            data/0627239Q.obs
+            data/sept_2019239.nav
+            data/2019239Q.l6
+      - name: Smoke-test WebAssembly tools (demo pipeline, MADOCA-PPP and CLAS in Node)
+        run: node wasm/test/smoke.mjs build-wasm/wasm/dist --qzss qzss-samples
       - name: Add browser GUI to the site (/app/)
         run: python wasm/assemble_site.py --dist build-wasm/wasm/dist --out site/app
       - name: Install Playwright Chromium for the browser GUI test
@@ -104,7 +134,7 @@ jobs:
       - name: Browser test of the GUI (real WebAssembly tools in Chromium)
         env:
           PLAYWRIGHT_PREFIX: ${{ runner.temp }}/pw
-        run: node wasm/test/browser.mjs site --screenshots "$RUNNER_TEMP/browser-test"
+        run: node wasm/test/browser.mjs site --qzss qzss-samples --screenshots "$RUNNER_TEMP/browser-test"
       - name: Keep the browser test screenshots
         if: always()
         uses: actions/upload-artifact@v7
