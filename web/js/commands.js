@@ -206,8 +206,7 @@ export function buildPostCommand(opts) {
       if (xyz.length !== 3 || xyz.some((v) => v === null)) throw new Error('base ECEF needs X, Y and Z');
       cmd.flag('--base-ecef', ...xyz);
     }
-    // No --kml: gnss_fuse's fused epochs report 0 satellites, which
-    // Solution::writeKML() skips as invalid, so the KML would be empty.
+    if (opts.kml) cmd.output('--kml', `${stem(out)}.kml`);
   } else {
     cmd.input('--obs', opts.rover);
     if (opts.nav) cmd.input('--nav', opts.nav);

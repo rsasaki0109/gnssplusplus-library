@@ -117,7 +117,7 @@ export async function runSmoke(factoryFor, log = console.log) {
   // RTK + IMU (gnss_fuse, tight coupling, PPC Tokyo lever arm).
   await run(buildPostCommand({
     mode: 'rtk-imu', rover: 'rover.obs', base: 'base.obs', nav: 'base.nav', imu: 'imu.csv',
-    leverArm: ['0.31', '0', '0.55'], tightCoupling: true, out: 'rover_fused.pos',
+    leverArm: ['0.31', '0', '0.55'], tightCoupling: true, out: 'rover_fused.pos', kml: true,
   }));
   const fused = parseSolution('rover_fused.pos', text('rover_fused.pos'));
   const fusedRtk = parseSolution('rover_fused_rtk.pos', text('rover_fused_rtk.pos'));
@@ -128,6 +128,10 @@ export async function runSmoke(factoryFor, log = console.log) {
   assert.ok(fusedErr.horizontalRms < 0.3, `fused horizontal RMS ${fusedErr.horizontalRms} m`);
   assert.equal(fusedRtk.n, 201);
   assert.ok(fusedRtkFix >= 180, `RTK FIX under fusion: ${fusedRtkFix}`);
+  // Fused epochs carry no satellite count; the KML must still draw all of them.
+  const fusedKml = text('rover_fused.kml').match(/<coordinates>([\s\S]*?)<\/coordinates>/g) || [];
+  const fusedKmlPoints = fusedKml.join('\n').split('\n').filter((line) => /^-?\d/.test(line)).length;
+  assert.equal(fusedKmlPoints, fused.n, `fused KML points: ${fusedKmlPoints}`);
 
   await run(buildPostCommand({ mode: 'single', rover: 'rover.obs', nav: 'base.nav', out: 'rover_spp.pos' }));
   const spp = parseSolution('rover_spp.pos', text('rover_spp.pos'));
