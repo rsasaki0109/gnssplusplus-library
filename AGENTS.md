@@ -84,7 +84,12 @@ Remove the symlinks afterwards so `RTKRealDataTest.*` returns to skipping.
   (`node --test web/test/web_app.test.mjs`, ctest `web_app_js_tests`).
 - `wasm/test/smoke.mjs` runs the demo pipeline (RTCM3 -> RINEX -> visibility,
   RTK, RTK + IMU, FGO, SPP, PPP) on the wasm build in CI; keep it passing when
-  solver output changes.
+  solver output changes. `wasm/test/browser.mjs` then drives the assembled
+  site in headless Chromium (Playwright 1.63.0) with the same wasm: every
+  Post-process mode, Plot with map / error colouring / PNG, and *Keep files
+  after reload*; it fails on page or console errors and on requests to other
+  sites than the map tile hosts. Run it locally with
+  `node wasm/test/browser.mjs <site dir>` after `wasm/assemble_site.py`.
 - The wasm link sets mirror `apps/CMakeLists.txt`; keep them in step, and do
   not add `Threads::Threads` / `-pthread` there (static hosting has no
   cross-origin isolation, so no SharedArrayBuffer).

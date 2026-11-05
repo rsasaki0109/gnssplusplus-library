@@ -97,6 +97,21 @@ jobs:
         run: node wasm/test/smoke.mjs build-wasm/wasm/dist
       - name: Add browser GUI to the site (/app/)
         run: python wasm/assemble_site.py --dist build-wasm/wasm/dist --out site/app
+      - name: Install Playwright Chromium for the browser GUI test
+        run: |
+          npm install --no-save --no-package-lock --prefix "$RUNNER_TEMP/pw" playwright@1.63.0
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Browser test of the GUI (real WebAssembly tools in Chromium)
+        env:
+          PLAYWRIGHT_PREFIX: ${{ runner.temp }}/pw
+        run: node wasm/test/browser.mjs site --screenshots "$RUNNER_TEMP/browser-test"
+      - name: Keep the browser test screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-test-screenshots
+          path: ${{ runner.temp }}/browser-test
+          if-no-files-found: ignore
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
