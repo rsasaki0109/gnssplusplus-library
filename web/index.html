@@ -236,6 +236,11 @@
           <label>Solution 1<select id="plot-sol1" data-kinds="pos"></select></label>
           <label>Solution 2<select id="plot-sol2" data-kinds="pos" data-optional></select></label>
           <label>Reference<select id="plot-ref" data-kinds="pos csv" data-optional></select></label>
+          <label>Reference point <span class="opt">used without a reference file</span>
+            <input id="plot-ref-point" type="text" spellcheck="false" placeholder="ECEF X Y Z (m) or lat lon h"></label>
+          <label>Converged when (m)
+            <span class="conv-thresholds">H &lt; <input id="plot-conv-h" type="number" step="any" min="0" value="0.2" aria-label="Horizontal threshold (m)">
+              |U| &lt; <input id="plot-conv-u" type="number" step="any" min="0" value="0.4" aria-label="Vertical threshold (m)"></span></label>
           <label>Origin
             <select id="plot-origin">
               <option value="mean">Mean of solution 1</option>
@@ -281,6 +286,8 @@
                 <option value="ns">Satellites</option>
                 <option value="ratio">AR ratio</option>
                 <option value="pdop">PDOP</option>
+                <option value="herr">Horizontal error vs reference</option>
+                <option value="verr">|Up error| vs reference</option>
               </select>
               <button type="button" class="btn small" data-png="aux" title="Save this plot as PNG">PNG</button>
             </div>

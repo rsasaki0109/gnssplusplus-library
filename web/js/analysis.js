@@ -1,7 +1,7 @@
 // Solution analysis for the plot view: local ENU, reference matching and
 // RTKPLOT-style statistics. Pure functions over parseSolution() results.
 
-import { enuFrame, ecefToLlh } from './geo.js';
+import { enuFrame, ecefToLlh, llhToEcef } from './geo.js';
 import { Q, Q_LABELS } from './formats.js';
 
 /** Mean geodetic position of a solution (through ECEF, so it is well defined). */
@@ -160,4 +160,55 @@ export function errorClassLabels(bins = ERROR_BINS_M) {
   for (let k = 1; k < bins.length; k += 1) labels.push(`${bins[k - 1]}–${bins[k]} m`);
   labels.push(`≥ ${bins[bins.length - 1]} m`, 'no reference');
   return labels;
+}
+
+/**
+ * A fixed reference point from text: "X Y Z" in ECEF metres, or "lat lon h"
+ * in degrees and metres (commas or spaces). Returns ECEF [x, y, z].
+ */
+export function parsePoint(text) {
+  const v = String(text || '').trim().split(/[\s,;]+/).filter(Boolean).map(Number);
+  if (v.length !== 3 || v.some((x) => !Number.isFinite(x))) {
+    throw new Error('reference point: give ECEF X Y Z (m) or lat lon h (deg, deg, m)');
+  }
+  const llh = Math.abs(v[0]) <= 90 && Math.abs(v[1]) <= 180 && Math.abs(v[2]) < 20000;
+  return llh ? llhToEcef(v[0], v[1], v[2]) : v;
+}
+
+/**
+ * Seconds from the first epoch of t after which every remaining epoch with
+ * a value passes ok(i) (the convergence time of the has-idd-ppp lane and
+ * cssrlib's samples), or null when the last such epoch fails. Epochs where
+ * ok(i) is null (no reference match) are skipped.
+ */
+export function convergenceTime(t, ok) {
+  let result = null;
+  for (let i = t.length - 1; i >= 0; i -= 1) {
+    const pass = ok(i);
+    if (pass === null) continue;
+    if (!pass) break;
+    result = t[i] - t[0];
+  }
+  return result;
+}
+
+/**
+ * Horizontal / vertical error at `seconds` after the first epoch (the epoch
+ * nearest to it, within toleranceS), or null when the run is shorter.
+ */
+export function errorAtElapsed(t, err, seconds, toleranceS = 5) {
+  if (t.length === 0) return null;
+  const i = nearestIndex(t, t[0] + seconds);
+  if (Math.abs(t[i] - t[0] - seconds) > toleranceS || !Number.isFinite(err.e[i])) return null;
+  return { h: Math.hypot(err.e[i], err.n[i]), u: err.u[i] };
+}
+
+/** Convergence summary of a solution's errors: thresholds in metres. */
+export function convergenceSummary(sol, err, thresholdH, thresholdU, checkpointsMin = [10, 30, 60]) {
+  const value = (i, f) => (Number.isFinite(err.e[i]) ? f(i) : null);
+  return {
+    horizontalS: convergenceTime(sol.t, (i) => value(i, (k) => Math.hypot(err.e[k], err.n[k]) < thresholdH)),
+    verticalS: convergenceTime(sol.t, (i) => value(i, (k) => Math.abs(err.u[k]) < thresholdU)),
+    checkpoints: checkpointsMin.map((minutes) => ({ minutes, at: errorAtElapsed(sol.t, err, minutes * 60) })),
+  };
 }

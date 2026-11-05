@@ -4,9 +4,12 @@
 import {
   buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultConvertNames, defaultPosName, DISPATCH_NAMES, HAS_PAGE_FORMATS, POST_MODES,
 } from './commands.js';
-import { parseSolution, parseVisibilityCsv, Q_LABELS, rinexFirstEpoch, rinexObsTimeSpan, SYSTEMS } from './formats.js';
 import {
-  chooseOrigin, errorClasses, errorClassLabels, errorSummary, isFixQuality, nearestIndex, referenceErrors, solutionSummary, toEnu,
+  parseSolution, parseVisibilityCsv, pointSolution, Q_LABELS, rinexFirstEpoch, rinexObsTimeSpan, SYSTEMS,
+} from './formats.js';
+import {
+  chooseOrigin, convergenceSummary, errorClasses, errorClassLabels, errorSummary, isFixQuality, nearestIndex, parsePoint,
+  referenceErrors, solutionSummary, toEnu,
 } from './analysis.js';
 import { formatGpst, splitGpsSeconds, SECONDS_PER_WEEK } from './geo.js';
 import { exportOptionsToml, importOptionsToml } from './options.js';
@@ -797,6 +800,8 @@ class PlotView {
     this.errorsBox = $('#plot-errors');
     this.colorSelect = $('#plot-color');
     this.auxSelect = $('#plot-aux');
+    this.refPoint = $('#plot-ref-point');
+    this.convInputs = [$('#plot-conv-h'), $('#plot-conv-u')];
     this.mapSelect = $('#plot-map');
     const savedMap = readSetting(MAP_SETTING);
     if (savedMap && TILE_SOURCES[savedMap]) this.mapSelect.value = savedMap;
@@ -821,10 +826,11 @@ class PlotView {
     this.pa = new PlotPanel($('#cv-aux'), { timeAxis: true, yLabel: 'Nsat', onHover: hover, onLeave: leave });
     this.timePanels = [this.pe, this.pn, this.pu, this.pa];
     for (const p of this.timePanels) p.opts.onViewChange = linkTime(p);
-    for (const el of [...Object.values(this.selects), this.originSelect, this.errorsBox]) {
+    for (const el of [...Object.values(this.selects), this.originSelect, this.errorsBox, this.refPoint]) {
       el.addEventListener('change', () => this.reload());
     }
     this.auxSelect.addEventListener('change', () => this.render());
+    for (const el of this.convInputs) el.addEventListener('change', () => { this.keepView = true; this.render(); });
     this.colorSelect.addEventListener('change', () => { this.keepView = true; this.render(); });
     for (const button of $$('#tool-plot [data-png]')) {
       button.addEventListener('click', () => this.savePng(button.dataset.png).catch((error) => setStatus(`PNG: ${error.message}`)));
@@ -862,6 +868,12 @@ class PlotView {
       this.sol1 = await this.parsed(this.selects.sol1.value);
       this.sol2 = await this.parsed(this.selects.sol2.value);
       this.ref = await this.parsed(this.selects.ref.value);
+      // A static coordinate stands in for a reference file (e.g. a station's
+      // surveyed position for PPP convergence).
+      if (!this.ref && this.sol1 && this.refPoint.value.trim()) {
+        const times = [...this.sol1.t, ...(this.sol2 ? this.sol2.t : [])];
+        this.ref = pointSolution('fixed point', parsePoint(this.refPoint.value), times);
+      }
       this.error = null;
     } catch (error) {
       this.error = error;
@@ -935,10 +947,25 @@ class PlotView {
       panel.setLayers(layers, { keepView: this.keepView });
     }
     const aux = this.auxSelect.value;
-    this.pa.opts.yLabel = { ns: 'Nsat', ratio: 'Ratio', pdop: 'PDOP' }[aux];
+    this.pa.opts.yLabel = {
+      ns: 'Nsat', ratio: 'Ratio', pdop: 'PDOP', herr: 'H error (m)', verr: '|U error| (m)',
+    }[aux] + (['herr', 'verr'].includes(aux) && !this.ref ? ' (needs a reference)' : '');
     this.pa.opts.integerY = aux === 'ns';
-    const auxLayers = [sol1Layer(this.sol1.t, this.sol1[aux])];
-    if (this.sol2) auxLayers.push(sol2Layer(this.sol2.t, this.sol2[aux]));
+    const auxLayers = [];
+    if (aux === 'herr' || aux === 'verr') {
+      // Error magnitudes with the convergence threshold as a line.
+      const magnitude = (err) => (aux === 'herr' ? err.e.map((e, i) => Math.hypot(e, err.n[i])) : err.u.map(Math.abs));
+      if (this.err1) auxLayers.push(sol1Layer(this.sol1.t, magnitude(this.err1)));
+      if (this.err2) auxLayers.push(sol2Layer(this.sol2.t, magnitude(this.err2)));
+      const threshold = this.convThresholds()[aux === 'herr' ? 0 : 1];
+      if (this.err1 && Number.isFinite(threshold)) {
+        const t = this.sol1.t;
+        auxLayers.push({ type: 'line', x: [t[0], t[t.length - 1]], y: [threshold, threshold], colors: cssVar('--muted', '#888'), width: 1, order: 0 });
+      }
+    } else {
+      auxLayers.push(sol1Layer(this.sol1.t, this.sol1[aux]));
+      if (this.sol2) auxLayers.push(sol2Layer(this.sol2.t, this.sol2[aux]));
+    }
     this.pa.setLayers(auxLayers, { keepView: this.keepView });
     this.keepView = false;
 
@@ -949,6 +976,14 @@ class PlotView {
 
   mapSource() {
     return TILE_SOURCES[this.mapSelect.value] || null;
+  }
+
+  /** Convergence thresholds [horizontal, vertical] (m) from the controls. */
+  convThresholds() {
+    return this.convInputs.map((input) => {
+      const v = Number(input.value);
+      return input.value.trim() !== '' && Number.isFinite(v) && v > 0 ? v : NaN;
+    });
   }
 
   paintMap(ctx, v, r, t) {
@@ -1108,6 +1143,17 @@ class PlotView {
       row('Horizontal max (m)', all.map((a) => fmt(a.horizontalMax)));
       row('Vertical RMS / 95% (m)', all.map((a) => `${fmt(a.u.rms)} / ${fmt(a.vertical95)}`));
       row('FIX epochs: H RMS / V RMS (m)', fix.map((a) => (a.matched ? `${fmt(a.horizontalRms)} / ${fmt(a.u.rms)}` : '–')));
+      // Convergence: from the first epoch to the time after which every
+      // remaining epoch stays under the threshold.
+      const [thrH, thrU] = this.convThresholds();
+      const conv = sols.map((s, i) => convergenceSummary(s, errs[i], thrH, thrU));
+      const minutes = (sec) => (sec === null ? 'not within the run' : `${fmt(sec / 60, 1)} min`);
+      if (Number.isFinite(thrH)) row(`Converged: H < ${thrH} m after`, conv.map((c) => minutes(c.horizontalS)));
+      if (Number.isFinite(thrU)) row(`Converged: |U| < ${thrU} m after`, conv.map((c) => minutes(c.verticalS)));
+      for (const [k, { minutes: m }] of conv[0].checkpoints.entries()) {
+        if (!conv.some((c) => c.checkpoints[k].at)) continue;
+        row(`H / U at ${m} min (m)`, conv.map((c) => (c.checkpoints[k].at ? `${fmt(c.checkpoints[k].at.h)} / ${fmt(c.checkpoints[k].at.u)}` : '–')));
+      }
     }
     const [lat, lon, h] = this.origin;
     $('#plot-stats').innerHTML = `<table>${head}${rows.join('')}</table>`

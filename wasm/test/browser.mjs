@@ -250,6 +250,24 @@ try {
     }, ['046r_rnx_has.pos']);
     assert.match(await text('#tool-post [data-cmd]'), /--has-pages 046r_gale6\.txt --has-pages-format cssrlib/);
     await shot('web_app_has.png');
+
+    // Plot: PPP convergence of the HAS IDD run against the OBE4 coordinate.
+    await page.click('button[data-tool="plot"]');
+    await page.selectOption('#plot-map', '');
+    await page.selectOption('#plot-sol1', 'OBE42023229c_has.pos');
+    await page.selectOption('#plot-sol2', '');
+    await page.selectOption('#plot-ref', '');
+    await page.selectOption('#plot-color', 'quality');
+    await page.fill('#plot-ref-point', '4186704.2262 834903.7677 4723664.9337');
+    await page.dispatchEvent('#plot-ref-point', 'change');
+    await page.selectOption('#plot-aux', 'herr');
+    await page.waitForFunction(() => /Converged: H < 0\.2 m after/.test(document.querySelector('#plot-stats').textContent), null, { timeout: 30000 });
+    const conv = await text('#plot-stats');
+    const hMin = Number((/Converged: H < 0\.2 m after\s*(\d+\.\d) min/.exec(conv) || [])[1]);
+    assert.ok(hMin >= 0 && hMin < 5, `HAS IDD convergence: ${conv}`);
+    assert.match(conv, /H \/ U at 10 min \(m\)/);
+    log(`plot convergence: HAS IDD H < 0.2 m after ${hMin} min`);
+    await shot('web_app_convergence.png', page.locator('#plot-grid'));
   }
 
   assert.deepEqual(external, [], `requests to other sites: ${external.join(', ')}`);

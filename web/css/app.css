@@ -235,6 +235,9 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .plot-controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin-bottom: 10px; }
 .plot-controls label { display: flex; flex-direction: column; gap: 3px; font-size: 0.8rem; font-weight: 600; min-width: 150px; }
 .plot-controls label.check { flex-direction: row; align-items: center; min-width: 0; }
+.plot-controls #plot-ref-point { min-width: 16em; }
+.conv-thresholds { display: flex; gap: 4px; align-items: center; font-weight: 500; }
+.conv-thresholds input { width: 4.5em; }
 .qfilter { display: flex; gap: 4px; flex-wrap: wrap; }
 .qfilter button { font: inherit; font-size: 0.75rem; font-weight: 700; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--muted); padding: 3px 9px; cursor: pointer; }
 .qfilter button.on { color: #fff; border-color: transparent; }

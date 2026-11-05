@@ -174,6 +174,15 @@ function finish(name, format, rows) {
   return { name, format, n, ...c };
 }
 
+/**
+ * A reference "solution" holding one fixed ECEF point at each of the given
+ * times, so a static coordinate can be used like a reference trajectory.
+ */
+export function pointSolution(name, xyz, times) {
+  const t = Float64Array.from(new Set(times)).sort();
+  return finish(name, 'reference point', Array.from(t, (time) => ({ t: time, x: xyz[0], y: xyz[1], z: xyz[2], q: Q.NONE })));
+}
+
 // The libgnss++ writers name their columns in a "% [Columns: ]GPS_Week
 // GPS_TOW ..." header line; the set differs between tools and --format.
 const LIBGNSS_DEFAULT_COLUMNS = [

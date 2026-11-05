@@ -8,16 +8,17 @@ import {
   buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultPosName, splitArgs,
 } from '../js/commands.js';
 import {
-  l6Service, parseSolution, parseVisibilityCsv, Q, rinexFirstEpoch, rinexObsTimeSpan, sniffKind,
+  l6Service, parseSolution, parseVisibilityCsv, pointSolution, Q, rinexFirstEpoch, rinexObsTimeSpan, sniffKind,
 } from '../js/formats.js';
 import { exportOptionsToml, extraArgsToEntries, importOptionsToml, parseFlatToml } from '../js/options.js';
 import {
-  ERROR_BINS_M, errorClasses, errorClassLabels, errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu,
+  convergenceSummary, convergenceTime, ERROR_BINS_M, errorAtElapsed, errorClasses, errorClassLabels, errorSummary, nearestIndex,
+  parsePoint, referenceErrors, solutionSummary, toEnu,
 } from '../js/analysis.js';
 import { addWorkerfsReadAhead } from '../js/engine.js';
 import { describeStored } from '../js/store.js';
 import { Workspace } from '../js/workspace.js';
-import { calendarToGpsSeconds, ecefToLlh, formatGpst, gpsSeconds, llhToEcef } from '../js/geo.js';
+import { calendarToGpsSeconds, ecefToLlh, enuFrame, formatGpst, gpsSeconds, llhToEcef } from '../js/geo.js';
 import { chooseZoom, enuPlane, TILE_SOURCES, tileCorner, tilesForView, tileUrl, tileXY } from '../js/tiles.js';
 
 const root = new URL('../../', import.meta.url);
@@ -653,4 +654,48 @@ test('Galileo HAS commands, page log sniffing and options', () => {
   assert.equal(back.fields.pppCorr, 'has-sis');
   assert.equal(back.extra, '');
   assert.deepEqual(back.files, { has_pages: 'r.ubx' });
+});
+
+test('PPP convergence vs a fixed reference point', () => {
+  assert.deepEqual(parsePoint('4186704.2262 834903.7677 4723664.9337'), [4186704.2262, 834903.7677, 4723664.9337]);
+  assert.deepEqual(parsePoint('4186704.2262, 834903.7677, 4723664.9337'), [4186704.2262, 834903.7677, 4723664.9337]);
+  const xyz = parsePoint('35 139 100');
+  const back = ecefToLlh(...xyz);
+  assert.ok(Math.abs(back[0] - 35) < 1e-9 && Math.abs(back[1] - 139) < 1e-9 && Math.abs(back[2] - 100) < 1e-6);
+  assert.throws(() => parsePoint('1 2'), /reference point/);
+  assert.throws(() => parsePoint('a b c'), /reference point/);
+
+  // A static run converging to the point: horizontal offset 1 m -> 0.05 m,
+  // up 0.5 m -> 0.1 m, one epoch per minute for an hour.
+  const truth = llhToEcef(35, 139, 100);
+  const frame = enuFrame(35, 139, 100);
+  const t = Array.from({ length: 61 }, (_, i) => 1e9 + 60 * i);
+  const rows = t.map((time, i) => {
+    const scale = Math.exp(-i / 8);
+    const e = 0.05 + 0.95 * scale; const u = 0.1 + 0.4 * scale;
+    // Invert the ENU offset back to ECEF with the frame's transpose.
+    const lat = 35 * Math.PI / 180; const lon = 139 * Math.PI / 180;
+    const dx = -Math.sin(lon) * e + Math.cos(lat) * Math.cos(lon) * u;
+    const dy = Math.cos(lon) * e + Math.cos(lat) * Math.sin(lon) * u;
+    const dz = Math.sin(lat) * u;
+    return `${Math.floor(time / 604800)} ${(time % 604800).toFixed(3)} ${truth[0] + dx} ${truth[1] + dy} ${truth[2] + dz} 0 0 0 6 10 1.0 0.0`;
+  });
+  const sol = parseSolution('ppp.pos', `% Columns: GPS_Week GPS_TOW X(m) Y(m) Z(m) Lat(deg) Lon(deg) Height(m) Status Satellites PDOP Ratio\n${rows.join('\n')}\n`);
+  const ref = pointSolution('fixed point', truth, sol.t);
+  assert.equal(ref.n, sol.n);
+  const err = referenceErrors(sol, ref, [35, 139, 100]);
+  assert.ok(Math.abs(err.e[60] - (0.05 + 0.95 * Math.exp(-60 / 8))) < 1e-6);
+  assert.ok(Math.abs(frame(...truth)[0]) < 1e-9);
+  const conv = convergenceSummary(sol, err, 0.2, 0.4);
+  // H < 0.2 m once 0.95 e^(-i/8) < 0.15: i >= 15 (15 min); |U| < 0.4 m once 0.4 e^(-i/8) < 0.3: i >= 3.
+  assert.equal(conv.horizontalS, 15 * 60);
+  assert.equal(conv.verticalS, 3 * 60);
+  assert.deepEqual(conv.checkpoints.map((c) => c.minutes), [10, 30, 60]);
+  assert.ok(Math.abs(conv.checkpoints[1].at.h - Math.hypot(0.05 + 0.95 * Math.exp(-30 / 8), 0)) < 1e-6);
+  assert.equal(convergenceSummary(sol, err, 0.01, 0.4).horizontalS, null); // never under 1 cm
+  assert.equal(errorAtElapsed(sol.t, err, 7200), null);                   // beyond the run
+  // Unmatched epochs (no reference) are skipped, not counted as failures.
+  const gaps = { e: Float64Array.from(err.e), n: err.n, u: err.u };
+  gaps.e[60] = NaN;
+  assert.equal(convergenceTime(sol.t, (i) => (Number.isFinite(gaps.e[i]) ? Math.hypot(gaps.e[i], gaps.n[i]) < 0.2 : null)), 15 * 60);
 });
