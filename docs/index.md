@@ -10,6 +10,10 @@ python3 apps/gnss.py doctor
 
 That is it: build, verify your machine, then pick a path below.
 
+Nothing to install? **[Open the browser GUI](https://rsasaki0109.github.io/gnssplusplus-library/app/)**:
+post-process, convert and plot GNSS data (RTK, RTK + IMU, FGO, SPP, PPP) in the
+browser with the same tools compiled to WebAssembly; files stay on your machine.
+
 ## Pick your path
 
 | I want to… | Start here | Time |
