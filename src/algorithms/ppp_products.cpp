@@ -16,7 +16,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
-#include <functional>
 #include <limits>
 #include <map>
 #include <memory>
@@ -273,32 +272,12 @@ bool PPPProcessor::loadSSRProducts(const std::string& ssr_file) {
 
 bool PPPProcessor::loadL6Products(const std::string& l6_file) {
     require_coherent_ssr_ = false;
-    // Strategy: use Python expander to convert L6 → expanded CSV,
-    // then load via the battle-tested CSV loader (0.14m accuracy).
-    // Falls back to C++ native L6 decoder if Python is unavailable.
+    // Raw L6 given as --ssr: decode Compact SSR natively. The policy-rich
+    // Python expansion of `gnss clas-ppp` (apps/commands/positioning/
+    // gnss_clas_ppp.py) passes its expanded CSV to --ssr instead.
     int gps_week = ppp_config_.l6_gps_week > 0 ? ppp_config_.l6_gps_week : last_obs_gps_week_;
     if (gps_week <= 0) gps_week = 2068;
 
-    // Try Python expander first
-    const std::string tmp_csv = "/tmp/gnsspp_l6_expanded_" +
-        std::to_string(std::hash<std::string>{}(l6_file)) + ".csv";
-    const std::string cmd =
-        "python3 -c \""
-        "import sys; sys.path.insert(0, 'apps'); "
-        "from pathlib import Path; "
-        "from gnss_clas_ppp import expand_qzss_l6_source; "
-        "expand_qzss_l6_source('" + l6_file + "', " +
-        std::to_string(gps_week) + ", Path('" + tmp_csv + "'))\" 2>/dev/null";
-
-    const int ret = std::system(cmd.c_str());
-    if (ret == 0) {
-        ssr_products_loaded_ = ssr_products_.loadCSVFile(tmp_csv);
-        if (ssr_products_loaded_) {
-            return true;
-        }
-    }
-
-    // Fallback: C++ native L6 decoder
     qzss_l6::L6Decoder decoder;
     auto epochs = decoder.decodeFile(l6_file, gps_week);
     if (epochs.empty()) {
