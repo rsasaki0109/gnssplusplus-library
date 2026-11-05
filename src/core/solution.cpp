@@ -12,6 +12,19 @@ namespace {
 
 constexpr std::size_t kMandatorySolutionColumns = 11;
 
+// Epochs that Solution-level products (statistics, KML, GeoJSON) count: a
+// status and a finite position. PositionSolution::isValid() also asks for
+// >= 4 satellites, a GNSS-only notion: IMU-fused epochs (gnss fuse) report
+// num_satellites = 0 because the position comes from the filter, so
+// isValid() would drop all of them.
+bool carriesPosition(const PositionSolution& sol) {
+    if (sol.status == SolutionStatus::NONE) return false;
+    return sol.position_ecef.allFinite() &&
+           std::isfinite(sol.position_geodetic.latitude) &&
+           std::isfinite(sol.position_geodetic.longitude) &&
+           std::isfinite(sol.position_geodetic.height);
+}
+
 Matrix3d ecefToEnuRotation(double latitude_rad, double longitude_rad) {
     Matrix3d rotation;
     rotation.col(0) = ecef2enu(Vector3d::UnitX(), latitude_rad, longitude_rad);
@@ -400,7 +413,7 @@ Solution::SolutionStatistics Solution::calculateStatistics(const Vector3d& refer
     double sum_processing_time = 0.0, sum_satellites = 0.0;
     
     for (const auto& sol : solutions) {
-        if (sol.isValid()) {
+        if (carriesPosition(sol)) {
             stats.valid_solutions++;
             if (sol.isFixed()) {
                 stats.fixed_solutions++;
@@ -431,7 +444,7 @@ Solution::SolutionStatistics Solution::calculateStatistics(const Vector3d& refer
             double sum_h_error_sq = 0.0, sum_v_error_sq = 0.0, sum_3d_error_sq = 0.0;
             
             for (const auto& sol : solutions) {
-                if (sol.isValid()) {
+                if (carriesPosition(sol)) {
                     Vector3d error = sol.position_ecef - reference_position;
                     sum_h_error_sq += error(0)*error(0) + error(1)*error(1);
                     sum_v_error_sq += error(2)*error(2);
@@ -495,18 +508,6 @@ bool isFloatStatus(SolutionStatus s) {
     return s == SolutionStatus::FLOAT || s == SolutionStatus::PPP_FLOAT;
 }
 
-// Map outputs (KML / GeoJSON) draw every epoch that carries a position.
-// PositionSolution::isValid() also asks for >= 4 satellites, a GNSS-only
-// notion: IMU-fused epochs (gnss fuse) report num_satellites = 0 because the
-// position comes from the filter, so isValid() would drop all of them.
-bool hasMapPosition(const PositionSolution& sol) {
-    if (sol.status == SolutionStatus::NONE) return false;
-    return sol.position_ecef.allFinite() &&
-           std::isfinite(sol.position_geodetic.latitude) &&
-           std::isfinite(sol.position_geodetic.longitude) &&
-           std::isfinite(sol.position_geodetic.height);
-}
-
 void writeKmlLineString(std::ofstream& file,
                         const std::string& name,
                         const std::string& color_abgr,
@@ -535,7 +536,7 @@ bool Solution::writeKML(const std::string& filename) const {
 
     std::vector<const PositionSolution*> fixed_pts, float_pts, other_pts;
     for (const auto& sol : solutions) {
-        if (!hasMapPosition(sol)) continue;
+        if (!carriesPosition(sol)) continue;
         if (isFixedStatus(sol.status))      fixed_pts.push_back(&sol);
         else if (isFloatStatus(sol.status)) float_pts.push_back(&sol);
         else                                other_pts.push_back(&sol);
@@ -578,7 +579,7 @@ bool Solution::writeGeoJSON(const std::string& filename) const {
 
     bool first = true;
     for (const auto& sol : solutions) {
-        if (!hasMapPosition(sol)) continue;
+        if (!carriesPosition(sol)) continue;
         const double lon = sol.position_geodetic.longitude * 180.0 / M_PI;
         const double lat = sol.position_geodetic.latitude  * 180.0 / M_PI;
         const double alt = sol.position_geodetic.height;

@@ -2,7 +2,7 @@
 // WebAssembly. Each run executes the unchanged native main() in a worker.
 
 import {
-  buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultConvertNames, defaultPosName, POST_MODES,
+  buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultConvertNames, defaultPosName, DISPATCH_NAMES, POST_MODES,
 } from './commands.js';
 import { parseSolution, parseVisibilityCsv, Q_LABELS, rinexObsTimeSpan, SYSTEMS } from './formats.js';
 import {
@@ -391,6 +391,7 @@ function postGroup() {
   const mode = postForm.elements.mode.value;
   if (mode === 'single') return 'spp';
   if (mode === 'rtk-imu') return 'imu';
+  if (mode === 'fgo') return 'fgo';
   return mode.startsWith('ppp') ? 'ppp' : 'rtk';
 }
 
@@ -404,7 +405,7 @@ function updatePostVisibility() {
 function postOptions() {
   const v = formValues(postForm);
   const group = postGroup();
-  const withBase = group === 'rtk' || group === 'imu';
+  const withBase = group === 'rtk' || group === 'imu' || group === 'fgo';
   return {
     mode: v.mode,
     rover: v.rover,
@@ -422,7 +423,8 @@ function postOptions() {
     preset: v.preset,
     iono: v.iono,
     ratio: v.ratio,
-    baseEcef: withBase && v.basePos === 'ecef' ? [v.baseX, v.baseY, v.baseZ] : null,
+    baseEcef: (group === 'rtk' || group === 'imu') && v.basePos === 'ecef' ? [v.baseX, v.baseY, v.baseZ] : null,
+    fgoPreset: v.fgoPreset,
     kml: v.kml,
     verbose: v.verbose,
     ionoFree: v.ionoFree,
@@ -523,7 +525,7 @@ $('#options-save').addEventListener('click', async () => {
     const name = `${stem}_options.toml`;
     await workspace.add(name, new Blob([text], { type: 'text/plain' }), 'output');
     download(name, workspace.get(name).blob);
-    setStatus(`Saved ${name}: use it as gnss ${POST_MODES[opts.mode].tool === 'gnss_ppp' ? 'ppp' : 'solve'} --config ${name}`);
+    setStatus(`Saved ${name}: use it as gnss ${DISPATCH_NAMES[POST_MODES[opts.mode].tool]} --config ${name}`);
   } catch (error) {
     setStatus(`Options: ${error.message}`);
   }

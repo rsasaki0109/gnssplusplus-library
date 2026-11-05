@@ -160,10 +160,11 @@ TEST_F(TypesTest, SolutionFileRoundTripsFgoQualityColumns) {
     EXPECT_EQ(loaded_sol.iterations, sol.iterations);
 }
 
-TEST_F(TypesTest, MapOutputsKeepFusedEpochsWithoutSatellites) {
+TEST_F(TypesTest, MapOutputsAndStatisticsKeepFusedEpochsWithoutSatellites) {
     // gnss fuse writes IMU-fused epochs as FLOAT with num_satellites = 0;
     // isValid() rejects those (< 4 satellites), but they carry a position and
-    // belong on the map. Epochs without a status or a finite position do not.
+    // belong on the map and in the statistics. Epochs without a status or a
+    // finite position do not.
     const auto make = [](double tow, SolutionStatus status, int satellites,
                          double lat_deg) {
         PositionSolution sol;
@@ -217,6 +218,17 @@ TEST_F(TypesTest, MapOutputsKeepFusedEpochsWithoutSatellites) {
     }
     EXPECT_EQ(features, 2u);
     EXPECT_NE(geojson.find("\"num_satellites\":0"), std::string::npos);
+
+    const auto& first = solution.solutions.front();
+    const auto stats = solution.calculateStatistics(first.position_ecef);
+    EXPECT_EQ(stats.total_epochs, 4u);
+    EXPECT_EQ(stats.valid_solutions, 2u);
+    EXPECT_EQ(stats.fixed_solutions, 1u);
+    EXPECT_EQ(stats.float_solutions, 1u);
+    EXPECT_DOUBLE_EQ(stats.availability_rate, 0.5);
+    EXPECT_DOUBLE_EQ(stats.mean_satellites, 6.0);
+    EXPECT_TRUE(std::isfinite(stats.rms_3d));
+    EXPECT_GT(stats.rms_3d, 0.0);  // the fused epoch is 0.1 deg north
 }
 
 TEST_F(TypesTest, SolutionLoaderMapsNamedOptionalColumns) {

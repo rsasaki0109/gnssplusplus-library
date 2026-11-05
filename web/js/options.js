@@ -63,7 +63,9 @@ export function extraArgsToEntries(text) {
 export function exportOptionsToml(opts, commandHint = '') {
   const mode = POST_MODES[opts.mode];
   if (!mode) throw new Error(`unknown positioning mode: ${opts.mode}`);
-  if (mode.tool === 'gnss_spp') throw new Error('gnss spp has no --config; options files cover the RTK, RTK + IMU and PPP modes');
+  if (mode.tool === 'gnss_spp' || mode.tool === 'gnss_fgo') {
+    throw new Error(`gnss ${mode.tool.slice(5)} has no --config; options files cover the RTK, RTK + IMU and PPP modes`);
+  }
   const entries = [];
   if (mode.tool === 'gnss_fuse') {
     const arm = (opts.leverArm || []).map((v) => (hasValue(v) ? String(v) : '0'));
