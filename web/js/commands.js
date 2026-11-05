@@ -33,6 +33,18 @@ export const RTK_IONO = ['auto', 'off', 'iflc', 'est'];
 export const IMU_FORMATS = ['ppc', 'rtklibexplorer-sf'];
 export const FGO_PRESETS = ['real-data-float', 'real-data-fixed', 'default'];
 
+// PPP correction sources: broadcast / precise products (NAV, SP3, CLK), QZSS
+// MADOCA-PPP from raw L6E (+ L6D ionosphere) logs, or QZSS CLAS from a raw
+// L6 log (experimental, docs/use_cases/clas_submeter.md).
+export const PPP_CORRECTIONS = ['products', 'madoca', 'clas'];
+// MADOCA PPP-AR as MADOCALIB's pppar sample and the CI MADOCA release matrix
+// (scripts/ci/run_madoca_release_matrix.py) run it.
+export const MADOCA_AR = {
+  ratio: 1.5,
+  convergence: ['--convergence-policy', 'local-enu',
+    '--convergence-threshold-horizontal', '0.75', '--convergence-threshold-vertical', '1.25'],
+};
+
 /** Shell-like split: whitespace separated, '...' and "..." group, \ escapes. */
 export function splitArgs(text) {
   const out = [];
@@ -133,8 +145,9 @@ function stem(name) {
 }
 
 /** Default solution file name for a rover observation file. */
-export function defaultPosName(rover, mode) {
-  const suffix = { single: 'spp', 'ppp-kinematic': 'ppp', 'ppp-static': 'ppp', 'rtk-imu': 'fused', fgo: 'fgo' }[mode] || 'rtk';
+export function defaultPosName(rover, mode, corrections) {
+  let suffix = { single: 'spp', 'ppp-kinematic': 'ppp', 'ppp-static': 'ppp', 'rtk-imu': 'fused', fgo: 'fgo' }[mode] || 'rtk';
+  if (suffix === 'ppp' && (corrections === 'madoca' || corrections === 'clas')) suffix = corrections;
   return `${stem(rover || 'solution')}_${suffix}.pos`;
 }
 
@@ -143,7 +156,8 @@ export function defaultPosName(rover, mode) {
  * opts: { mode, rover, base, nav, sp3, clk, out, elevationMask, maxEpochs,
  *         preset, iono, ratio, baseEcef: [x,y,z] | null, kml, verbose,
  *         ionoFree, enableAr, imu, leverArm: [x,y,z] | null, tightCoupling,
- *         imuFormat, fgoPreset, extra, workspaceNames }
+ *         imuFormat, fgoPreset, corrections, l6e: [names], l6d: [names],
+ *         clasL6, antex, extra, workspaceNames }
  */
 export function buildPostCommand(opts) {
   const mode = POST_MODES[opts.mode];
@@ -152,10 +166,21 @@ export function buildPostCommand(opts) {
     const what = { nav: 'a navigation', imu: 'an IMU (CSV)' }[role] || `a ${role}`;
     if (!opts[role]) throw new Error(`${mode.label} needs ${what} file`);
   }
-  if (mode.tool === 'gnss_ppp' && !opts.nav && !(opts.sp3 && opts.clk)) {
-    throw new Error('PPP needs a navigation file or both SP3 and CLK products');
+  const corrections = mode.tool === 'gnss_ppp' ? opts.corrections || 'products' : 'products';
+  if (!PPP_CORRECTIONS.includes(corrections)) throw new Error(`unknown PPP corrections: ${corrections}`);
+  const l6e = opts.l6e || [];
+  const l6d = opts.l6d || [];
+  if (mode.tool === 'gnss_ppp') {
+    if (corrections === 'products' && !opts.nav && !(opts.sp3 && opts.clk)) {
+      throw new Error('PPP needs a navigation file or both SP3 and CLK products');
+    }
+    if (corrections !== 'products' && !opts.nav) {
+      throw new Error(`${corrections === 'clas' ? 'CLAS' : 'MADOCA-PPP'} needs a navigation file (broadcast ephemeris)`);
+    }
+    if (corrections === 'madoca' && l6e.length === 0) throw new Error('MADOCA-PPP needs at least one L6E file');
+    if (corrections === 'clas' && !opts.clasL6) throw new Error('CLAS needs an L6 file');
   }
-  const out = opts.out || defaultPosName(opts.rover, opts.mode);
+  const out = opts.out || defaultPosName(opts.rover, opts.mode, corrections);
   const elevation = finite(opts.elevationMask);
   const maxEpochs = finite(opts.maxEpochs);
   const cmd = new Command(mode.tool);
@@ -232,13 +257,33 @@ export function buildPostCommand(opts) {
   } else {
     cmd.input('--obs', opts.rover);
     if (opts.nav) cmd.input('--nav', opts.nav);
-    if (opts.sp3) cmd.input('--sp3', opts.sp3);
-    if (opts.clk) cmd.input('--clk', opts.clk);
+    const ratio = finite(opts.ratio);
+    if (corrections === 'products') {
+      if (opts.sp3) cmd.input('--sp3', opts.sp3);
+      if (opts.clk) cmd.input('--clk', opts.clk);
+    } else if (corrections === 'madoca') {
+      for (const name of l6e) cmd.input('--madoca-l6', name);
+      for (const name of l6d) cmd.input('--madoca-l6d', name);
+    } else {
+      // A raw L6 log given as --ssr is decoded natively (Compact SSR) for
+      // the CLAS OSR PPP-RTK filter.
+      cmd.input('--ssr', opts.clasL6).flag('--clas-osr');
+    }
+    if (opts.antex) cmd.input('--antex', opts.antex);
     cmd.output('--out', out);
     cmd.flag(mode.pppMotion);
     if (elevation !== null) cmd.flag('--elevation-mask', elevation);
     if (maxEpochs) cmd.flag('--max-epochs', maxEpochs);
-    if (opts.enableAr) cmd.flag('--enable-ar');
+    if (corrections === 'madoca') {
+      // L6D ionosphere applies only to the per-frequency (uncombined) filter.
+      if (opts.enableAr || l6d.length) cmd.flag('--ar-method', 'per-freq');
+      if (opts.enableAr) {
+        cmd.flag('--enable-ar', '--ar-ratio-threshold', ratio ?? MADOCA_AR.ratio, ...MADOCA_AR.convergence);
+      }
+    } else if (corrections === 'products' && opts.enableAr) {
+      cmd.flag('--enable-ar');
+      if (ratio !== null) cmd.flag('--ar-ratio-threshold', ratio);
+    }
     if (opts.kml) cmd.output('--kml', `${stem(out)}.kml`);
     cmd.output('--summary-json', `${stem(out)}_summary.json`);
   }

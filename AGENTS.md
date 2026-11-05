@@ -90,6 +90,10 @@ Remove the symlinks afterwards so `RTKRealDataTest.*` returns to skipping.
   after reload*; it fails on page or console errors and on requests to other
   sites than the map tile hosts. Run it locally with
   `node wasm/test/browser.mjs <site dir>` after `wasm/assemble_site.py`.
+  With `--qzss <dir>` both also run MADOCA-PPP and CLAS on the public
+  MADOCALIB / CLASLIB samples (`QZSS_SAMPLES` in `smoke.mjs`; the Docs
+  workflow checks out exactly those files) and compare with the native
+  `gnss ppp` results recorded there.
 - The wasm link sets mirror `apps/CMakeLists.txt`; keep them in step, and do
   not add `Threads::Threads` / `-pthread` there (static hosting has no
   cross-origin isolation, so no SharedArrayBuffer).
