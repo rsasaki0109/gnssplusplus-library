@@ -21,6 +21,8 @@ map tiles, and only after you choose a map background in Plot.
 Every run prints the equivalent `gnss ...` command, so a browser session can
 be repeated natively, for example on a larger dataset or in a script.
 
+![Post-process: RTK + IMU on the bundled sample, with the run log and the outputs](web_app_post_process.png)
+
 ## Quick tour
 
 1. Press **Run demo pipeline** in the Files panel. It loads a 40 s excerpt of
@@ -52,6 +54,8 @@ be repeated natively, for example on a larger dataset or in a script.
    skyplot. The receiver position for azimuth/elevation comes from the RINEX
    header, else the first SPP fix (rover files converted from RTCM have no
    header position), or an ECEF position you enter.
+
+![Observations: skyplot, per-satellite tracking coloured by SNR with LLI slips, SNR vs elevation, satellite count](web_app_observations.png)
 
 Post-process exposes the everyday options (positioning mode, elevation mask,
 RTK preset, ionosphere option, ratio threshold, base position, KML) and an
@@ -123,6 +127,12 @@ The selector next to *Ground track* in Plot puts web map tiles under the
 trajectory: OpenStreetMap, or, for Japan, the GSI standard map or GSI
 aerial photos (地理院タイル). Wheel zoom, drag and double-click fit work as
 without a map, and the map follows.
+
+![Plot: PPC Tokyo run1 RTK coloured by horizontal error vs the reference over OpenStreetMap, with the fused solution as solution 2](web_app_plot_map.png)
+
+The screenshot shows the full PPC Tokyo run1 (`gnss solve` RTK as solution 1,
+coloured by error; `gnss fuse` as solution 2; map © OpenStreetMap
+contributors).
 
 - The track stays in the same E/N metres around the plot origin as the time
   series and statistics; each tile is placed by converting its corner

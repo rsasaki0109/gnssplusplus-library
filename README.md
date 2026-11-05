@@ -34,9 +34,12 @@ Zenith inset: satellite IDs and LOS/NLOS predictions from PLATEAU buildings and 
 ## Try it
 
 No install at all: the [browser GUI](https://rsasaki0109.github.io/gnssplusplus-library/app/)
-runs `gnss convert`, `gnss solve`, `gnss spp` and `gnss ppp` compiled to
-WebAssembly, RTKLIB-style (post-process, convert, plot), on your files or a
-bundled RTCM3 sample, without uploading anything ([guide](docs/web_app.md)).
+runs `gnss convert`, `gnss solve`, `gnss fuse`, `gnss fgo`, `gnss spp` and
+`gnss ppp` compiled to WebAssembly, RTKLIB-style (post-process, convert, plot,
+observations), on your files or a bundled RTCM3 sample, without uploading
+anything ([guide](docs/web_app.md)).
+
+![Browser GUI: PPC Tokyo run1 RTK coloured by error vs the reference, over OpenStreetMap](docs/web_app_plot_map.png)
 
 The fastest command-line run uses the published runtime image; no local build is
 needed:
