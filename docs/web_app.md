@@ -30,9 +30,10 @@ be repeated natively, for example on a larger dataset or in a script.
    trajectory), converts both streams to RINEX, runs kinematic RTK and opens
    the result in Plot with the errors against the reference.
 2. Or add your own files with **Add files** or drag and drop: RINEX OBS/NAV,
-   SP3, CLK, ANTEX, QZSS L6 logs (CLAS, MADOCA L6E / L6D), RTCM3, u-blox UBX,
-   `.pos` (libgnss++ or RTKLIB) and reference CSV files are recognised from
-   their content. Files are lost on reload unless
+   SP3, CLK, ANTEX, QZSS L6 logs (CLAS, MADOCA L6E / L6D), Galileo HAS
+   E6-B page logs (cssrlib text; Septentrio SBF), RTCM3 (including RTCM SSR),
+   u-blox UBX, `.pos` (libgnss++ or RTKLIB) and reference CSV files are
+   recognised from their content. Files are lost on reload unless
    **Keep files after reload** is ticked: then inputs and outputs are kept in
    this browser's IndexedDB (on this device, for this site only) and come
    back on the next visit; the note next to it shows how much is kept.
@@ -108,11 +109,22 @@ Memory grows with the span: about 0.25 GB plus 0.17 MB per epoch (2.3 GB
 natively for the full Tokyo run1), within the 4 GB of a browser run.
 `gnss fgo` has no `--config`, so FGO settings are not saved.
 
-### QZSS MADOCA-PPP and CLAS
+### PPP corrections: Galileo HAS, QZSS MADOCA-PPP and CLAS
 
 In the PPP modes, *PPP corrections* picks where the corrections come from:
 
 - *Broadcast / precise products*: the NAV, SP3 and CLK files above.
+- *Galileo HAS, internet*: the HAS Internet Data Distribution recorded as an
+  RTCM 3 SSR file, with the broadcast NAV of the same day:
+  `gnss ppp --ssr-rtcm <file> --ssr-rtcm-profile has-idd` (IODE-matched
+  orbits, ephemerides from the stream, Galileo I/NAV only; see
+  [Galileo HAS support](galileo_has.md)).
+- *Galileo HAS, signal in space*: the E6-B pages a receiver logged, as cssrlib
+  text, u-blox RXM-SFRBX or Septentrio SBF, with a NAV that holds Galileo
+  I/NAV: `gnss ppp --has-pages <log> --has-pages-format <format>`, the format
+  taken from the log's content. HAS carries no phase biases, so both HAS modes
+  are float PPP (no ambiguity resolution), and East Asia / the Pacific
+  (90°E–180°E) is outside the service area.
 - *QZSS MADOCA-PPP*: raw L6E logs (orbit, clock and bias; tick every channel
   and hour of the run, e.g. PRN 204 and 206) and, optionally, L6D logs
   (ionosphere over Japan and Australia), with the broadcast NAV of the same
@@ -137,8 +149,12 @@ and compares them with native `gnss ppp`:
 | --- | --- | --- |
 | MADOCALIB 0089f7dc: IGS MIZU, 2025-04-01 00–01 h, L6E 204/206, L6D 200/201, ANTEX | kinematic PPP-AR, 120 epochs | 118 solved, 91 FIX (MADOCALIB: 97); without L6D 108 FIX / 10 FLOAT, as MADOCALIB. Same status as native at every epoch, positions within 0.01 mm. 5.8 s in Chromium, 2.5 s natively |
 | CLASLIB 4320e844: 2019-08-27 (`0627239Q.obs`, `2019239Q.l6`) | static, 300 epochs | 298 FLOAT / 2 FIX, horizontal RMS 1.6 m over the last 100 epochs from the station coordinate; byte-identical to native. 9.5 s as WebAssembly in Node, 6–8 s natively |
+| cssrlib-data ec1dfa2c: OBE4 2023-08-17, HAS IDD (`idd2023229c.rtc`) | static, 1800 epochs (30 min) | 0.09 m horizontal from the OBE4 coordinate (0.01 m after the full hour, `gnss reproduce has-idd-ppp`); final position within 0.01 mm of native. 4 s natively |
+| cssrlib-data ec1dfa2c: Kamakura 2025-02-15, E6-B pages (`046r_gale6.txt`) and the receiver's NAV | static, 1800 epochs (30 min) | 0.09 m horizontal from the Kamakura coordinate, indicative only (outside the HAS service area); final position within 0.01 mm of native. 4 s natively |
 
-MIZU's RINEX header position is 4.4 m from its PPP-AR fixed solution
+The cssrlib-data files have no stated license, so CI checks them out for the
+test and nothing is redistributed. MIZU's RINEX header position is 4.4 m
+from its PPP-AR fixed solution
 ([MADOCALIB native migration](madocalib_native_migration.md)), so it is not
 a truth for scoring. CLAS is marked experimental: the CLI's `gnss clas-ppp`
 expands L6 with Python, which the browser cannot run, and gives 1.4 m on

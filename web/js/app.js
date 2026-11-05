@@ -2,7 +2,7 @@
 // WebAssembly. Each run executes the unchanged native main() in a worker.
 
 import {
-  buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultConvertNames, defaultPosName, DISPATCH_NAMES, POST_MODES,
+  buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultConvertNames, defaultPosName, DISPATCH_NAMES, HAS_PAGE_FORMATS, POST_MODES,
 } from './commands.js';
 import { parseSolution, parseVisibilityCsv, Q_LABELS, rinexFirstEpoch, rinexObsTimeSpan, SYSTEMS } from './formats.js';
 import {
@@ -525,6 +525,9 @@ function postOptions() {
     l6e: corrections === 'madoca' ? checkedIn('#post-l6e') : [],
     l6d: corrections === 'madoca' ? checkedIn('#post-l6d') : [],
     clasL6: corrections === 'clas' ? v.clasL6 : '',
+    hasIdd: corrections === 'has-idd' ? v.hasIdd : '',
+    hasPages: corrections === 'has-sis' ? v.hasPages : '',
+    hasPagesFormat: corrections === 'has-sis' ? HAS_PAGE_FORMATS[workspace.get(v.hasPages)?.kind] || 'cssrlib' : '',
     antex: group === 'ppp' ? v.antex : '',
     imu: group === 'imu' ? v.imu : '',
     leverArm: group === 'imu' ? [v.leverX, v.leverY, v.leverZ] : null,

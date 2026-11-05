@@ -616,3 +616,41 @@ test('MADOCA-PPP and CLAS options round-trip through TOML', () => {
   assert.deepEqual(parseFlatToml(clas).sections.gnss_ppp, [['kinematic', false], ['clas_osr', true]]);
   assert.equal(importOptionsToml(clas).fields.pppCorr, 'clas');
 });
+
+test('Galileo HAS commands, page log sniffing and options', () => {
+  const page = '2353\t579600\t 19\t6\t 62\tfffebcef0ffb098ee4079ec8f795ed3eb0783f84b3955b21fb431479ed3cb396e405431314794312b07ae404f3f8b3979ec9fb400b7bb72ee9fccae948000000\n';
+  assert.equal(sniffKind('046r_gale6.txt', new TextEncoder().encode(page)), 'has');
+  assert.equal(sniffKind('log.bin', new Uint8Array([0x24, 0x40, 0x10, 0x20])), 'sbf');
+  assert.equal(sniffKind('x.sbf', new Uint8Array()), 'sbf');
+  assert.equal(sniffKind('idd2023229c.rtc', new Uint8Array([0xd3, 0x00, 0xf1])), 'rtcm');
+
+  const common = { rover: 'OBE42023229c.obs', nav: 'OBE42023229c.nav', kml: false };
+  const idd = buildPostCommand({ ...common, mode: 'ppp-static', corrections: 'has-idd', hasIdd: 'idd2023229c.rtc', enableAr: true });
+  assert.equal(idd.commandLine,
+    'gnss ppp --obs OBE42023229c.obs --nav OBE42023229c.nav --ssr-rtcm idd2023229c.rtc --ssr-rtcm-profile has-idd '
+    + '--out OBE42023229c_has.pos --static --summary-json OBE42023229c_has_summary.json');
+  assert.deepEqual(idd.inputs, ['OBE42023229c.obs', 'OBE42023229c.nav', 'idd2023229c.rtc']);
+  const sis = buildPostCommand({
+    ...common, mode: 'ppp-kinematic', corrections: 'has-sis', hasPages: '046r_gale6.txt', hasPagesFormat: 'cssrlib', maxEpochs: '600',
+  });
+  assert.match(sis.commandLine, /--has-pages 046r_gale6\.txt --has-pages-format cssrlib --out OBE42023229c_has\.pos --kinematic --max-epochs 600/);
+  assert.match(buildPostCommand({ ...common, mode: 'ppp-static', corrections: 'has-sis', hasPages: 'r.ubx', hasPagesFormat: 'ubx' }).commandLine,
+    /--has-pages r\.ubx --has-pages-format ubx/);
+  assert.throws(() => buildPostCommand({ ...common, nav: '', mode: 'ppp-static', corrections: 'has-idd', hasIdd: 'x.rtc' }),
+    /Galileo HAS needs a navigation file/);
+  assert.throws(() => buildPostCommand({ ...common, mode: 'ppp-static', corrections: 'has-idd' }), /needs an RTCM 3 SSR file/);
+  assert.throws(() => buildPostCommand({ ...common, mode: 'ppp-static', corrections: 'has-sis' }), /needs a page log/);
+  assert.throws(() => buildPostCommand({ ...common, mode: 'ppp-static', corrections: 'has-sis', hasPages: 'p', hasPagesFormat: 'novatel' }),
+    /unknown HAS page log format/);
+  assert.equal(defaultPosName('OBE4.obs', 'ppp-kinematic', 'has-sis'), 'OBE4_has.pos');
+
+  const iddToml = exportOptionsToml({ mode: 'ppp-static', corrections: 'has-idd', hasIdd: 'x.rtc', enableAr: true, extra: '' });
+  assert.deepEqual(parseFlatToml(iddToml).sections.gnss_ppp, [['kinematic', false], ['ssr_rtcm_profile', 'has-idd']]);
+  assert.equal(importOptionsToml(iddToml).fields.pppCorr, 'has-idd');
+  const sisToml = exportOptionsToml({ mode: 'ppp-kinematic', corrections: 'has-sis', hasPages: 'r.ubx', hasPagesFormat: 'ubx', extra: '' });
+  assert.deepEqual(parseFlatToml(sisToml).sections.gnss_ppp, [['kinematic', true], ['has_pages_format', 'ubx']]);
+  const back = importOptionsToml(`${sisToml}has_pages = "logs/r.ubx"\n`);
+  assert.equal(back.fields.pppCorr, 'has-sis');
+  assert.equal(back.extra, '');
+  assert.deepEqual(back.files, { has_pages: 'r.ubx' });
+});

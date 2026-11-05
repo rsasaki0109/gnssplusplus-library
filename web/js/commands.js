@@ -33,10 +33,17 @@ export const RTK_IONO = ['auto', 'off', 'iflc', 'est'];
 export const IMU_FORMATS = ['ppc', 'rtklibexplorer-sf'];
 export const FGO_PRESETS = ['real-data-float', 'real-data-fixed', 'default'];
 
-// PPP correction sources: broadcast / precise products (NAV, SP3, CLK), QZSS
-// MADOCA-PPP from raw L6E (+ L6D ionosphere) logs, or QZSS CLAS from a raw
-// L6 log (experimental, docs/use_cases/clas_submeter.md).
-export const PPP_CORRECTIONS = ['products', 'madoca', 'clas'];
+// PPP correction sources: broadcast / precise products (NAV, SP3, CLK),
+// Galileo HAS from the internet distribution (IDD, RTCM 3 SSR) or from E6-B
+// pages logged by a receiver (docs/galileo_has.md), QZSS MADOCA-PPP from raw
+// L6E (+ L6D ionosphere) logs, or QZSS CLAS from a raw L6 log (experimental,
+// docs/use_cases/clas_submeter.md).
+export const PPP_CORRECTIONS = ['products', 'has-idd', 'has-sis', 'madoca', 'clas'];
+const CORRECTION_NAMES = {
+  'has-idd': 'Galileo HAS', 'has-sis': 'Galileo HAS', madoca: 'MADOCA-PPP', clas: 'CLAS',
+};
+// gnss ppp --has-pages-format for each page log kind (formats.js sniffKind).
+export const HAS_PAGE_FORMATS = { has: 'cssrlib', ubx: 'ubx', sbf: 'sbf' };
 // MADOCA PPP-AR as MADOCALIB's pppar sample and the CI MADOCA release matrix
 // (scripts/ci/run_madoca_release_matrix.py) run it.
 export const MADOCA_AR = {
@@ -148,6 +155,7 @@ function stem(name) {
 export function defaultPosName(rover, mode, corrections) {
   let suffix = { single: 'spp', 'ppp-kinematic': 'ppp', 'ppp-static': 'ppp', 'rtk-imu': 'fused', fgo: 'fgo' }[mode] || 'rtk';
   if (suffix === 'ppp' && (corrections === 'madoca' || corrections === 'clas')) suffix = corrections;
+  if (suffix === 'ppp' && (corrections === 'has-idd' || corrections === 'has-sis')) suffix = 'has';
   return `${stem(rover || 'solution')}_${suffix}.pos`;
 }
 
@@ -157,7 +165,7 @@ export function defaultPosName(rover, mode, corrections) {
  *         preset, iono, ratio, baseEcef: [x,y,z] | null, kml, verbose,
  *         ionoFree, enableAr, imu, leverArm: [x,y,z] | null, tightCoupling,
  *         imuFormat, fgoPreset, corrections, l6e: [names], l6d: [names],
- *         clasL6, antex, extra, workspaceNames }
+ *         clasL6, hasIdd, hasPages, hasPagesFormat, antex, extra, workspaceNames }
  */
 export function buildPostCommand(opts) {
   const mode = POST_MODES[opts.mode];
@@ -175,10 +183,15 @@ export function buildPostCommand(opts) {
       throw new Error('PPP needs a navigation file or both SP3 and CLK products');
     }
     if (corrections !== 'products' && !opts.nav) {
-      throw new Error(`${corrections === 'clas' ? 'CLAS' : 'MADOCA-PPP'} needs a navigation file (broadcast ephemeris)`);
+      throw new Error(`${CORRECTION_NAMES[corrections]} needs a navigation file (broadcast ephemeris)`);
     }
     if (corrections === 'madoca' && l6e.length === 0) throw new Error('MADOCA-PPP needs at least one L6E file');
     if (corrections === 'clas' && !opts.clasL6) throw new Error('CLAS needs an L6 file');
+    if (corrections === 'has-idd' && !opts.hasIdd) throw new Error('Galileo HAS (IDD) needs an RTCM 3 SSR file');
+    if (corrections === 'has-sis' && !opts.hasPages) throw new Error('Galileo HAS (E6-B) needs a page log');
+    if (corrections === 'has-sis' && !Object.values(HAS_PAGE_FORMATS).includes(opts.hasPagesFormat || 'cssrlib')) {
+      throw new Error(`unknown HAS page log format: ${opts.hasPagesFormat}`);
+    }
   }
   const out = opts.out || defaultPosName(opts.rover, opts.mode, corrections);
   const elevation = finite(opts.elevationMask);
@@ -264,6 +277,12 @@ export function buildPostCommand(opts) {
     } else if (corrections === 'madoca') {
       for (const name of l6e) cmd.input('--madoca-l6', name);
       for (const name of l6d) cmd.input('--madoca-l6d', name);
+    } else if (corrections === 'has-idd') {
+      // RTCM 10403.3 semantics: IODE-matched orbits, ephemerides from the
+      // stream, Galileo I/NAV only, held code biases (docs/galileo_has.md).
+      cmd.input('--ssr-rtcm', opts.hasIdd).flag('--ssr-rtcm-profile', 'has-idd');
+    } else if (corrections === 'has-sis') {
+      cmd.input('--has-pages', opts.hasPages).flag('--has-pages-format', opts.hasPagesFormat || 'cssrlib');
     } else {
       // A raw L6 log given as --ssr is decoded natively (Compact SSR) for
       // the CLAS OSR PPP-RTK filter.
