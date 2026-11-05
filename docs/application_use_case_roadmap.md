@@ -75,7 +75,9 @@ Scope:
 - add a maximum bridge-age recommendation instead of implying indefinite
   dead reckoning;
 - either make `fuse --kml` include propagated fusion epochs or document and
-  test the accepted `pos2kml --status all` route.
+  test the accepted `pos2kml --status all` route (both done: `fuse --kml`
+  draws every fused epoch since #719, and the urban recipe keeps the tested
+  `pos2kml --status all` route).
 
 Acceptance gate:
 

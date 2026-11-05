@@ -237,6 +237,10 @@ public:
     
     /**
      * @brief Calculate statistics
+     *
+     * Counts every epoch with a status other than NONE and a finite position
+     * as a valid solution (the epochs writeKML() draws), including IMU-fused
+     * epochs that report no satellites; isValid() is not used.
      */
     struct SolutionStatistics {
         size_t total_epochs = 0;
@@ -297,10 +301,10 @@ public:
     /**
      * @brief Write solutions in GeoJSON format for visualization.
      *
-     * Emits a FeatureCollection with one LineString per status group
-     * (fixed/float/other) and individual Point features carrying fix status,
-     * satellite count, and PDOP as properties. Compatible with QGIS, Mapbox,
-     * Leaflet, and any GeoJSON-aware tool. Selects epochs like writeKML().
+     * Emits a FeatureCollection of Point features, one per epoch, carrying
+     * fix status, satellite count, and PDOP as properties. Compatible with
+     * QGIS, Mapbox, Leaflet, and any GeoJSON-aware tool. Selects epochs like
+     * writeKML().
      */
     bool writeGeoJSON(const std::string& filename) const;
     
