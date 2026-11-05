@@ -63,6 +63,7 @@
                 <option value="static">Static RTK</option>
                 <option value="moving-base">Moving-base RTK</option>
                 <option value="rtk-imu">Kinematic RTK + IMU</option>
+                <option value="fgo">Kinematic FGO (batch, experimental)</option>
                 <option value="ppp-kinematic">PPP Kinematic</option>
                 <option value="ppp-static">PPP Static</option>
               </select>
@@ -72,7 +73,7 @@
             <legend>Input files</legend>
             <label>Rover observation (RINEX OBS)
               <select name="rover" data-kinds="obs" data-prefer="rover"></select></label>
-            <label data-show="rtk imu">Base observation (RINEX OBS)
+            <label data-show="rtk imu fgo">Base observation (RINEX OBS)
               <select name="base" data-kinds="obs" data-prefer="base"></select></label>
             <label>Navigation (RINEX NAV)<span data-show="ppp" class="opt"> optional</span>
               <select name="nav" data-kinds="nav" data-optional-modes="ppp"></select></label>
@@ -104,7 +105,13 @@
                   <option value="iflc">iflc</option>
                   <option value="est">est</option>
                 </select></label>
-              <label data-show="rtk imu">AR ratio threshold<input name="ratio" type="number" step="any" min="1" placeholder="default"></label>
+              <label data-show="fgo">FGO preset
+                <select name="fgoPreset">
+                  <option value="real-data-float">real-data-float</option>
+                  <option value="real-data-fixed">real-data-fixed (LAMBDA, check FIX vs a reference)</option>
+                  <option value="default">default</option>
+                </select></label>
+              <label data-show="rtk imu fgo">AR ratio threshold<input name="ratio" type="number" step="any" min="1" placeholder="default"></label>
             </div>
             <div data-show="imu" class="imu-opts">
               <label>IMU to antenna lever arm, body FLU (m) <span class="opt">x forward, y left, z up</span></label>

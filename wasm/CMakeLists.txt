@@ -94,6 +94,10 @@ gnsspp_add_wasm_tool(gnss_ppp
         ${GNSSPP_NATIVE_APP_DIR}/gnss_ppp.cpp
         ${GNSSPP_NATIVE_APP_DIR}/cli_toml_config.cpp
     LIBS gnss_lib gnss_lib_solvers)
+# Eigen backend only: GTSAM is not built for the browser.
+gnsspp_add_wasm_tool(gnss_fgo
+    SOURCES ${GNSSPP_NATIVE_APP_DIR}/gnss_fgo.cpp
+    LIBS gnss_lib gnss_lib_solvers)
 
 add_custom_target(gnsspp_wasm)
 add_dependencies(gnsspp_wasm ${GNSSPP_WASM_TARGETS})

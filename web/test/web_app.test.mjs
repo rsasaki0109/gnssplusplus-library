@@ -440,3 +440,22 @@ test('map tiles: ENU placement, tile choice and coverage', () => {
   assert.equal(chooseZoom(0.001, origin[0], TILE_SOURCES['gsi-std'].maxZoom), 18);
   assert.equal(chooseZoom(1e7, origin[0], 19), 0);
 });
+
+test('FGO command and options', () => {
+  const opts = {
+    mode: 'fgo', rover: 'rover.obs', base: 'base.obs', nav: 'base.nav', fgoPreset: 'real-data-fixed',
+    ratio: '2.5', elevationMask: '15', maxEpochs: '400', kml: true, verbose: true, baseEcef: null,
+  };
+  const cmd = buildPostCommand(opts);
+  assert.equal(cmd.tool, 'gnss_fgo');
+  assert.deepEqual(cmd.inputs, ['rover.obs', 'base.obs', 'base.nav']);
+  assert.deepEqual(cmd.outputs, ['rover_fgo.pos', 'rover_fgo_summary.json']);
+  assert.equal(cmd.commandLine,
+    'gnss fgo --obs rover.obs --base base.obs --nav base.nav --out rover_fgo.pos --preset real-data-fixed '
+    + '--lambda-ratio-threshold 2.5 --min-elevation 15 --max-epochs 400 --summary-json rover_fgo_summary.json');
+  assert.equal(defaultPosName('rover.obs', 'fgo'), 'rover_fgo.pos');
+  const plain = buildPostCommand({ mode: 'fgo', rover: 'r.obs', base: 'b.obs', nav: 'n.nav' });
+  assert.ok(plain.args.join(' ').includes('--preset real-data-float'), 'float preset by default');
+  assert.throws(() => buildPostCommand({ ...opts, base: '' }), /needs a base file/);
+  assert.throws(() => exportOptionsToml(opts), /gnss fgo has no --config/);
+});
