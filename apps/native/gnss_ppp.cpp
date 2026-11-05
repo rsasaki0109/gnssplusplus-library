@@ -916,24 +916,24 @@ parseClasSubtype12ValueConstructionPolicy(const std::string& value) {
 
 int main(int argc, char* argv[]) {
     try {
+        // `key = true` passes --key, except for options that are on by
+        // default; `key = false` passes the negative flag, or nothing for an
+        // option that is off by default.
         const libgnss_apps::TomlCliSchema schema{
             "gnss_ppp",
             {
-                {"--clas-osr", ""},
-                {"--enable-ar", ""},
-                {"--emit-epoch-time", ""},
-                {"--estimate-ionosphere", ""},
                 {"--estimate-troposphere", ""},
-                {"--kinematic", ""},
-                {"--no-ionosphere-free", ""},
-                {"--use-dynamics-model", ""},
-                {"--quiet", ""},
-                {"--progress", ""},
             },
             {
                 {"--estimate-troposphere", "--no-estimate-troposphere"},
-                {"--enable-ar", "--no-ar"},
-                {"--kinematic", "--no-kinematic"},
+                {"--estimate-ionosphere", "--no-estimate-ionosphere"},
+                {"--enable-ar", "--disable-ar"},
+                {"--kinematic", "--static"},
+                {"--clas-osr", ""},
+                {"--emit-epoch-time", ""},
+                {"--use-dynamics-model", ""},
+                {"--quiet", ""},
+                {"--progress", ""},
             },
             {
                 {"--madoca-l6", libgnss_apps::TomlArrayStyle::SEPARATE_ARGUMENTS},
