@@ -6,8 +6,9 @@ browser GUI in `web/` (user guide: `docs/web_app.md`).
 ```bash
 bash wasm/build.sh                                   # emcmake + cmake --build
 node wasm/test/smoke.mjs build-wasm/wasm/dist        # demo pipeline in Node
-python3 wasm/assemble_site.py --dist build-wasm/wasm/dist --out build-wasm/site
-python3 -m http.server -d build-wasm/site 8000       # http://localhost:8000/
+python3 wasm/assemble_site.py --dist build-wasm/wasm/dist --out build-wasm/site/app
+node wasm/test/browser.mjs build-wasm/site           # GUI end to end in headless Chromium (Playwright)
+python3 -m http.server -d build-wasm/site/app 8000   # http://localhost:8000/
 ```
 
 Without a local Emscripten SDK, the image CI uses works too:
