@@ -9,6 +9,7 @@ import {
 } from '../js/commands.js';
 import { parseSolution, parseVisibilityCsv, Q, rinexObsTimeSpan, sniffKind } from '../js/formats.js';
 import { errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu } from '../js/analysis.js';
+import { addWorkerfsReadAhead } from '../js/engine.js';
 import { calendarToGpsSeconds, ecefToLlh, formatGpst, gpsSeconds, llhToEcef } from '../js/geo.js';
 
 const root = new URL('../../', import.meta.url);
@@ -194,6 +195,52 @@ test('splitArgs handles quotes and escapes', () => {
   assert.deepEqual(splitArgs(` --a 1  --b "two words" 'x y' c\\ d ""`), ['--a', '1', '--b', 'two words', 'x y', 'c d', '']);
   assert.deepEqual(splitArgs(''), []);
   assert.throws(() => splitArgs('"open'), /unterminated/);
+});
+
+test('WORKERFS read-ahead returns the same bytes with far fewer blob reads', () => {
+  // Stand-ins for Emscripten's WORKERFS: Blob-backed nodes read with a
+  // synchronous FileReader (FileReaderSync exists only in browser workers).
+  class BytesBlob extends Blob {
+    constructor(bytes) { super([bytes]); this.bytes = bytes; }
+    slice(start, end) { return new BytesBlob(this.bytes.subarray(start, end)); }
+  }
+  const data = new Uint8Array(1_000_003).map((_, i) => (i * 7919) % 251);
+  const blob = new BytesBlob(data);
+  let reads = 0;
+  const workerfs = {
+    reader: { readAsArrayBuffer(b) { reads += 1; return b.bytes.slice().buffer; } },
+    stream_ops: {
+      read(stream, buffer, offset, length, position) {
+        if (position >= stream.node.size) return 0;
+        const chunk = stream.node.contents.slice(position, position + length);
+        buffer.set(new Uint8Array(workerfs.reader.readAsArrayBuffer(chunk)), offset);
+        return chunk.size;
+      },
+    },
+  };
+  const stream = { node: { contents: blob, size: data.length } };
+  assert.ok(addWorkerfsReadAhead(workerfs, 65536));
+  assert.equal(addWorkerfsReadAhead(workerfs, 65536), false); // patched once
+  // Sequential 4 KiB reads, a seek back, an unaligned tail and a large read.
+  const out = new Uint8Array(data.length + 16);
+  let pos = 0;
+  while (pos < data.length) {
+    const n = workerfs.stream_ops.read(stream, out, pos, 4096, pos);
+    assert.ok(n > 0);
+    pos += n;
+  }
+  assert.deepEqual(out.subarray(0, data.length), data);
+  assert.equal(workerfs.stream_ops.read(stream, out, 0, 10, data.length), 0);
+  const seek = new Uint8Array(300);
+  assert.equal(workerfs.stream_ops.read(stream, seek, 0, 300, 12345), 300);
+  assert.deepEqual(seek, data.subarray(12345, 12645));
+  assert.equal(workerfs.stream_ops.read(stream, seek, 0, 300, data.length - 7), 7);
+  assert.deepEqual(seek.subarray(0, 7), data.subarray(data.length - 7));
+  const big = new Uint8Array(200_000);
+  assert.equal(workerfs.stream_ops.read(stream, big, 0, big.length, 5), big.length);
+  assert.deepEqual(big, data.subarray(5, 200_005));
+  // ~1 MB in 4 KiB reads: 16 chunk reads instead of ~245.
+  assert.ok(reads < 25, `blob reads: ${reads}`);
 });
 
 // Rows from `gnss visibility` on the converted realtime_stress rover file.

@@ -4,6 +4,41 @@
 
 import { IN_DIR, OUT_DIR } from './commands.js';
 
+// Emscripten's WORKERFS answers every read() with its own blob.slice() and
+// FileReaderSync call. The C++ streams read a few KB at a time, so a 90 MB
+// RINEX file costs tens of thousands of synchronous reads (35 s vs 6 s from
+// MEMFS in Chromium). Serve small reads from a per-file read-ahead chunk
+// instead; large reads, and anything unexpected, keep the original path.
+export const READ_AHEAD_BYTES = 4 * 1024 * 1024;
+
+export function addWorkerfsReadAhead(workerfs, chunkBytes = READ_AHEAD_BYTES) {
+  const ops = workerfs && workerfs.stream_ops;
+  if (!ops || typeof ops.read !== 'function' || ops.readAheadBytes) return false;
+  const direct = ops.read;
+  ops.read = function readAhead(stream, buffer, offset, length, position) {
+    const node = stream.node;
+    const blob = node && node.contents;
+    if (!workerfs.reader || typeof Blob === 'undefined' || !(blob instanceof Blob)
+        || !Number.isFinite(position) || length >= chunkBytes) {
+      return direct.call(this, stream, buffer, offset, length, position);
+    }
+    const size = blob.size;
+    if (position >= size) return 0;
+    const end = Math.min(size, position + length);
+    let cache = node.readAheadCache;
+    if (!cache || position < cache.start || end > cache.start + cache.bytes.length) {
+      const stop = Math.min(size, position + chunkBytes);
+      cache = { start: position, bytes: new Uint8Array(workerfs.reader.readAsArrayBuffer(blob.slice(position, stop))) };
+      node.readAheadCache = cache;
+    }
+    const from = position - cache.start;
+    buffer.set(cache.bytes.subarray(from, from + (end - position)), offset);
+    return end - position;
+  };
+  ops.readAheadBytes = chunkBytes;
+  return true;
+}
+
 function listFiles(FS, dir, prefix = '') {
   const files = [];
   for (const entry of FS.readdir(dir)) {
@@ -42,6 +77,7 @@ export async function runTool(factory, options) {
   let mounted = false;
   if (mountBlobs && workerfs && blobs.length === inputs.length && blobs.length > 0) {
     try {
+      addWorkerfsReadAhead(workerfs);
       FS.mount(workerfs, { blobs: inputs.map((f) => ({ name: f.name, data: f.data })) }, IN_DIR);
       mounted = true;
     } catch {
