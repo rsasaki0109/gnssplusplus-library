@@ -8,6 +8,7 @@ import {
   buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultPosName, splitArgs,
 } from '../js/commands.js';
 import { parseSolution, parseVisibilityCsv, Q, rinexObsTimeSpan, sniffKind } from '../js/formats.js';
+import { exportOptionsToml, extraArgsToEntries, importOptionsToml, parseFlatToml } from '../js/options.js';
 import { errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu } from '../js/analysis.js';
 import { addWorkerfsReadAhead } from '../js/engine.js';
 import { calendarToGpsSeconds, ecefToLlh, formatGpst, gpsSeconds, llhToEcef } from '../js/geo.js';
@@ -195,6 +196,59 @@ test('splitArgs handles quotes and escapes', () => {
   assert.deepEqual(splitArgs(` --a 1  --b "two words" 'x y' c\\ d ""`), ['--a', '1', '--b', 'two words', 'x y', 'c d', '']);
   assert.deepEqual(splitArgs(''), []);
   assert.throws(() => splitArgs('"open'), /unterminated/);
+});
+
+test('options TOML export matches the CLI --config schema and round-trips', () => {
+  const opts = {
+    mode: 'static', rover: 'rover.obs', base: 'base.obs', nav: 'base.nav', preset: 'survey', iono: 'iflc',
+    ratio: '2.5', elevationMask: '15', maxEpochs: '', kml: false, verbose: true,
+    baseEcef: ['-3961905.0275', '3348993.7526', '3698211.7831'],
+    extra: '--arfilter --min-ar-sats 6 --no-glonass --rtk-snr-reference-dbhz 42',
+  };
+  const toml = exportOptionsToml(opts, 'gnss solve ...');
+  const { sections } = parseFlatToml(toml);
+  assert.deepEqual(sections.gnss_solve, [
+    ['mode', 'static'], ['preset', 'survey'], ['iono', 'iflc'], ['ratio', '2.5'], ['elevation_mask_deg', '15'],
+    ['base_ecef', ['-3961905.0275', '3348993.7526', '3698211.7831']], ['kml', false], ['verbose', true],
+    ['arfilter', true], ['min_ar_sats', '6'], ['no_glonass', true], ['rtk_snr_reference_dbhz', '42'],
+  ]);
+  assert.match(toml, /^base_ecef = \[-3961905\.0275, 3348993\.7526, 3698211\.7831\]$/m);
+  assert.match(toml, /^preset = "survey"$/m);
+  assert.doesNotMatch(toml, /rover|base\.obs/); // input/output files are not written
+
+  const back = importOptionsToml(toml);
+  assert.equal(back.mode, 'static');
+  assert.deepEqual(back.fields, {
+    kml: false, verbose: true, enableAr: false, basePos: 'ecef', preset: 'survey', iono: 'iflc', ratio: '2.5',
+    elevationMask: '15', baseX: '-3961905.0275', baseY: '3348993.7526', baseZ: '3698211.7831',
+  });
+  assert.equal(back.extra, '--arfilter --min-ar-sats 6 --no-glonass --rtk-snr-reference-dbhz 42');
+
+  const ppp = exportOptionsToml({ mode: 'ppp-kinematic', elevationMask: 10, enableAr: true, extra: '' });
+  assert.deepEqual(parseFlatToml(ppp).sections.gnss_ppp, [['kinematic', true], ['elevation_mask', '10'], ['enable_ar', true]]);
+  assert.equal(importOptionsToml(ppp).mode, 'ppp-kinematic');
+  assert.throws(() => exportOptionsToml({ mode: 'single' }), /gnss spp has no --config/);
+  assert.throws(() => extraArgsToEntries('stray --x'), /does not follow an --option/);
+});
+
+test('options import reads the repository example configs', () => {
+  const solve = importOptionsToml(fixture('configs/examples/solve.example.toml').toString());
+  assert.equal(solve.mode, 'kinematic');
+  assert.equal(solve.fields.preset, 'low-cost');
+  assert.equal(solve.fields.ratio, '2.4');
+  assert.equal(solve.fields.maxEpochs, '0');
+  assert.deepEqual(solve.files, { data_dir: 'run1', nav: 'base.nav', out: 'rtk_solution.pos' });
+  assert.equal(solve.extra, '--max-subset-ar-drop-steps 18 --rtk-snr-weighting --no-arfilter');
+
+  const ppp = importOptionsToml(fixture('configs/examples/ppp_static.toml').toString());
+  assert.equal(ppp.mode, 'ppp-static');
+  assert.equal(ppp.fields.enableAr, true);
+  assert.equal(ppp.extra, '--estimate-troposphere --ar-ratio-threshold 3.0');
+
+  const odd = importOptionsToml('[gnss_solve]\nmode = "auto"\nratio = "sat-count"\npreset = "unknown"\n');
+  assert.equal(odd.mode, 'kinematic');
+  assert.deepEqual(odd.notes, ['mode = "auto" has no GUI equivalent; using kinematic']);
+  assert.equal(odd.extra, '--ratio sat-count --preset unknown');
 });
 
 test('WORKERFS read-ahead returns the same bytes with far fewer blob reads', () => {

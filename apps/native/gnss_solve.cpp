@@ -2056,7 +2056,9 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             {"--enable-wide-lane-ar", "--no-wide-lane-ar"},
             {"--wide-lane-ar", "--no-wide-lane-ar"},
         },
-        {},
+        {
+            {"--base-ecef", libgnss_apps::TomlArrayStyle::SEPARATE_ARGUMENTS},
+        },
     };
     std::vector<std::string> expanded_arguments =
         libgnss_apps::expandTomlConfigArguments(argc, argv, schema);

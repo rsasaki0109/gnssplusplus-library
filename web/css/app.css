@@ -153,6 +153,8 @@ main { min-width: 0; }
 .tool[hidden] { display: none; }
 #tool-plot { display: block; }
 #tool-plot[hidden] { display: none; }
+.form-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.form-head h2 { margin: 0; }
 .form fieldset { border: 1px solid var(--line); border-radius: 10px; margin: 0 0 10px; padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 8px; }
 .form legend { font-weight: 700; font-size: 0.82rem; color: var(--muted); padding: 0 4px; }
 .form label { display: flex; flex-direction: column; gap: 3px; font-size: 0.85rem; font-weight: 600; }

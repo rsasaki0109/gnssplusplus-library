@@ -2,11 +2,12 @@
 // WebAssembly. Each run executes the unchanged native main() in a worker.
 
 import {
-  buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultConvertNames, defaultPosName,
+  buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultConvertNames, defaultPosName, POST_MODES,
 } from './commands.js';
 import { parseSolution, parseVisibilityCsv, Q_LABELS, rinexObsTimeSpan, SYSTEMS } from './formats.js';
 import { chooseOrigin, errorSummary, isFixQuality, nearestIndex, referenceErrors, solutionSummary, toEnu } from './analysis.js';
 import { formatGpst, splitGpsSeconds, SECONDS_PER_WEEK } from './geo.js';
+import { exportOptionsToml, importOptionsToml } from './options.js';
 import { cssVar, PlotPanel, SkyPlot } from './plot.js';
 import { startJob, wasmAvailable } from './runner.js';
 import { Workspace } from './workspace.js';
@@ -98,6 +99,13 @@ function renderFiles(fresh) {
       plot.title = 'Open in Plot';
       plot.onclick = () => plotView.open(f.name);
       acts.append(plot);
+    }
+    if (f.kind === 'toml') {
+      const load = document.createElement('button');
+      load.textContent = 'load';
+      load.title = 'Load into Post-process options';
+      load.onclick = () => f.blob.text().then((text) => applyOptionsToml(f.name, text)).catch((e) => setStatus(`Options: ${e.message}`));
+      acts.append(load);
     }
     if (f.kind === 'vis') {
       const view = document.createElement('button');
@@ -448,6 +456,67 @@ async function runPost() {
   }
   return runCommand(cmd, postView, postForm, hooks);
 }
+
+// ---- options file (gnss solve / gnss ppp --config TOML)
+function applyOptionsToml(name, text) {
+  const imported = importOptionsToml(text);
+  const el = postForm.elements;
+  el.mode.value = imported.mode;
+  updatePostVisibility();
+  refreshFileSelectors();
+  for (const [field, value] of Object.entries(imported.fields)) {
+    if (!el[field]) continue;
+    if (el[field].type === 'checkbox') el[field].checked = Boolean(value);
+    else el[field].value = value;
+  }
+  for (const field of ['preset', 'ratio', 'elevationMask', 'maxEpochs']) {
+    if (!(field in imported.fields) && el[field]) el[field].value = '';
+  }
+  if (!('iono' in imported.fields)) el.iono.value = 'auto';
+  const matched = [];
+  for (const [role, base] of Object.entries(imported.files)) {
+    if (role === 'out') el.out.value = base;
+    else if (['rover', 'base', 'nav', 'sp3', 'clk'].includes(role) && workspace.get(base)) {
+      el[role].value = base;
+      matched.push(base);
+    }
+  }
+  el.extra.value = imported.extra;
+  updatePostVisibility();
+  updatePostPreview();
+  postForm.dispatchEvent(new Event('change'));
+  const notes = [...imported.notes];
+  if (matched.length) notes.push(`inputs from Files: ${matched.join(', ')}`);
+  setStatus(`Loaded options from ${name} (${POST_MODES[imported.mode].label})${notes.length ? ` — ${notes.join('; ')}` : ''}`);
+}
+
+$('#options-input').addEventListener('change', async (event) => {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  try {
+    await workspace.add(file.name, file, 'upload');
+    applyOptionsToml(file.name, await file.text());
+  } catch (error) {
+    setStatus(`Options: ${error.message}`);
+  }
+});
+
+$('#options-save').addEventListener('click', async () => {
+  try {
+    const opts = postOptions();
+    let hint = '';
+    try { hint = buildPostCommand(opts).commandLine; } catch { /* inputs not chosen yet */ }
+    const text = exportOptionsToml(opts, hint);
+    const stem = (opts.out || defaultPosName(opts.rover, opts.mode)).replace(/\.[^./]*$/, '');
+    const name = `${stem}_options.toml`;
+    await workspace.add(name, new Blob([text], { type: 'text/plain' }), 'output');
+    download(name, workspace.get(name).blob);
+    setStatus(`Saved ${name}: use it as gnss ${POST_MODES[opts.mode].tool === 'gnss_ppp' ? 'ppp' : 'solve'} --config ${name}`);
+  } catch (error) {
+    setStatus(`Options: ${error.message}`);
+  }
+});
 
 postForm.addEventListener('submit', (event) => {
   event.preventDefault();

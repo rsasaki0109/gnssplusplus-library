@@ -78,8 +78,9 @@ Remove the symlinks afterwards so `RTKRealDataTest.*` returns to skipping.
 with Emscripten (`wasm/CMakeLists.txt`, `bash wasm/build.sh`; see
 `wasm/README.md`).
 
-- `web/js/commands.js` maps GUI fields to CLI flags. Renaming or removing one
-  of those flags must update it and `web/test/web_app.test.mjs`
+- `web/js/commands.js` maps GUI fields to CLI flags, and `web/js/options.js`
+  maps them to `--config` TOML keys. Renaming or removing one of those flags
+  must update them and `web/test/web_app.test.mjs`
   (`node --test web/test/web_app.test.mjs`, ctest `web_app_js_tests`).
 - `wasm/test/smoke.mjs` runs the demo pipeline (RTCM3 -> RINEX -> visibility,
   RTK/SPP/PPP)
