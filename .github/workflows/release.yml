@@ -164,8 +164,11 @@ jobs:
           if [[ -f "${notes_file}" ]]; then
             # gh combines this maintainer-authored preface with its generated
             # release notes when both --notes-file and --generate-notes are
-            # supplied.
-            release_args+=(--notes-file "${notes_file}")
+            # supplied. Its relative docs links (../web_app.md) would 404 on
+            # the release page, so they point at the docs site instead.
+            release_notes="${RUNNER_TEMP}/release-notes.md"
+            python3 scripts/release/release_notes.py "${notes_file}" --output "${release_notes}"
+            release_args+=(--notes-file "${release_notes}")
           fi
           # --verify-tag is intentional: gh must never create a tag as a side
           # effect of this release workflow.

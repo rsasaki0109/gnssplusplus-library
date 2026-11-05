@@ -48,7 +48,10 @@ workflow never creates a Git tag.
 - Treat the binaries and packages as Ubuntu 24.04 amd64 release artifacts;
   the TGZ is not a universal portability promise.
 - Confirm the GitHub Release for `v0.5.0` contains those assets and generated
-  notes plus `docs/releases/v0.5.0.md` when that file is present.
+  notes plus `docs/releases/v0.5.0.md` when that file is present. Its relative
+  docs links are published as links to the docs site
+  (`scripts/release/release_notes.py`), which fails the release on a link to
+  a missing file.
 - Confirm GHCR has `v0.5.0`, `0.5.0`, and `0.5` aliases, together with the
   normal branch/ref, short-SHA, and `latest` tags.
 

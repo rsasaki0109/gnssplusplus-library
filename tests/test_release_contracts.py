@@ -11,21 +11,24 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 VALIDATOR_PATH = ROOT_DIR / "scripts" / "release" / "validate_version.py"
+NOTES_PATH = ROOT_DIR / "scripts" / "release" / "release_notes.py"
 RELEASE_WORKFLOW_PATH = ROOT_DIR / ".github" / "workflows" / "release.yml"
 DOCKER_WORKFLOW_PATH = ROOT_DIR / ".github" / "workflows" / "docker.yml"
 PUBLIC_IMAGE = "ghcr.io/rsasaki0109/gnssplusplus-library:v0.5.0"
 
 
-def load_validator_module():
-    spec = importlib.util.spec_from_file_location("release_validate_version", VALIDATOR_PATH)
+def load_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"failed to load validator module from {VALIDATOR_PATH}")
+        raise RuntimeError(f"failed to load module from {path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-validator = load_validator_module()
+validator = load_module("release_validate_version", VALIDATOR_PATH)
+release_notes = load_module("release_notes", NOTES_PATH)
+SITE_URL = "https://rsasaki0109.github.io/gnssplusplus-library/"
 
 
 class ReleaseVersionValidatorTest(unittest.TestCase):
@@ -51,6 +54,55 @@ class ReleaseVersionValidatorTest(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "declares 0.2.1"):
                 validator.validate_versions("v0.2.0", cmake_file)
+
+
+class ReleaseNotesTest(unittest.TestCase):
+    notes = ROOT_DIR / "docs" / "releases" / "v0.5.0.md"
+    docs = ROOT_DIR / "docs"
+
+    def rewrite(self, text: str) -> str:
+        return release_notes.rewrite_links(text, self.notes, self.docs, SITE_URL)
+
+    def test_site_url_and_docs_dir_come_from_mkdocs(self) -> None:
+        site_url, docs_dir = release_notes.mkdocs_site(ROOT_DIR / "mkdocs.yml")
+        self.assertEqual(site_url, SITE_URL)
+        self.assertEqual(docs_dir.resolve(), self.docs.resolve())
+
+    def test_relative_links_point_at_the_docs_site(self) -> None:
+        self.assertEqual(
+            self.rewrite("See the [guide](../web_app.md) and [maps](../web_app.md#map-backgrounds).\n"),
+            f"See the [guide]({SITE_URL}web_app/) and [maps]({SITE_URL}web_app/#map-backgrounds).\n",
+        )
+        self.assertEqual(self.rewrite("[home](../index.md)"), f"[home]({SITE_URL})")
+        self.assertEqual(self.rewrite("[v0.4.0](v0.4.0.md)"), f"[v0.4.0]({SITE_URL}releases/v0.4.0/)")
+        self.assertEqual(
+            self.rewrite("![map](../web_app_plot_map.png)"),
+            f"![map]({SITE_URL}web_app_plot_map.png)",
+        )
+
+    def test_absolute_links_anchors_and_code_blocks_are_kept(self) -> None:
+        text = (
+            "[app](https://rsasaki0109.github.io/gnssplusplus-library/app/) <https://example.org/>\n"
+            "[below](#highlights) [mail](mailto:someone@example.org)\n"
+            "```sh\n"
+            "echo '[x](../no_such_page.md)'\n"
+            "```\n"
+        )
+        self.assertEqual(self.rewrite(text), text)
+
+    def test_broken_or_outside_links_fail(self) -> None:
+        with self.assertRaisesRegex(ValueError, "has no file"):
+            self.rewrite("[gone](../no_such_page.md)")
+        with self.assertRaisesRegex(ValueError, "outside"):
+            self.rewrite("[readme](../../README.md)")
+
+    def test_every_release_note_converts_without_relative_links(self) -> None:
+        for path in sorted((self.docs / "releases").glob("v*.md")):
+            with self.subTest(path=path.name):
+                body = release_notes.rewrite_links(
+                    path.read_text(encoding="utf-8"), path, self.docs, SITE_URL)
+                self.assertNotIn("](../", body)
+                self.assertNotRegex(body, r"\]\((?!https?:|mailto:|#)")
 
 
 class ReleaseWorkflowContractTest(unittest.TestCase):
@@ -101,7 +153,11 @@ class ReleaseWorkflowContractTest(unittest.TestCase):
         self.assertIn('gh release create "${RELEASE_TAG}" --verify-tag', self.release_workflow)
         self.assertIn("--generate-notes", self.release_workflow)
         self.assertIn('notes_file="docs/releases/${RELEASE_TAG}.md"', self.release_workflow)
-        self.assertIn("--notes-file", self.release_workflow)
+        self.assertIn(
+            'python3 scripts/release/release_notes.py "${notes_file}" --output "${release_notes}"',
+            self.release_workflow,
+        )
+        self.assertIn('--notes-file "${release_notes}"', self.release_workflow)
         self.assertIn("gh release upload", self.release_workflow)
         self.assertIn("--clobber", self.release_workflow)
         self.assertNotIn("git tag", self.release_workflow)
