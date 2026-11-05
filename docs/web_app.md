@@ -32,7 +32,12 @@ be repeated natively, for example on a larger dataset or in a script.
 3. Outputs (`.pos`, `.kml`, RINEX, summary JSON) appear in Files; download
    them or open `.pos` files in Plot. Solution 2 and a reference trajectory
    can be overlaid, as in RTKPLOT. The ground track can be drawn over a map
-   (see [Map backgrounds](#map-backgrounds)).
+   (see [Map backgrounds](#map-backgrounds)). With a reference loaded,
+   *Colour solution 1 by* → *Horizontal error vs reference* colours its
+   epochs in five classes (< 0.1, 0.1–0.3, 0.3–1, 1–3, ≥ 3 m; light to dark)
+   instead of by FIX / FLOAT, on every plot, so the stretches where the
+   solution goes wrong stand out on the map. **PNG** on each plot saves it
+   as an image with its legend (and the map credit when a map is shown).
 4. **Observations** shows the data before you solve: a skyplot, one tracking
    row per satellite coloured by SNR (or system) with loss-of-lock (LLI)
    slip ticks, SNR against elevation, the satellite count and a per-satellite

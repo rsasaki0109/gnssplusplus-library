@@ -5,10 +5,12 @@ import {
   buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultConvertNames, defaultPosName, DISPATCH_NAMES, POST_MODES,
 } from './commands.js';
 import { parseSolution, parseVisibilityCsv, Q_LABELS, rinexObsTimeSpan, SYSTEMS } from './formats.js';
-import { chooseOrigin, errorSummary, isFixQuality, nearestIndex, referenceErrors, solutionSummary, toEnu } from './analysis.js';
+import {
+  chooseOrigin, errorClasses, errorClassLabels, errorSummary, isFixQuality, nearestIndex, referenceErrors, solutionSummary, toEnu,
+} from './analysis.js';
 import { formatGpst, splitGpsSeconds, SECONDS_PER_WEEK } from './geo.js';
 import { exportOptionsToml, importOptionsToml } from './options.js';
-import { cssVar, PlotPanel, SkyPlot } from './plot.js';
+import { canvasesToPng, cssVar, PlotPanel, SkyPlot } from './plot.js';
 import { startJob, wasmAvailable } from './runner.js';
 import { enuPlane, MAX_SPAN_M, TILE_SOURCES, TileLayer } from './tiles.js';
 import { Workspace } from './workspace.js';
@@ -634,6 +636,7 @@ const Q_COLOR_VARS = {
   0: '--q-dr', 1: '--q-fix', 2: '--q-float', 3: '--q-sbas', 4: '--q-dgps', 5: '--q-single', 6: '--q-ppp', 7: '--q-pppfix', 8: '--q-dr',
 };
 const MAP_SETTING = 'gnsspp.plotMap';
+const ERROR_COLOR_VARS = ['--err-0', '--err-1', '--err-2', '--err-3', '--err-4', '--err-none'];
 
 function readSetting(key) {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -650,6 +653,7 @@ class PlotView {
     this.selects = { sol1: $('#plot-sol1'), sol2: $('#plot-sol2'), ref: $('#plot-ref') };
     this.originSelect = $('#plot-origin');
     this.errorsBox = $('#plot-errors');
+    this.colorSelect = $('#plot-color');
     this.auxSelect = $('#plot-aux');
     this.mapSelect = $('#plot-map');
     const savedMap = readSetting(MAP_SETTING);
@@ -679,6 +683,10 @@ class PlotView {
       el.addEventListener('change', () => this.reload());
     }
     this.auxSelect.addEventListener('change', () => this.render());
+    this.colorSelect.addEventListener('change', () => { this.keepView = true; this.render(); });
+    for (const button of $$('#tool-plot [data-png]')) {
+      button.addEventListener('click', () => this.savePng(button.dataset.png).catch((error) => setStatus(`PNG: ${error.message}`)));
+    }
     this.mapSelect.addEventListener('change', () => {
       writeSetting(MAP_SETTING, this.mapSelect.value);
       this.keepView = true; // the track itself does not move
@@ -751,7 +759,18 @@ class PlotView {
     const sol2Color = cssVar('--sol2', '#7c3aed');
     const refColor = cssVar('--ref', '#111');
     const sol2Colors = Object.fromEntries(Object.keys(qColors).map((q) => [q, sol2Color]));
-    const sol1Layer = (x, y) => ({ type: 'points', x, y, cls: this.sol1.q, colors: qColors, size: 3, order: 2 });
+    // Solution 1 by quality, or by horizontal error class (hidden qualities
+    // stay hidden: their epochs get a class with no colour).
+    this.colorByError = this.colorSelect.value === 'error' && Boolean(this.err1);
+    let sol1Cls = this.sol1.q;
+    let sol1Colors = qColors;
+    if (this.colorByError) {
+      sol1Cls = errorClasses(this.err1);
+      for (let i = 0; i < sol1Cls.length; i += 1) if (this.hidden.has(this.sol1.q[i])) sol1Cls[i] = 255;
+      sol1Colors = Object.fromEntries(ERROR_COLOR_VARS.map((name, k) => [k, cssVar(name, '#888')]));
+    }
+    this.sol1Cls = sol1Cls;
+    const sol1Layer = (x, y) => ({ type: 'points', x, y, cls: sol1Cls, colors: sol1Colors, size: 3, order: 2 });
     const sol2Layer = (x, y) => ({ type: 'points', x, y, cls: this.sol2.q, colors: sol2Colors, size: 3, order: 1 });
     const refLayer = (x, y) => ({ type: 'line', x, y, colors: refColor, width: 1, order: 0 });
 
@@ -782,7 +801,7 @@ class PlotView {
     this.keepView = false;
 
     this.renderFilter();
-    this.renderLegend(qColors, sol2Color, refColor);
+    this.renderLegend(qColors, sol2Color, refColor, sol1Colors);
     this.renderStats();
   }
 
@@ -853,21 +872,63 @@ class PlotView {
     }
   }
 
-  renderLegend(qColors, sol2Color, refColor) {
+  renderLegend(qColors, sol2Color, refColor, sol1Colors) {
     const legend = $('#plot-legend');
     legend.replaceChildren();
+    this.legendItems = [];
     const item = (color, text) => {
+      this.legendItems.push({ color, text });
       const span = document.createElement('span');
-      const sw = document.createElement('span');
-      sw.className = 'sw';
-      sw.style.background = color;
-      span.append(sw, document.createTextNode(text));
+      if (color) {
+        const sw = document.createElement('span');
+        sw.className = 'sw';
+        sw.style.background = color;
+        span.append(sw);
+      }
+      span.append(document.createTextNode(text));
       legend.append(span);
     };
-    const present = new Set(this.sol1.q);
-    for (const q of [...present].sort()) if (qColors[q]) item(qColors[q], `${Q_LABELS[q]} (${this.sol1.name})`);
+    if (this.colorByError) {
+      item(null, `${this.sol1.name} horizontal error:`);
+      const present = new Set(this.sol1Cls);
+      errorClassLabels().forEach((label, k) => {
+        if (present.has(k)) item(sol1Colors[k], label);
+      });
+    } else {
+      const present = new Set(this.sol1.q);
+      for (const q of [...present].sort()) if (qColors[q]) item(qColors[q], `${Q_LABELS[q]} (${this.sol1.name})`);
+    }
     if (this.sol2) item(sol2Color, this.sol2.name);
     if (this.ref) item(refColor, `${this.ref.name} (reference)`);
+    this.colorSelect.closest('label').title = this.ref ? '' : 'Choose a reference to colour by error';
+  }
+
+  /** Save one plot card ('gt' | 'ts' | 'aux') as PNG, legend and map credit included. */
+  async savePng(which) {
+    if (!this.sol1) return;
+    const cards = {
+      gt: { canvases: [this.gt.canvas], title: 'Ground track E/N (m)', suffix: 'ground_track' },
+      ts: { canvases: [this.pe.canvas, this.pn.canvas, this.pu.canvas], title: $('#ts-title').textContent, suffix: 'enu' },
+      aux: { canvases: [this.pa.canvas], title: this.pa.opts.yLabel, suffix: this.auxSelect.value },
+    };
+    const card = cards[which];
+    const names = [this.sol1, this.sol2].filter(Boolean).map((sol) => sol.name);
+    if (this.ref) names.push(`reference ${this.ref.name}`);
+    const notes = [];
+    const source = this.mapSource();
+    if (which === 'gt' && source) notes.push(`Map: ${source.attribution}`);
+    const legend = which === 'aux' ? this.legendItems.filter((it) => !it.text.endsWith('(reference)')) : this.legendItems;
+    const blob = await canvasesToPng(card.canvases, {
+      title: `${card.title} · ${names.join(' · ')}`,
+      legend,
+      notes,
+      background: cssVar('--panel', '#fff'),
+      ink: cssVar('--ink', '#1f2937'),
+      muted: cssVar('--muted', '#6b7280'),
+    });
+    const name = `${this.sol1.name.replace(/\.[^./]*$/, '')}_${card.suffix}.png`;
+    download(name, blob);
+    setStatus(`Saved ${name}`);
   }
 
   renderStats() {
