@@ -417,6 +417,45 @@ class PPPProcessingCases:
             records = self.read_pos_records(out_path)
             self.assertEqual(len(records), 8)
             self.assertTrue(all(record["status"] in (5, 6) for record in records))
+    def test_ppp_cli_config_booleans_match_the_command_line_flags(self) -> None:
+        # In gnss ppp --config, `key = true` passes --key and `key = false`
+        # the negative flag (nothing for an option that is off by default).
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_config_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, _ = build_synthetic_ppp_inputs(temp_root)
+            inputs = ["--obs", str(obs_path), "--sp3", str(sp3_path), "--clk", str(clk_path),
+                      "--max-epochs", "8"]
+
+            def run(name: str, *options: str) -> tuple[str, dict]:
+                out_path = temp_root / f"{name}.pos"
+                summary_path = temp_root / f"{name}.json"
+                result = self.run_gnss("ppp", *inputs, *options, "--out", str(out_path),
+                                       "--summary-json", str(summary_path))
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                return (out_path.read_text(encoding="utf-8"),
+                        json.loads(summary_path.read_text(encoding="utf-8")))
+
+            pos_flags, summary_flags = run(
+                "flags", "--kinematic", "--enable-ar", "--ar-method", "per-freq",
+                "--ar-ratio-threshold", "2.0", "--no-estimate-troposphere", "--emit-epoch-time")
+            config_on = temp_root / "on.toml"
+            config_on.write_text(
+                "[gnss_ppp]\nkinematic = true\nenable_ar = true\nar_method = \"per-freq\"\n"
+                "ar_ratio_threshold = 2.0\nestimate_troposphere = false\nemit_epoch_time = true\n",
+                encoding="utf-8")
+            pos_config, summary_config = run("config", "--config", str(config_on))
+            self.assertEqual(summary_flags["mode"], "kinematic")
+            self.assertEqual(summary_config["mode"], "kinematic")
+            self.assertTrue(summary_config["ambiguity_resolution_enabled"])
+            self.assertEqual(pos_config, pos_flags)
+
+            config_off = temp_root / "off.toml"
+            config_off.write_text(
+                "[gnss_ppp]\nkinematic = false\nenable_ar = false\nclas_osr = false\nquiet = false\n",
+                encoding="utf-8")
+            _, summary_off = run("off", "--config", str(config_off))
+            self.assertEqual(summary_off["mode"], "static")
+            self.assertFalse(summary_off["ambiguity_resolution_enabled"])
     def test_nav_products_cli_generates_sp3_and_clk_from_static_sample(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_nav_products_cli_") as temp_dir:
             temp_root = Path(temp_dir)
