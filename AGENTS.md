@@ -74,17 +74,17 @@ Remove the symlinks afterwards so `RTKRealDataTest.*` returns to skipping.
 
 `web/` is an RTKLIB-style GUI (published at `/app/` by
 `.github/workflows/docs.yml`) that runs `gnss_convert`, `gnss_rinex_info`,
-`gnss_visibility`, `gnss_spp`, `gnss_solve` and `gnss_ppp` compiled unchanged
-with Emscripten (`wasm/CMakeLists.txt`, `bash wasm/build.sh`; see
-`wasm/README.md`).
+`gnss_visibility`, `gnss_spp`, `gnss_solve`, `gnss_fuse` and `gnss_ppp`
+compiled unchanged with Emscripten (`wasm/CMakeLists.txt`,
+`bash wasm/build.sh`; see `wasm/README.md`).
 
 - `web/js/commands.js` maps GUI fields to CLI flags, and `web/js/options.js`
   maps them to `--config` TOML keys. Renaming or removing one of those flags
   must update them and `web/test/web_app.test.mjs`
   (`node --test web/test/web_app.test.mjs`, ctest `web_app_js_tests`).
 - `wasm/test/smoke.mjs` runs the demo pipeline (RTCM3 -> RINEX -> visibility,
-  RTK/SPP/PPP)
-  on the wasm build in CI; keep it passing when solver output changes.
+  RTK, RTK + IMU, SPP, PPP) on the wasm build in CI; keep it passing when
+  solver output changes.
 - The wasm link sets mirror `apps/CMakeLists.txt`; keep them in step, and do
   not add `Threads::Threads` / `-pthread` there (static hosting has no
   cross-origin isolation, so no SharedArrayBuffer).

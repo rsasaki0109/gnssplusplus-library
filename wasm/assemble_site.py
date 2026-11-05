@@ -27,22 +27,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_DIR = ROOT / "web"
-TOOLS = ("gnss_convert", "gnss_rinex_info", "gnss_visibility", "gnss_spp", "gnss_solve", "gnss_ppp")
+TOOLS = ("gnss_convert", "gnss_rinex_info", "gnss_visibility", "gnss_spp", "gnss_solve", "gnss_fuse", "gnss_ppp")
 # Sample inputs offered by the GUI ("Load files" / "Run demo pipeline").
 SAMPLES = {
     "rover.rtcm": "tests/fixtures/realtime_stress/rover.rtcm",
     "base.rtcm": "tests/fixtures/realtime_stress/base.rtcm",
     "reference.csv": "tests/fixtures/realtime_stress/reference.csv",
+    "imu.csv": "tests/fixtures/realtime_stress/imu.csv",
     "synthetic_ppp.obs": "demo/fixtures/synthetic_ppp.obs",
     "synthetic_ppp.sp3": "demo/fixtures/synthetic_ppp.sp3",
     "synthetic_ppp.clk": "demo/fixtures/synthetic_ppp.clk",
 }
 SAMPLE_NOTES = """Sample inputs for the libgnss++ browser GUI.
 
-rover.rtcm / base.rtcm / reference.csv: a 40 s excerpt (GPS only, 5 Hz rover,
-1 Hz base) of the Precise Positioning Challenge dataset, Tokyo run1
-(MIT licence, (c) 2025 Taro Suzuki), as RTCM3 MSM7 + 1005 + 1019, with the
-matching reference trajectory. See tests/fixtures/realtime_stress/README.md.
+rover.rtcm / base.rtcm / reference.csv / imu.csv: a 40 s excerpt (GPS only,
+5 Hz rover, 1 Hz base) of the Precise Positioning Challenge dataset, Tokyo
+run1 (MIT licence, (c) 2025 Taro Suzuki), as RTCM3 MSM7 + 1005 + 1019, with
+the matching reference trajectory and 100 Hz IMU samples. See
+tests/fixtures/realtime_stress/README.md.
 
 synthetic_ppp.*: the project-authored deterministic PPP fixture from
 demo/fixtures/ (synthetic; not an accuracy benchmark).

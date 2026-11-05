@@ -16,7 +16,7 @@ const LIBGNSS_STATUS_TO_Q = [Q.NONE, Q.SINGLE, Q.DGPS, Q.FLOAT, Q.FIX, Q.PPP, Q.
 
 /**
  * Guess what a file is from its name and first bytes.
- * Returns one of: obs, nav, sp3, clk, rtcm, ubx, pos, vis, csv, kml, json, toml, other.
+ * Returns one of: obs, nav, sp3, clk, rtcm, ubx, pos, vis, imu, csv, kml, json, toml, other.
  */
 export function sniffKind(name, headBytes) {
   const lower = name.toLowerCase();
@@ -33,6 +33,8 @@ export function sniffKind(name, headBytes) {
   }
   if (/^#[a-d][PV]/.test(firstLine)) return 'sp3';
   if (firstLine.startsWith('epoch_index,week,tow,satellite,')) return 'vis';
+  // IMU CSV (PPC: "GPS TOW (s), GPS Week, Acc X (m/s^2), ..., Ang Rate X (deg/s), ...").
+  if (firstLine.includes(',') && /\bacc/i.test(firstLine) && /(ang(ular)?[ _]?rate|gyro)/i.test(firstLine)) return 'imu';
   if (/^%/.test(firstLine) || /\.pos$/.test(lower)) return 'pos';
   if (/\.(rtcm3?|rtc)$/.test(lower)) return 'rtcm';
   if (/\.ubx$/.test(lower)) return 'ubx';

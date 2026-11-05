@@ -36,7 +36,7 @@
       <ul id="file-list" class="file-list"></ul>
       <div class="sample">
         <h3>Sample data</h3>
-        <p class="hint">40&nbsp;s of the PPC Tokyo run1 drive as RTCM3 (rover 5&nbsp;Hz, base 1&nbsp;Hz, GPS) with the reference trajectory, plus a synthetic PPP set.</p>
+        <p class="hint">40&nbsp;s of the PPC Tokyo run1 drive as RTCM3 (rover 5&nbsp;Hz, base 1&nbsp;Hz, GPS) with the reference trajectory and 100&nbsp;Hz IMU, plus a synthetic PPP set.</p>
         <div class="row">
           <button type="button" class="btn small" id="load-sample">Load files</button>
           <button type="button" class="btn small primary" id="run-sample">Run demo pipeline</button>
@@ -62,6 +62,7 @@
                 <option value="kinematic" selected>Kinematic RTK</option>
                 <option value="static">Static RTK</option>
                 <option value="moving-base">Moving-base RTK</option>
+                <option value="rtk-imu">Kinematic RTK + IMU</option>
                 <option value="ppp-kinematic">PPP Kinematic</option>
                 <option value="ppp-static">PPP Static</option>
               </select>
@@ -71,7 +72,7 @@
             <legend>Input files</legend>
             <label>Rover observation (RINEX OBS)
               <select name="rover" data-kinds="obs" data-prefer="rover"></select></label>
-            <label data-show="rtk">Base observation (RINEX OBS)
+            <label data-show="rtk imu">Base observation (RINEX OBS)
               <select name="base" data-kinds="obs" data-prefer="base"></select></label>
             <label>Navigation (RINEX NAV)<span data-show="ppp" class="opt"> optional</span>
               <select name="nav" data-kinds="nav" data-optional-modes="ppp"></select></label>
@@ -79,13 +80,15 @@
               <select name="sp3" data-kinds="sp3" data-optional></select></label>
             <label data-show="spp ppp">Precise clock (CLK) <span class="opt">optional</span>
               <select name="clk" data-kinds="clk" data-optional></select></label>
+            <label data-show="imu">IMU samples (CSV)
+              <select name="imu" data-kinds="imu"></select></label>
           </fieldset>
           <fieldset>
             <legend>Options</legend>
             <div class="grid3">
               <label>Elevation mask (deg)<input name="elevationMask" type="number" step="any" min="0" max="90" placeholder="15"></label>
               <label>Max epochs<input name="maxEpochs" type="number" min="0" step="1" placeholder="all"></label>
-              <label data-show="rtk">Preset
+              <label data-show="rtk imu">Preset
                 <select name="preset">
                   <option value="">(none)</option>
                   <option value="survey">survey</option>
@@ -101,9 +104,24 @@
                   <option value="iflc">iflc</option>
                   <option value="est">est</option>
                 </select></label>
-              <label data-show="rtk">AR ratio threshold<input name="ratio" type="number" step="any" min="1" placeholder="default"></label>
+              <label data-show="rtk imu">AR ratio threshold<input name="ratio" type="number" step="any" min="1" placeholder="default"></label>
             </div>
-            <div data-show="rtk" class="base-pos">
+            <div data-show="imu" class="imu-opts">
+              <label>IMU to antenna lever arm, body FLU (m) <span class="opt">x forward, y left, z up</span></label>
+              <div class="grid3">
+                <input name="leverX" type="number" step="any" placeholder="x (m)" aria-label="Lever arm x (forward)">
+                <input name="leverY" type="number" step="any" placeholder="y (m)" aria-label="Lever arm y (left)">
+                <input name="leverZ" type="number" step="any" placeholder="z (m)" aria-label="Lever arm z (up)">
+              </div>
+              <div class="grid3">
+                <label>IMU format
+                  <select name="imuFormat">
+                    <option value="ppc">PPC (m/s², deg/s)</option>
+                    <option value="rtklibexplorer-sf">rtklibexplorer (g, rad/s)</option>
+                  </select></label>
+              </div>
+            </div>
+            <div data-show="rtk imu" class="base-pos">
               <label>Base position
                 <select name="basePos">
                   <option value="header">RINEX header (APPROX POSITION XYZ)</option>
@@ -118,6 +136,7 @@
             <div class="checks">
               <label data-show="spp" class="check"><input type="checkbox" name="ionoFree"> Ionosphere-free code (dual frequency)</label>
               <label data-show="ppp" class="check"><input type="checkbox" name="enableAr"> PPP ambiguity resolution</label>
+              <label data-show="imu" class="check"><input type="checkbox" name="tightCoupling" checked> Tight coupling (<code>--navi776-tc</code>)</label>
               <label data-show="rtk ppp" class="check"><input type="checkbox" name="kml" checked> Write KML</label>
               <label data-show="rtk" class="check"><input type="checkbox" name="verbose" checked> Progress (<code>--verbose</code>)</label>
             </div>

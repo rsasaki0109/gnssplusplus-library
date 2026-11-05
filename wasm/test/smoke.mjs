@@ -27,6 +27,7 @@ const FIXTURES = {
   'rover.rtcm': 'tests/fixtures/realtime_stress/rover.rtcm',
   'base.rtcm': 'tests/fixtures/realtime_stress/base.rtcm',
   'reference.csv': 'tests/fixtures/realtime_stress/reference.csv',
+  'imu.csv': 'tests/fixtures/realtime_stress/imu.csv',
   'synthetic_ppp.obs': 'demo/fixtures/synthetic_ppp.obs',
   'synthetic_ppp.sp3': 'demo/fixtures/synthetic_ppp.sp3',
   'synthetic_ppp.clk': 'demo/fixtures/synthetic_ppp.clk',
@@ -112,6 +113,21 @@ export async function runSmoke(factoryFor, log = console.log) {
   }));
   assert.equal(text('config.pos'), text('flags.pos'), '--config TOML and flags differ');
   log('Options TOML: --config run identical to the flags run');
+
+  // RTK + IMU (gnss_fuse, tight coupling, PPC Tokyo lever arm).
+  await run(buildPostCommand({
+    mode: 'rtk-imu', rover: 'rover.obs', base: 'base.obs', nav: 'base.nav', imu: 'imu.csv',
+    leverArm: ['0.31', '0', '0.55'], tightCoupling: true, out: 'rover_fused.pos',
+  }));
+  const fused = parseSolution('rover_fused.pos', text('rover_fused.pos'));
+  const fusedRtk = parseSolution('rover_fused_rtk.pos', text('rover_fused_rtk.pos'));
+  const fusedErr = errorSummary(referenceErrors(fused, reference, origin));
+  const fusedRtkFix = fusedRtk.q.filter((q) => q === Q.FIX).length;
+  log(`RTK + IMU: ${fused.n} fused epochs, horizontal RMS ${fusedErr.horizontalRms.toFixed(3)} m; RTK ${fusedRtk.n} epochs, ${fusedRtkFix} FIX`);
+  assert.ok(fused.n >= 180, `fused epochs: ${fused.n}`);
+  assert.ok(fusedErr.horizontalRms < 0.3, `fused horizontal RMS ${fusedErr.horizontalRms} m`);
+  assert.equal(fusedRtk.n, 201);
+  assert.ok(fusedRtkFix >= 180, `RTK FIX under fusion: ${fusedRtkFix}`);
 
   await run(buildPostCommand({ mode: 'single', rover: 'rover.obs', nav: 'base.nav', out: 'rover_spp.pos' }));
   const spp = parseSolution('rover_spp.pos', text('rover_spp.pos'));

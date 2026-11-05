@@ -12,6 +12,9 @@ gnss realtime-stress prepare --run-dir data/PPC-Dataset/tokyo/run1 --out-dir /tm
 * `rover.rtcm` / `base.rtcm`: RTCM3 byte streams; `*.idx`: one line per epoch
   (`tow week offset length obs_messages aux_messages`).
 * `reference.csv`: the matching rows of the dataset's 5 Hz reference trajectory.
+* `imu.csv`: the dataset's 100 Hz IMU samples (`imu.csv`, PPC format, body FLU) for
+  TOW 187470.00-187511.00, unchanged; used by the browser GUI's RTK + IMU sample and
+  the wasm smoke test (`gnss fuse`, Tokyo lever arm `0.31,0,0.55` FLU).
 * `manifest.json`: loadable by `gnss realtime-stress run --prepared tests/fixtures/realtime_stress`.
 
 No receiver is involved; this is recorded data only.

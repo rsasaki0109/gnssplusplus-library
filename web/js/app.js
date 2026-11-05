@@ -21,6 +21,8 @@ const SAMPLES = [
   { path: 'samples/rover.rtcm', meta: { gpsWeek: 2324 } },
   { path: 'samples/base.rtcm', meta: { gpsWeek: 2324 } },
   { path: 'samples/reference.csv' },
+  // PPC Tokyo: antenna 0.31 m forward, 0.55 m above the IMU (body FLU).
+  { path: 'samples/imu.csv', meta: { leverArm: ['0.31', '0', '0.55'] } },
   { path: 'samples/synthetic_ppp.obs' },
   { path: 'samples/synthetic_ppp.sp3' },
   { path: 'samples/synthetic_ppp.clk' },
@@ -385,6 +387,7 @@ const postView = new RunView($('#tool-post [data-run]'), 'Choose input files and
 function postGroup() {
   const mode = postForm.elements.mode.value;
   if (mode === 'single') return 'spp';
+  if (mode === 'rtk-imu') return 'imu';
   return mode.startsWith('ppp') ? 'ppp' : 'rtk';
 }
 
@@ -392,26 +395,31 @@ function updatePostVisibility() {
   const group = postGroup();
   for (const el of $$('[data-show]', postForm)) el.hidden = !el.dataset.show.split(/\s+/).includes(group);
   const ecef = postForm.elements.basePos.value === 'ecef';
-  for (const el of $$('[data-show-base]', postForm)) el.hidden = !ecef || group !== 'rtk';
+  for (const el of $$('[data-show-base]', postForm)) el.hidden = !ecef || !['rtk', 'imu'].includes(group);
 }
 
 function postOptions() {
   const v = formValues(postForm);
   const group = postGroup();
+  const withBase = group === 'rtk' || group === 'imu';
   return {
     mode: v.mode,
     rover: v.rover,
-    base: group === 'rtk' ? v.base : '',
+    base: withBase ? v.base : '',
     nav: v.nav,
-    sp3: group === 'rtk' ? '' : v.sp3,
-    clk: group === 'rtk' ? '' : v.clk,
+    sp3: withBase ? '' : v.sp3,
+    clk: withBase ? '' : v.clk,
+    imu: group === 'imu' ? v.imu : '',
+    leverArm: group === 'imu' ? [v.leverX, v.leverY, v.leverZ] : null,
+    tightCoupling: v.tightCoupling,
+    imuFormat: v.imuFormat,
     out: v.out.trim(),
     elevationMask: v.elevationMask,
     maxEpochs: v.maxEpochs,
     preset: v.preset,
     iono: v.iono,
     ratio: v.ratio,
-    baseEcef: group === 'rtk' && v.basePos === 'ecef' ? [v.baseX, v.baseY, v.baseZ] : null,
+    baseEcef: withBase && v.basePos === 'ecef' ? [v.baseX, v.baseY, v.baseZ] : null,
     kml: v.kml,
     verbose: v.verbose,
     ionoFree: v.ionoFree,
@@ -526,8 +534,17 @@ postForm.addEventListener('input', updatePostPreview);
 postForm.addEventListener('change', () => {
   updatePostVisibility();
   refreshFileSelectors();
+  applyImuMeta();
   updatePostPreview();
 });
+
+// A sample IMU file carries its lever arm; fill it in while the fields are empty.
+function applyImuMeta() {
+  const el = postForm.elements;
+  const meta = postGroup() === 'imu' && fileMeta.get(el.imu.value);
+  if (!meta || !meta.leverArm || [el.leverX, el.leverY, el.leverZ].some((input) => input.value !== '')) return;
+  [el.leverX.value, el.leverY.value, el.leverZ.value] = meta.leverArm;
+}
 
 // ---------------------------------------------------------------- conversion
 const convForm = $('#conv-form');

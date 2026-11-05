@@ -84,6 +84,11 @@ gnsspp_add_wasm_tool(gnss_solve
         ${GNSSPP_NATIVE_APP_DIR}/gnss_solve.cpp
         ${GNSSPP_NATIVE_APP_DIR}/cli_toml_config.cpp
     LIBS gnss_lib gnss_rtk_runtime)
+gnsspp_add_wasm_tool(gnss_fuse
+    SOURCES
+        ${GNSSPP_NATIVE_APP_DIR}/gnss_fuse.cpp
+        ${GNSSPP_NATIVE_APP_DIR}/cli_toml_config.cpp
+    LIBS gnss_lib gnss_rtk_runtime)
 gnsspp_add_wasm_tool(gnss_ppp
     SOURCES
         ${GNSSPP_NATIVE_APP_DIR}/gnss_ppp.cpp

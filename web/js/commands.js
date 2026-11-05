@@ -13,6 +13,7 @@ export const DISPATCH_NAMES = {
   gnss_convert: 'convert',
   gnss_rinex_info: 'rinex-info',
   gnss_visibility: 'visibility',
+  gnss_fuse: 'fuse',
 };
 
 export const POST_MODES = {
@@ -20,12 +21,14 @@ export const POST_MODES = {
   kinematic: { tool: 'gnss_solve', label: 'Kinematic RTK', rtkMode: 'kinematic', needs: ['rover', 'base', 'nav'] },
   static: { tool: 'gnss_solve', label: 'Static RTK', rtkMode: 'static', needs: ['rover', 'base', 'nav'] },
   'moving-base': { tool: 'gnss_solve', label: 'Moving-base RTK', rtkMode: 'moving-base', needs: ['rover', 'base', 'nav'] },
+  'rtk-imu': { tool: 'gnss_fuse', label: 'Kinematic RTK + IMU', needs: ['rover', 'base', 'nav', 'imu'] },
   'ppp-kinematic': { tool: 'gnss_ppp', label: 'PPP Kinematic', pppMotion: '--kinematic', needs: ['rover'] },
   'ppp-static': { tool: 'gnss_ppp', label: 'PPP Static', pppMotion: '--static', needs: ['rover'] },
 };
 
 export const RTK_PRESETS = ['survey', 'low-cost', 'moving-base', 'odaiba', 'urban'];
 export const RTK_IONO = ['auto', 'off', 'iflc', 'est'];
+export const IMU_FORMATS = ['ppc', 'rtklibexplorer-sf'];
 
 /** Shell-like split: whitespace separated, '...' and "..." group, \ escapes. */
 export function splitArgs(text) {
@@ -128,7 +131,7 @@ function stem(name) {
 
 /** Default solution file name for a rover observation file. */
 export function defaultPosName(rover, mode) {
-  const suffix = { single: 'spp', 'ppp-kinematic': 'ppp', 'ppp-static': 'ppp' }[mode] || 'rtk';
+  const suffix = { single: 'spp', 'ppp-kinematic': 'ppp', 'ppp-static': 'ppp', 'rtk-imu': 'fused' }[mode] || 'rtk';
   return `${stem(rover || 'solution')}_${suffix}.pos`;
 }
 
@@ -136,13 +139,15 @@ export function defaultPosName(rover, mode) {
  * Post-processing (RTKPOST equivalent).
  * opts: { mode, rover, base, nav, sp3, clk, out, elevationMask, maxEpochs,
  *         preset, iono, ratio, baseEcef: [x,y,z] | null, kml, verbose,
- *         ionoFree, enableAr, extra, workspaceNames }
+ *         ionoFree, enableAr, imu, leverArm: [x,y,z] | null, tightCoupling,
+ *         imuFormat, extra, workspaceNames }
  */
 export function buildPostCommand(opts) {
   const mode = POST_MODES[opts.mode];
   if (!mode) throw new Error(`unknown positioning mode: ${opts.mode}`);
   for (const role of mode.needs) {
-    if (!opts[role]) throw new Error(`${mode.label} needs a ${role === 'nav' ? 'navigation' : role} file`);
+    const what = { nav: 'a navigation', imu: 'an IMU (CSV)' }[role] || `a ${role}`;
+    if (!opts[role]) throw new Error(`${mode.label} needs ${what} file`);
   }
   if (mode.tool === 'gnss_ppp' && !opts.nav && !(opts.sp3 && opts.clk)) {
     throw new Error('PPP needs a navigation file or both SP3 and CLK products');
@@ -179,6 +184,30 @@ export function buildPostCommand(opts) {
     if (opts.kml) cmd.output('--kml', `${stem(out)}.kml`);
     else cmd.flag('--no-kml');
     if (opts.verbose) cmd.flag('--verbose');
+  } else if (mode.tool === 'gnss_fuse') {
+    // GNSS/IMU fusion: the fused trajectory (--out) plus the RTK solution the
+    // fusion ran on (--rtk-pos-out), which --navi776-tc refines with the IMU.
+    cmd.input('--rover', opts.rover).input('--base', opts.base).input('--nav', opts.nav).input('--imu', opts.imu);
+    cmd.output('--out', out);
+    cmd.output('--rtk-pos-out', `${stem(out)}_rtk.pos`);
+    if (opts.imuFormat && opts.imuFormat !== 'ppc') cmd.flag('--imu-format', opts.imuFormat);
+    if (opts.leverArm) {
+      const arm = opts.leverArm.map((v) => finite(v) ?? 0);
+      if (arm.some((v) => v !== 0)) cmd.flag('--lever-arm', arm.join(','));
+    }
+    if (opts.tightCoupling) cmd.flag('--navi776-tc');
+    if (opts.preset) cmd.flag('--preset', opts.preset);
+    const ratio = finite(opts.ratio);
+    if (ratio !== null) cmd.flag('--ratio', ratio);
+    if (elevation !== null) cmd.flag('--elevation-mask-deg', elevation);
+    if (maxEpochs) cmd.flag('--max-epochs', maxEpochs);
+    if (opts.baseEcef) {
+      const xyz = opts.baseEcef.map(finite);
+      if (xyz.length !== 3 || xyz.some((v) => v === null)) throw new Error('base ECEF needs X, Y and Z');
+      cmd.flag('--base-ecef', ...xyz);
+    }
+    // No --kml: gnss_fuse's fused epochs report 0 satellites, which
+    // Solution::writeKML() skips as invalid, so the KML would be empty.
   } else {
     cmd.input('--obs', opts.rover);
     if (opts.nav) cmd.input('--nav', opts.nav);
