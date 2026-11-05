@@ -12,7 +12,7 @@ map tiles, and only after you choose a map background in Plot.
 
 | GUI tool | RTKLIB counterpart | Runs | Typical command it shows |
 | --- | --- | --- | --- |
-| Post-process | RTKPOST | `gnss_spp`, `gnss_solve`, `gnss_fuse`, `gnss_ppp` | `gnss solve --rover rover.obs --base base.obs --nav base.nav --out rover_rtk.pos --mode kinematic` |
+| Post-process | RTKPOST | `gnss_spp`, `gnss_solve`, `gnss_fuse`, `gnss_fgo`, `gnss_ppp` | `gnss solve --rover rover.obs --base base.obs --nav base.nav --out rover_rtk.pos --mode kinematic` |
 | Convert | RTKCONV | `gnss_convert` | `gnss convert --input base.rtcm --format rtcm --gps-week 2324 --obs-out base.obs --nav-out base.nav` |
 | Plot | RTKPLOT | (in the page) | ground track, E/N/U or error vs reference, satellites / ratio / PDOP, statistics |
 | Observations | RTKPLOT (observation data, skyplot) | `gnss_visibility` | `gnss visibility --obs rover.obs --nav base.nav --csv rover_vis.csv --summary-json rover_vis_summary.json` |
@@ -39,7 +39,12 @@ be repeated natively, for example on a larger dataset or in a script.
 3. Outputs (`.pos`, `.kml`, RINEX, summary JSON) appear in Files; download
    them or open `.pos` files in Plot. Solution 2 and a reference trajectory
    can be overlaid, as in RTKPLOT. The ground track can be drawn over a map
-   (see [Map backgrounds](#map-backgrounds)).
+   (see [Map backgrounds](#map-backgrounds)). With a reference loaded,
+   *Colour solution 1 by* → *Horizontal error vs reference* colours its
+   epochs in five classes (< 0.1, 0.1–0.3, 0.3–1, 1–3, ≥ 3 m; light to dark)
+   instead of by FIX / FLOAT, on every plot, so the stretches where the
+   solution goes wrong stand out on the map. **PNG** on each plot saves it
+   as an image with its legend (and the map credit when a map is shown).
 4. **Observations** shows the data before you solve: a skyplot, one tracking
    row per satellite coloured by SNR (or system) with loss-of-lock (LLI)
    slip ticks, SNR against elevation, the satellite count and a per-satellite
@@ -66,6 +71,29 @@ covers the 40 s RTCM3 excerpt and fills in the PPC Tokyo lever arm
 [RTK only vs RTK + GNSS/IMU on PPC](ppc_rtk_vs_gnss_imu_fusion.md) for the
 full-run comparison and its caveats.
 
+**Kinematic FGO (batch, experimental)** runs `gnss fgo`: one factor graph
+over the whole span (or *Max epochs*) with code, TDCP and double-difference
+carrier factors, solved with the Eigen backend (the GTSAM backend and the
+IMU factors are not in the browser build). *FGO preset* picks
+`real-data-float` (default), `real-data-fixed` (adds LAMBDA ambiguity
+fixing) or `default`; *AR ratio threshold* maps to
+`--lambda-ratio-threshold`. It gives a solution at every epoch but is not
+more accurate than RTK on the PPC data checked, so treat it as a comparison
+tool:
+
+| Data (vs PPC reference) | RTK (`gnss solve`) | FGO `real-data-float` |
+| --- | --- | --- |
+| Sample 40 s (201 epochs) | 197 FIX, horizontal RMS 0.06 m | all FLOAT, 0.14 m |
+| Tokyo run1 first 400 s | 39 % FIX, 0.43 m (FIX 0.04 m) | all FLOAT, 0.83 m |
+| Tokyo run1 full (11 866 epochs) | 10 755 epochs solved, 2.7 m (H95 6.7 m) | all 11 866, 3.6 m (H95 7.5 m) |
+
+On the 400 s window `real-data-fixed` labels every epoch FIX but the
+positions are the same as with `real-data-float` (0.83 m), so check FIX
+epochs against a reference before trusting them. Memory grows with the
+span: about 0.25 GB plus 0.17 MB per epoch (2.3 GB natively for the full
+Tokyo run1, 28 s), within the 4 GB of a browser run. `gnss fgo` has no
+`--config`, so FGO settings are not saved.
+
 **Save options** writes the RTK, RTK + IMU or PPP settings as the flat TOML
 that `gnss solve --config`, `gnss fuse --config` and `gnss ppp --config`
 read (input and output files are left out, as in RTKPOST's options file); **Load options**, or *load* on a
@@ -77,7 +105,8 @@ arguments. For example, a saved static RTK setup runs natively as:
 gnss solve --config rover_rtk_options.toml --rover rover.obs --base base.obs --nav base.nav --out rtk.pos
 ```
 
-`gnss spp` has no `--config`, so SPP settings are not saved.
+`gnss spp` and `gnss fgo` have no `--config`, so SPP and FGO settings are not
+saved.
 
 ## Map backgrounds
 

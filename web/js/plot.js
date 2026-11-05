@@ -571,3 +571,78 @@ export class SkyPlot {
     this.opts.onHover(best);
   }
 }
+
+/**
+ * One PNG of stacked canvases (as painted, map tiles included) with an
+ * optional title above and legend / note lines below, on `background`.
+ *   legend: [{ color, text }] (color null: a text-only label)   notes: [text]
+ * Resolves to a Blob; rejects if a canvas is tainted (cross-origin pixels).
+ */
+export function canvasesToPng(canvases, { title = '', legend = [], notes = [], background = '#fff', ink = '#1f2937', muted = '#6b7280' } = {}) {
+  const dpr = window.devicePixelRatio || 1;
+  const pad = Math.round(10 * dpr);
+  const gap = Math.round(4 * dpr);
+  const line = Math.round(16 * dpr);
+  const width = Math.max(...canvases.map((c) => c.width)) + 2 * pad;
+  const font = (px, weight = 500) => `${weight} ${Math.round(px * dpr)}px system-ui, sans-serif`;
+  // Lay the legend out in rows to know the height.
+  const measure = document.createElement('canvas').getContext('2d');
+  measure.font = font(12);
+  const rows = [];
+  let row = [];
+  let x = pad;
+  for (const item of legend) {
+    const swatch = item.color ? Math.round(14 * dpr) : 0;
+    const w = swatch + measure.measureText(item.text).width + Math.round(14 * dpr);
+    if (row.length && x + w > width - pad) { rows.push(row); row = []; x = pad; }
+    row.push({ ...item, x });
+    x += w;
+  }
+  if (row.length) rows.push(row);
+  const top = title ? pad + line + gap : pad;
+  const plotsHeight = canvases.reduce((sum, c) => sum + c.height + gap, 0);
+  const height = top + plotsHeight + rows.length * line + notes.length * line + pad;
+  const out = document.createElement('canvas');
+  out.width = width;
+  out.height = height;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, width, height);
+  ctx.textBaseline = 'middle';
+  if (title) {
+    ctx.fillStyle = ink;
+    ctx.font = font(13, 700);
+    ctx.fillText(title, pad, pad + line / 2);
+  }
+  let y = top;
+  for (const c of canvases) {
+    ctx.drawImage(c, pad, y);
+    y += c.height + gap;
+  }
+  ctx.font = font(12);
+  for (const r of rows) {
+    for (const item of r) {
+      let tx = item.x;
+      if (item.color) {
+        ctx.fillStyle = item.color;
+        ctx.fillRect(item.x, y + line / 2 - 5 * dpr, 10 * dpr, 10 * dpr);
+        tx += 14 * dpr;
+      }
+      ctx.fillStyle = muted;
+      ctx.fillText(item.text, tx, y + line / 2);
+    }
+    y += line;
+  }
+  for (const note of notes) {
+    ctx.fillStyle = muted;
+    ctx.fillText(note, pad, y + line / 2);
+    y += line;
+  }
+  return new Promise((resolve, reject) => {
+    try {
+      out.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('could not encode the PNG'))), 'image/png');
+    } catch (error) {
+      reject(error);
+    }
+  });
+}

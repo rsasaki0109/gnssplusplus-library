@@ -66,6 +66,7 @@
                 <option value="static">Static RTK</option>
                 <option value="moving-base">Moving-base RTK</option>
                 <option value="rtk-imu">Kinematic RTK + IMU</option>
+                <option value="fgo">Kinematic FGO (batch, experimental)</option>
                 <option value="ppp-kinematic">PPP Kinematic</option>
                 <option value="ppp-static">PPP Static</option>
               </select>
@@ -75,7 +76,7 @@
             <legend>Input files</legend>
             <label>Rover observation (RINEX OBS)
               <select name="rover" data-kinds="obs" data-prefer="rover"></select></label>
-            <label data-show="rtk imu">Base observation (RINEX OBS)
+            <label data-show="rtk imu fgo">Base observation (RINEX OBS)
               <select name="base" data-kinds="obs" data-prefer="base"></select></label>
             <label>Navigation (RINEX NAV)<span data-show="ppp" class="opt"> optional</span>
               <select name="nav" data-kinds="nav" data-optional-modes="ppp"></select></label>
@@ -107,7 +108,13 @@
                   <option value="iflc">iflc</option>
                   <option value="est">est</option>
                 </select></label>
-              <label data-show="rtk imu">AR ratio threshold<input name="ratio" type="number" step="any" min="1" placeholder="default"></label>
+              <label data-show="fgo">FGO preset
+                <select name="fgoPreset">
+                  <option value="real-data-float">real-data-float</option>
+                  <option value="real-data-fixed">real-data-fixed (LAMBDA, check FIX vs a reference)</option>
+                  <option value="default">default</option>
+                </select></label>
+              <label data-show="rtk imu fgo">AR ratio threshold<input name="ratio" type="number" step="any" min="1" placeholder="default"></label>
             </div>
             <div data-show="imu" class="imu-opts">
               <label>IMU to antenna lever arm, body FLU (m) <span class="opt">x forward, y left, z up</span></label>
@@ -210,6 +217,11 @@
               <option value="reference">Mean of reference</option>
             </select></label>
           <label class="check"><input type="checkbox" id="plot-errors"> Errors vs reference</label>
+          <label>Colour solution 1 by
+            <select id="plot-color">
+              <option value="quality">Quality (FIX / FLOAT / ...)</option>
+              <option value="error">Horizontal error vs reference</option>
+            </select></label>
           <div class="qfilter" id="plot-qfilter" aria-label="Quality filter"></div>
         </div>
         <div class="plot-empty panel" id="plot-empty">Load or compute a <code>.pos</code> solution (libgnss++ or RTKLIB format) to plot it.</div>
@@ -224,13 +236,15 @@
                   <option value="gsi-photo">GSI aerial photo (Japan)</option>
                 </select></span>
               <span class="hint">E/N (m) · wheel zoom · drag pan · double-click fit</span>
+              <button type="button" class="btn small" data-png="gt" title="Save this plot as PNG">PNG</button>
             </div>
             <canvas id="cv-gt"></canvas>
             <div class="legend" id="plot-legend"></div>
             <div class="map-note" id="plot-map-note" hidden></div>
           </div>
           <div class="card ts">
-            <div class="card-title"><span id="ts-title">Position E / N / U (m)</span> <span class="hint">wheel zoom time · shift+wheel zoom value</span></div>
+            <div class="card-title"><span id="ts-title">Position E / N / U (m)</span> <span class="hint">wheel zoom time · shift+wheel zoom value</span>
+              <button type="button" class="btn small" data-png="ts" title="Save these plots as PNG">PNG</button></div>
             <canvas id="cv-e"></canvas>
             <canvas id="cv-n"></canvas>
             <canvas id="cv-u"></canvas>
@@ -242,6 +256,7 @@
                 <option value="ratio">AR ratio</option>
                 <option value="pdop">PDOP</option>
               </select>
+              <button type="button" class="btn small" data-png="aux" title="Save this plot as PNG">PNG</button>
             </div>
             <canvas id="cv-aux"></canvas>
           </div>

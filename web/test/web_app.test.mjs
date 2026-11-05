@@ -9,7 +9,9 @@ import {
 } from '../js/commands.js';
 import { parseSolution, parseVisibilityCsv, Q, rinexObsTimeSpan, sniffKind } from '../js/formats.js';
 import { exportOptionsToml, extraArgsToEntries, importOptionsToml, parseFlatToml } from '../js/options.js';
-import { errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu } from '../js/analysis.js';
+import {
+  ERROR_BINS_M, errorClasses, errorClassLabels, errorSummary, nearestIndex, referenceErrors, solutionSummary, toEnu,
+} from '../js/analysis.js';
 import { addWorkerfsReadAhead } from '../js/engine.js';
 import { describeStored } from '../js/store.js';
 import { Workspace } from '../js/workspace.js';
@@ -462,4 +464,35 @@ test('workspace keeps a restored file\'s time stamp; stored-files summary', asyn
   assert.equal(describeStored([blob(1500)]), '1 file, 2 kB');
   assert.equal(describeStored([blob(90e6), blob(36e6)]), '2 files, 126.0 MB');
   assert.equal(describeStored([blob(2.5e9)]), '1 file, 2.50 GB');
+});
+
+test('horizontal error classes for colouring a track', () => {
+  const err = {
+    e: Float64Array.from([0.03, 0.2, 0.6, -2, 30, NaN, 0.1]),
+    n: Float64Array.from([0.04, 0, 0, 0, 0, NaN, 0]),
+  };
+  // 0.05 m, 0.2, 0.6, 2, 30, unmatched, exactly on the 0.1 m edge (goes up).
+  assert.deepEqual([...errorClasses(err)], [0, 1, 2, 3, 4, 5, 1]);
+  assert.deepEqual(errorClassLabels(), ['< 0.1 m', '0.1–0.3 m', '0.3–1 m', '1–3 m', '≥ 3 m', 'no reference']);
+  assert.equal(errorClassLabels().length, ERROR_BINS_M.length + 2);
+  assert.deepEqual([...errorClasses({ e: [0.5], n: [0] }, [1])], [0]);
+});
+
+test('FGO command and options', () => {
+  const opts = {
+    mode: 'fgo', rover: 'rover.obs', base: 'base.obs', nav: 'base.nav', fgoPreset: 'real-data-fixed',
+    ratio: '2.5', elevationMask: '15', maxEpochs: '400', kml: true, verbose: true, baseEcef: null,
+  };
+  const cmd = buildPostCommand(opts);
+  assert.equal(cmd.tool, 'gnss_fgo');
+  assert.deepEqual(cmd.inputs, ['rover.obs', 'base.obs', 'base.nav']);
+  assert.deepEqual(cmd.outputs, ['rover_fgo.pos', 'rover_fgo_summary.json']);
+  assert.equal(cmd.commandLine,
+    'gnss fgo --obs rover.obs --base base.obs --nav base.nav --out rover_fgo.pos --preset real-data-fixed '
+    + '--lambda-ratio-threshold 2.5 --min-elevation 15 --max-epochs 400 --summary-json rover_fgo_summary.json');
+  assert.equal(defaultPosName('rover.obs', 'fgo'), 'rover_fgo.pos');
+  const plain = buildPostCommand({ mode: 'fgo', rover: 'r.obs', base: 'b.obs', nav: 'n.nav' });
+  assert.ok(plain.args.join(' ').includes('--preset real-data-float'), 'float preset by default');
+  assert.throws(() => buildPostCommand({ ...opts, base: '' }), /needs a base file/);
+  assert.throws(() => exportOptionsToml(opts), /gnss fgo has no --config/);
 });

@@ -133,3 +133,31 @@ export function solutionSummary(sol, enu) {
 export function isFixQuality(q) {
   return q === Q.FIX || q === Q.PPP_FIX;
 }
+
+/** Horizontal-error bin edges (m) for colouring a track by its error. */
+export const ERROR_BINS_M = [0.1, 0.3, 1, 3];
+
+/**
+ * Per-epoch class of the horizontal error: 0 .. ERROR_BINS_M.length for the
+ * bins below each edge and above the last, ERROR_BINS_M.length + 1 where the
+ * epoch has no reference match.
+ */
+export function errorClasses(err, bins = ERROR_BINS_M) {
+  const cls = new Uint8Array(err.e.length);
+  for (let i = 0; i < cls.length; i += 1) {
+    const h = Math.hypot(err.e[i], err.n[i]);
+    if (!Number.isFinite(h)) { cls[i] = bins.length + 1; continue; }
+    let k = 0;
+    while (k < bins.length && h >= bins[k]) k += 1;
+    cls[i] = k;
+  }
+  return cls;
+}
+
+/** Legend labels for errorClasses(): "< 0.1 m", "0.1-0.3 m", ..., "≥ 3 m", "no reference". */
+export function errorClassLabels(bins = ERROR_BINS_M) {
+  const labels = [`< ${bins[0]} m`];
+  for (let k = 1; k < bins.length; k += 1) labels.push(`${bins[k - 1]}–${bins[k]} m`);
+  labels.push(`≥ ${bins[bins.length - 1]} m`, 'no reference');
+  return labels;
+}

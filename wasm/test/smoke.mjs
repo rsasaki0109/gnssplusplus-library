@@ -133,6 +133,18 @@ export async function runSmoke(factoryFor, log = console.log) {
   const fusedKmlPoints = fusedKml.join('\n').split('\n').filter((line) => /^-?\d/.test(line)).length;
   assert.equal(fusedKmlPoints, fused.n, `fused KML points: ${fusedKmlPoints}`);
 
+  // Batch FGO (gnss_fgo, Eigen backend, real-data-float preset).
+  await run(buildPostCommand({
+    mode: 'fgo', rover: 'rover.obs', base: 'base.obs', nav: 'base.nav', fgoPreset: 'real-data-float', out: 'rover_fgo.pos',
+  }));
+  const fgo = parseSolution('rover_fgo.pos', text('rover_fgo.pos'));
+  const fgoErr = errorSummary(referenceErrors(fgo, reference, origin));
+  const fgoSummary = JSON.parse(text('rover_fgo_summary.json'));
+  log(`FGO: ${fgo.n} epochs, horizontal RMS ${fgoErr.horizontalRms.toFixed(3)} m`);
+  assert.equal(fgo.n, 201);
+  assert.ok(fgoErr.horizontalRms < 0.3, `FGO horizontal RMS ${fgoErr.horizontalRms} m`);
+  assert.ok(fgoSummary && typeof fgoSummary === 'object', 'FGO summary JSON');
+
   await run(buildPostCommand({ mode: 'single', rover: 'rover.obs', nav: 'base.nav', out: 'rover_spp.pos' }));
   const spp = parseSolution('rover_spp.pos', text('rover_spp.pos'));
   const sppErr = errorSummary(referenceErrors(spp, reference, origin));
