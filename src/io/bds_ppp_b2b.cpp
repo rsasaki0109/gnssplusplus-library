@@ -249,7 +249,7 @@ bool BdsB2bDecoder::masked(const SatelliteId& satellite) const {
 void BdsB2bDecoder::emit(const SatelliteId& satellite, const GNSSTime& time) {
     const auto orbit = orbits_.find(satellite);
     const auto clock = clocks_.find(satellite);
-    if (orbit == orbits_.end() || clock == clocks_.end() || !orbit->second.orbit.available) {
+    if (orbit == orbits_.end() || clock == clocks_.end()) {
         return;
     }
     const BdsB2bOrbit& o = orbit->second.orbit;
@@ -258,18 +258,24 @@ void BdsB2bDecoder::emit(const SatelliteId& satellite, const GNSSTime& time) {
     // Corr still serves an orbit on the previous one.
     double c0_m = 0.0;
     GNSSTime clock_time;
-    if (c.iod_corr == o.iod_corr && c.available) {
+    bool paired = false;
+    if (c.iod_corr == o.iod_corr) {
+        paired = c.available;
         c0_m = c.c0_m;
         clock_time = c.time;
-    } else if (c.has_previous && c.previous_iod_corr == o.iod_corr && c.previous_available) {
+    } else if (c.has_previous && c.previous_iod_corr == o.iod_corr) {
+        paired = c.previous_available;
         c0_m = c.previous_c0_m;
         clock_time = c.previous_time;
-    } else {
-        return;
     }
     BdsB2bUpdate update;
     update.satellite = satellite;
     update.time = time;
+    if (!paired || !o.available) {
+        update.usable = false;
+        updates_.push_back(std::move(update));
+        return;
+    }
     update.orbit_time = orbit->second.time;
     update.clock_time = clock_time;
     update.iodssr = iodssr_;

@@ -131,8 +131,13 @@ struct BdsB2bDecodedMessage {
 
 /// One satellite's held correction when its orbit and a clock of the same
 /// IOD Corr are known (ICD 6.2.2: orbit and clock are used in pairs).
+/// An update with usable == false marks that, from its time on, the latest
+/// orbit and clock no longer form a valid pair (an invalid value, or IOD
+/// Corrs that do not match): the satellite has no correction until the next
+/// usable update.
 struct BdsB2bUpdate {
     SatelliteId satellite;
+    bool usable = true;
     GNSSTime time;                ///< reference time of the newer of the orbit / clock
     GNSSTime orbit_time;
     GNSSTime clock_time;
