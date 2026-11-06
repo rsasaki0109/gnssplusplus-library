@@ -8,6 +8,7 @@
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rinex4.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -67,7 +68,7 @@ std::string gpsLnavBody(const std::string& satellite) {
 
 // GPS/QZSS CNAV body: nine lines, ADOT / delta-n0-dot / URAI fields where
 // LNAV carries IODE / week / accuracy.  Read as LNAV these would produce a
-// week of 3 and an IODE of 0.25, which must never reach NavigationData.
+// week of 3 and an IODE of 0.25; they belong in cnav_ephemeris_data only.
 std::string cnavBody(const std::string& satellite) {
     return epochLine(satellite, "2025 03 01 12 00 00",
                      1.234000000000e-04, 1.100000000000e-12, 0.0) +
@@ -78,7 +79,7 @@ std::string cnavBody(const std::string& satellite) {
            orbitLine({2.3e-10, -1.0e-13, 3.0, 2.0}) +
            orbitLine({1.0, 0.0, -1.0e-08, 1.0}) +
            orbitLine({1.5e-09, -2.0e-09, 3.0e-09, 4.0e-09}) +
-           orbitLine({554418.0, 561600.0});
+           orbitLine({554418.0, 2355.0});
 }
 
 // Galileo body; data_source selects I/NAV (bits 0/2 + 9) or F/NAV (1 + 8).
@@ -113,12 +114,29 @@ std::string beidouD1Body(const std::string& satellite) {
            orbitLine({561580.0, 1.0});
 }
 
-// BeiDou B-CNAV bodies: CNV1/CNV2 have ten lines, CNV3 nine.
-std::string beidouCnavBody(const std::string& satellite, int lines) {
-    std::string body = epochLine(satellite, "2025 03 01 11 59 46",
-                                 2.3e-04, 3.5e-14, 0.0);
-    for (int line = 1; line < lines; ++line) {
-        body += orbitLine({0.5 * line, -3.0, 1.0e-09, 2.0});
+// BeiDou B-CNAV body; epoch and toe are BDT (BDT week 999 = GPS week 2355).
+// CNV1 / CNV2 have ten lines, CNV3 nine.  Blank columns are the spare / other
+// signal fields; the short lines exercise writers that drop trailing blanks.
+std::string beidouCnavBody(const std::string& satellite, const std::string& message) {
+    const std::string blank(19, ' ');
+    std::string body =
+        epochLine(satellite, "2025 03 01 11 59 46", -9.4e-04, 3.7e-13, 0.0) +
+        orbitLine({-2.28e-03, -146.88, 3.5e-09, 0.698}) +       // ADOT Crs dn0 M0
+        orbitLine({-7.16e-06, 6.75e-04, 1.89e-06, 5282.63}) +    // Cuc e Cus sqrtA
+        orbitLine({561586.0, 5.12e-08, 1.874, 5.68e-08}) +       // toe Cic OMEGA0 Cis
+        orbitLine({0.9846, 334.996, -0.4104, -6.94e-09}) +       // i0 Crc omega OMEGAdot
+        orbitLine({-1.925e-10, 1.578e-14, 3.0, 561586.0}) +      // IDOT dn0dot SatType t_op
+        orbitLine({0.0, -5.0, 0.0, -1.0});                       // SISAI oe ocb oc1 oc2
+    if (message == "CNV1") {
+        body += "    " + field(-8.7e-10) + blank + field(9.5e-09) + field(1.2e-09) + "\n";
+    } else if (message == "CNV2") {
+        body += "    " + blank + field(-2.7e-09) + field(9.5e-09) + field(1.2e-09) + "\n";
+    }
+    if (message == "CNV3") {
+        body += orbitLine({3.0, 0.0, 0.0, 1.9e-09}) + orbitLine({561000.0});
+    } else {
+        body += orbitLine({3.0, 0.0, 0.0, 12.0}) +
+                "    " + field(561000.0) + blank + blank + field(12.0) + "\n";
     }
     return body;
 }
@@ -218,9 +236,9 @@ TEST(Rinex4NavigationTest, ReadsEveryConstellationAndKeepsMessageTypesApart) {
     content += "> EPH J02 CNAV\n" + cnavBody("J02");
     content += "> EPH E11 INAV\n" + galileoBody("E11", 517.0, -4.656612873077e-09);
     content += "> EPH E11 FNAV\n" + galileoBody("E11", 258.0, 0.0);
-    content += "> EPH C25 CNV1\n" + beidouCnavBody("C25", 10);
-    content += "> EPH C25 CNV2\n" + beidouCnavBody("C25", 10);
-    content += "> EPH C25 CNV3\n" + beidouCnavBody("C25", 9);
+    content += "> EPH C25 CNV1\n" + beidouCnavBody("C25", "CNV1");
+    content += "> EPH C25 CNV2\n" + beidouCnavBody("C25", "CNV2");
+    content += "> EPH C25 CNV3\n" + beidouCnavBody("C25", "CNV3");
     content += "> EPH C25 D1\n" + beidouD1Body("C25");
     content += "> EPH R05 FDMA\n" +
                glonassFdmaBody("R05", "2025 03 01 11 45 00", kGlonassZKm, kGlonassVzKmPerS);
@@ -230,12 +248,8 @@ TEST(Rinex4NavigationTest, ReadsEveryConstellationAndKeepsMessageTypesApart) {
     const ReadResult result = readNavigation(path);
     ASSERT_TRUE(result.ok) << result.diagnostics;
 
-    // CNAV / B-CNAV records are reported and skipped, never parsed as LNAV/D1.
-    for (const char* skipped : {"G07 CNAV", "J02 CNAV", "C25 CNV1", "C25 CNV2", "C25 CNV3"}) {
-        EXPECT_TRUE(contains(result.diagnostics,
-                             std::string("Skipping unsupported RINEX 4 EPH ") + skipped))
-            << skipped << "\n" << result.diagnostics;
-    }
+    // Every record is read; none is reported as skipped.
+    EXPECT_FALSE(contains(result.diagnostics, "Skipping")) << result.diagnostics;
 
     for (const GNSSSystem system : {GNSSSystem::GPS, GNSSSystem::QZSS}) {
         const auto* list = ephemerides(result.nav, system, system == GNSSSystem::GPS ? 7 : 2);
@@ -284,6 +298,110 @@ TEST(Rinex4NavigationTest, ReadsEveryConstellationAndKeepsMessageTypesApart) {
     EXPECT_EQ(beidou->front().toc, GNSSTime(2355, 561600.0));
     EXPECT_DOUBLE_EQ(beidou->front().tgd, 2.3e-09);
     EXPECT_DOUBLE_EQ(beidou->front().tgd_secondary, -1.0e-09);
+
+    // CNAV / B-CNAV records live in cnav_ephemeris_data, never next to the
+    // LNAV / D1 records above.
+    for (const GNSSSystem system : {GNSSSystem::GPS, GNSSSystem::QZSS}) {
+        const auto it = result.nav.cnav_ephemeris_data.find(
+            SatelliteId(system, system == GNSSSystem::GPS ? 7 : 2));
+        ASSERT_NE(it, result.nav.cnav_ephemeris_data.end());
+        ASSERT_EQ(it->second.size(), 1U);
+        const Ephemeris& eph = it->second.front();
+        EXPECT_EQ(eph.navigation_message_type, NavigationMessageType::CNAV);
+        // CNAV has no toe field: toe = toc.
+        EXPECT_EQ(eph.toc, GNSSTime(2355, 561600.0));
+        EXPECT_EQ(eph.toe, GNSSTime(2355, 561600.0));
+        EXPECT_EQ(eph.tof, GNSSTime(2355, 554418.0));
+        EXPECT_DOUBLE_EQ(eph.toes, 561600.0);
+        EXPECT_EQ(eph.week, 2355);
+        EXPECT_EQ(eph.iode, 0);
+        EXPECT_DOUBLE_EQ(eph.sqrt_a, 5153.65);
+        EXPECT_DOUBLE_EQ(eph.delta_n, 4.5e-09);
+        EXPECT_DOUBLE_EQ(eph.tgd, -1.0e-08);
+        EXPECT_EQ(eph.health, 0);
+        ASSERT_TRUE(eph.cnav_data.has_value());
+        const CnavNavigationData& cnav = *eph.cnav_data;
+        EXPECT_DOUBLE_EQ(cnav.a_dot, 0.25);
+        EXPECT_DOUBLE_EQ(cnav.delta_n0_dot, -1.0e-13);
+        EXPECT_DOUBLE_EQ(cnav.t_op, 561600.0);
+        EXPECT_EQ(cnav.urai_ned0, 3);
+        EXPECT_EQ(cnav.urai_ned1, 2);
+        EXPECT_EQ(cnav.urai_ed, 1);
+        EXPECT_EQ(cnav.urai_ned2, 1);
+        EXPECT_EQ(cnav.wn_op, 2355);
+        EXPECT_FALSE(cnav.integrity_flags.has_value());
+        ASSERT_TRUE(cnav.isc_l1ca.has_value());
+        EXPECT_DOUBLE_EQ(*cnav.isc_l1ca, 1.5e-09);
+        EXPECT_DOUBLE_EQ(*cnav.isc_l5q5, 4.0e-09);
+        EXPECT_FALSE(cnav.isc_l1cd.has_value());
+    }
+
+    const auto bds_cnav = result.nav.cnav_ephemeris_data.find(SatelliteId(GNSSSystem::BeiDou, 25));
+    ASSERT_NE(bds_cnav, result.nav.cnav_ephemeris_data.end());
+    ASSERT_EQ(bds_cnav->second.size(), 3U);
+    for (const Ephemeris& eph : bds_cnav->second) {
+        const NavigationMessageType type = eph.navigation_message_type;
+        SCOPED_TRACE(io::rinex4::navigationMessageTypeName(type));
+        // BDT 2025-03-01 11:59:46 (week 999, 561586 s) is GPST week 2355, 561600 s.
+        EXPECT_EQ(eph.toc, GNSSTime(2355, 561600.0));
+        EXPECT_EQ(eph.toe, GNSSTime(2355, 561600.0));
+        EXPECT_EQ(eph.tof, GNSSTime(2355, 561014.0));
+        EXPECT_DOUBLE_EQ(eph.toes, 561586.0);
+        EXPECT_EQ(eph.week, 999);
+        ASSERT_TRUE(eph.cnav_data.has_value());
+        const CnavNavigationData& cnav = *eph.cnav_data;
+        EXPECT_DOUBLE_EQ(cnav.a_dot, -2.28e-03);
+        EXPECT_DOUBLE_EQ(cnav.delta_n0_dot, 1.578e-14);
+        EXPECT_DOUBLE_EQ(cnav.t_op, 561586.0);
+        EXPECT_EQ(cnav.satellite_type, 3);
+        EXPECT_EQ(cnav.sisai_ocb, -5);
+        EXPECT_EQ(cnav.sisai_oc2, -1);
+        EXPECT_EQ(cnav.sismai, 3);
+        EXPECT_EQ(cnav.integrity_flags, 0);
+        if (type == NavigationMessageType::CNV3) {
+            EXPECT_DOUBLE_EQ(eph.tgd, 1.9e-09);
+            EXPECT_EQ(eph.iode, 0);
+            EXPECT_FALSE(cnav.isc_b1cd.has_value());
+            EXPECT_FALSE(cnav.isc_b2ad.has_value());
+            continue;
+        }
+        EXPECT_DOUBLE_EQ(eph.tgd, 9.5e-09);
+        EXPECT_DOUBLE_EQ(eph.tgd_secondary, 1.2e-09);
+        EXPECT_EQ(eph.iode, 12);
+        EXPECT_EQ(eph.iodc, 12);
+        if (type == NavigationMessageType::CNV1) {
+            ASSERT_TRUE(cnav.isc_b1cd.has_value());
+            EXPECT_DOUBLE_EQ(*cnav.isc_b1cd, -8.7e-10);
+            EXPECT_FALSE(cnav.isc_b2ad.has_value());
+        } else {
+            EXPECT_EQ(type, NavigationMessageType::CNV2);
+            ASSERT_TRUE(cnav.isc_b2ad.has_value());
+            EXPECT_DOUBLE_EQ(*cnav.isc_b2ad, -2.7e-09);
+            EXPECT_FALSE(cnav.isc_b1cd.has_value());
+        }
+    }
+
+    // Explicit selection by message type and IODE.
+    const SatelliteId c25(GNSSSystem::BeiDou, 25);
+    const GNSSTime query(2355, 562000.0);
+    for (const auto type : {NavigationMessageType::CNV1, NavigationMessageType::CNV2,
+                            NavigationMessageType::CNV3}) {
+        const Ephemeris* eph = result.nav.getCnavEphemeris(c25, query, type);
+        ASSERT_NE(eph, nullptr);
+        EXPECT_EQ(eph->navigation_message_type, type);
+    }
+    EXPECT_NE(result.nav.getCnavEphemeris(c25, query, NavigationMessageType::CNV1, 12), nullptr);
+    EXPECT_EQ(result.nav.getCnavEphemeris(c25, query, NavigationMessageType::CNV1, 13), nullptr);
+    EXPECT_EQ(result.nav.getCnavEphemeris(c25, query, NavigationMessageType::D1), nullptr);
+    EXPECT_EQ(result.nav.getCnavEphemeris(c25, GNSSTime(2356, 561600.0),
+                                          NavigationMessageType::CNV1),
+              nullptr);
+    EXPECT_EQ(result.nav.getCnavEphemeris(SatelliteId(GNSSSystem::GPS, 7), query,
+                                          NavigationMessageType::CNV1),
+              nullptr);
+    // The legacy selection never returns a CNAV record.
+    EXPECT_EQ(result.nav.getEphemeris(c25, query)->navigation_message_type,
+              NavigationMessageType::D1);
 
     const auto* glonass = ephemerides(result.nav, GNSSSystem::GLONASS, 5);
     ASSERT_NE(glonass, nullptr);
@@ -394,4 +512,94 @@ TEST(Rinex4NavigationTest, GlonassStatePlausibilityBounds) {
     // Non-finite values.
     EXPECT_FALSE(io::rinex4::isPlausibleGlonassFdmaState(
         Vector3d(std::nan(""), 0.0, 0.0), velocity));
+}
+
+TEST(Rinex4NavigationTest, CnavRateTermsChangeOnlyRadiusAndMeanMotion) {
+    // A circular orbit with no harmonic corrections isolates the two CNAV
+    // terms: ADOT scales the radius by A0 + ADOT tk, delta-n0-dot advances
+    // the argument of latitude by delta-n0-dot tk^2 / 2.
+    Ephemeris eph;
+    eph.satellite = SatelliteId(GNSSSystem::GPS, 7);
+    eph.toe = GNSSTime(2355, 561600.0);
+    eph.toc = eph.toe;
+    eph.toes = 561600.0;
+    eph.sqrt_a = 5153.65;
+    eph.e = 0.0;
+    eph.i0 = 0.96;
+    eph.omega0 = 1.2;
+    eph.omega = 0.4;
+    eph.m0 = 0.3;
+    eph.delta_n = 4.5e-09;
+    eph.omega_dot = -7.9e-09;
+    eph.valid = true;
+
+    const double tk = 3600.0;
+    const GNSSTime time = eph.toe + tk;
+    Vector3d legacy_pos, legacy_vel;
+    double legacy_clk = 0.0, legacy_drift = 0.0;
+    ASSERT_TRUE(eph.calculateSatelliteState(time, legacy_pos, legacy_vel, legacy_clk, legacy_drift));
+
+    // Zero rates: identical to the legacy computation.
+    Ephemeris zero = eph;
+    zero.cnav_data = CnavNavigationData{};
+    Vector3d pos, vel;
+    double clk = 0.0, drift = 0.0;
+    ASSERT_TRUE(zero.calculateSatelliteState(time, pos, vel, clk, drift));
+    EXPECT_EQ(pos, legacy_pos);
+    EXPECT_EQ(clk, legacy_clk);
+
+    Ephemeris adot = zero;
+    adot.cnav_data->a_dot = 0.25;
+    ASSERT_TRUE(adot.calculateSatelliteState(time, pos, vel, clk, drift));
+    EXPECT_NEAR(pos.norm() - legacy_pos.norm(), 0.25 * tk, 1e-6);
+    EXPECT_NEAR(std::atan2(pos.cross(legacy_pos).norm(), pos.dot(legacy_pos)), 0.0, 1e-12);
+
+    Ephemeris dndot = zero;
+    dndot.cnav_data->delta_n0_dot = -1.0e-13;
+    ASSERT_TRUE(dndot.calculateSatelliteState(time, pos, vel, clk, drift));
+    EXPECT_NEAR(pos.norm(), legacy_pos.norm(), 1e-6);
+    const double angle = std::atan2(pos.cross(legacy_pos).norm(), pos.dot(legacy_pos));
+    EXPECT_NEAR(angle, 0.5 * 1.0e-13 * tk * tk, 1e-12);
+}
+
+TEST(Rinex4NavigationTest, CnavSatelliteStatesMatchCssrlib) {
+    // Reference values: cssrlib (MIT) rnxdec.decode_nav + ephemeris.eph2pos
+    // on these same synthetic records, toe -1 h and +1.5 h.
+    const auto path = writeTempFile(
+        "libgnss_rinex4_nav_cnav_cssrlib.rnx",
+        rinex4Header() + "> EPH G07 CNAV\n" + cnavBody("G07") + "> EPH C25 CNV1\n" +
+            beidouCnavBody("C25", "CNV1"));
+    const ReadResult result = readNavigation(path);
+    ASSERT_TRUE(result.ok) << result.diagnostics;
+
+    struct Expected {
+        SatelliteId satellite;
+        NavigationMessageType type;
+        double dt;
+        Vector3d position;
+        double clock;
+    };
+    const std::vector<Expected> expected = {
+        {SatelliteId(GNSSSystem::GPS, 7), NavigationMessageType::CNAV, -3600.0,
+         Vector3d(-16514324.467706, 1087778.919311, 20599956.345308), 1.233866935400717e-04},
+        {SatelliteId(GNSSSystem::GPS, 7), NavigationMessageType::CNAV, 5400.0,
+         Vector3d(-24810074.002564, -9599879.005788, -1262486.485955), 1.233923675452283e-04},
+        {SatelliteId(GNSSSystem::BeiDou, 25), NavigationMessageType::CNV1, -3600.0,
+         Vector3d(9262061.753319, -25898344.438093, -4608463.356392), -9.400016631368170e-04},
+        {SatelliteId(GNSSSystem::BeiDou, 25), NavigationMessageType::CNV1, 5400.0,
+         Vector3d(9969602.072164, -16933349.478383, 19810593.302954), -9.399995705322118e-04},
+    };
+    for (const auto& item : expected) {
+        SCOPED_TRACE(item.satellite.toString() + " dt " + std::to_string(item.dt));
+        const GNSSTime time = GNSSTime(2355, 561600.0) + item.dt;
+        const Ephemeris* eph = result.nav.getCnavEphemeris(item.satellite, time, item.type);
+        ASSERT_NE(eph, nullptr);
+        Vector3d pos, vel;
+        double clk = 0.0, drift = 0.0;
+        ASSERT_TRUE(eph->calculateSatelliteState(time, pos, vel, clk, drift));
+        EXPECT_LT((pos - item.position).norm(), 1e-4);
+        EXPECT_NEAR(clk, item.clock, 1e-15);
+    }
+
+    std::filesystem::remove(path);
 }

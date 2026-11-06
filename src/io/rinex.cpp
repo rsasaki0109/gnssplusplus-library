@@ -965,6 +965,22 @@ bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
             return;
         }
 
+        if (active_header.navigation_message_type == NavigationMessageType::CNAV ||
+            active_header.navigation_message_type == NavigationMessageType::CNV1 ||
+            active_header.navigation_message_type == NavigationMessageType::CNV2 ||
+            active_header.navigation_message_type == NavigationMessageType::CNV3) {
+            rinex4::CnavEphemerisRecord record;
+            if (!rinex4::parseCnavEphemerisRecord(active_header, body, record)) {
+                std::cerr << "Skipping malformed RINEX 4 " << active_header.message_type
+                          << " body for " << active_header.source << std::endl;
+                body.clear();
+                return;
+            }
+            nav_data.addCnavEphemeris(cnavEphemerisFromRecord(record));
+            body.clear();
+            return;
+        }
+
         if (active_header.system == 'R' &&
             (active_header.message_type == "L1OC" ||
              active_header.message_type == "L3OC")) {
@@ -1232,7 +1248,109 @@ bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
     }
 
     finish_record();
-    return !nav_data.isEmpty() || !rinex4_system_data_.empty();
+    return !nav_data.isEmpty() || !nav_data.cnav_ephemeris_data.empty() ||
+           !rinex4_system_data_.empty();
+}
+
+Ephemeris RINEXReader::cnavEphemerisFromRecord(const rinex4::CnavEphemerisRecord& record) {
+    std::ostringstream epoch_text;
+    epoch_text << record.toc.year << ' ' << record.toc.month << ' ' << record.toc.day << ' '
+               << record.toc.hour << ' ' << record.toc.minute << ' ' << record.toc.second;
+    // GPST for G/J.  For BeiDou this is BDT read as a GPS-numbered week: the
+    // BDT week starts on the same weekday, 1356 weeks later.
+    const GNSSTime toc_file = parseTime(epoch_text.str(), header_.version);
+    // A seconds-of-week field placed in the week that keeps it within half a
+    // week of toc (toe and t_tm can fall in the week before or after).
+    const auto near_toc = [&toc_file](double seconds_of_week) {
+        GNSSTime time = normalizeWeekTow(toc_file.week, seconds_of_week);
+        const double offset = time - toc_file;
+        if (offset > 0.5 * constants::SECONDS_PER_WEEK) {
+            time.week -= 1;
+        } else if (offset < -0.5 * constants::SECONDS_PER_WEEK) {
+            time.week += 1;
+        }
+        return time;
+    };
+
+    const rinex4::NavigationRecordHeader& header = record.header;
+    Ephemeris eph;
+    eph.satellite = SatelliteId(systemFromRinexChar(header.system), header.prn);
+    eph.navigation_message_type = header.navigation_message_type;
+    eph.af0 = record.af0;
+    eph.af1 = record.af1;
+    eph.af2 = record.af2;
+    eph.crs = record.crs;
+    eph.delta_n = record.delta_n0;
+    eph.m0 = record.m0;
+    eph.cuc = record.cuc;
+    eph.e = record.e;
+    eph.cus = record.cus;
+    eph.sqrt_a = record.sqrt_a;
+    eph.cic = record.cic;
+    eph.omega0 = record.omega0;
+    eph.cis = record.cis;
+    eph.i0 = record.i0;
+    eph.crc = record.crc;
+    eph.omega = record.omega;
+    eph.omega_dot = record.omega_dot;
+    eph.idot = record.idot;
+    eph.i_dot = record.idot;
+    eph.sv_health = static_cast<double>(record.health);
+    eph.health = rinexHealthWord(static_cast<double>(record.health));
+    eph.valid = true;
+
+    CnavNavigationData cnav;
+    cnav.a_dot = record.a_dot;
+    cnav.delta_n0_dot = record.delta_n0_dot;
+    cnav.t_op = record.t_op;
+    cnav.transmission_time = record.transmission_time;
+    cnav.integrity_flags = record.integrity_flags;
+
+    if (header.system == 'C') {
+        const GNSSTime toe_bdt = near_toc(record.toe);
+        eph.toc = bdtToGpst(toc_file);
+        eph.toe = bdtToGpst(toe_bdt);
+        eph.tof = bdtToGpst(near_toc(record.transmission_time));
+        eph.toes = record.toe;
+        eph.week = static_cast<uint16_t>(toe_bdt.week - 1356);
+        if (header.navigation_message_type == NavigationMessageType::CNV3) {
+            eph.tgd = record.tgd_b2bi;
+        } else {
+            eph.tgd = record.tgd_b1cp;
+            eph.tgd_secondary = record.tgd_b2ap;
+            eph.iode = static_cast<uint16_t>(record.iode);
+            eph.iodc = static_cast<uint16_t>(record.iodc);
+        }
+        cnav.satellite_type = record.satellite_type;
+        cnav.sisai_oe = record.sisai_oe;
+        cnav.sisai_ocb = record.sisai_ocb;
+        cnav.sisai_oc1 = record.sisai_oc1;
+        cnav.sisai_oc2 = record.sisai_oc2;
+        cnav.sismai = record.sismai;
+        cnav.isc_b1cd = record.isc_b1cd;
+        cnav.isc_b2ad = record.isc_b2ad;
+    } else {
+        // CNAV / CNAV-2 have no separate toe field: toe = toc.
+        eph.toc = toc_file;
+        eph.toe = toc_file;
+        eph.tof = near_toc(record.transmission_time);
+        eph.toes = toc_file.tow;
+        eph.week = static_cast<uint16_t>(toc_file.week);
+        eph.tgd = record.tgd;
+        cnav.urai_ed = record.urai_ed;
+        cnav.urai_ned0 = record.urai_ned0;
+        cnav.urai_ned1 = record.urai_ned1;
+        cnav.urai_ned2 = record.urai_ned2;
+        cnav.wn_op = record.wn_op;
+        cnav.isc_l1ca = record.isc_l1ca;
+        cnav.isc_l2c = record.isc_l2c;
+        cnav.isc_l5i5 = record.isc_l5i5;
+        cnav.isc_l5q5 = record.isc_l5q5;
+        cnav.isc_l1cd = record.isc_l1cd;
+        cnav.isc_l1cp = record.isc_l1cp;
+    }
+    eph.cnav_data = std::move(cnav);
+    return eph;
 }
 
 bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) {

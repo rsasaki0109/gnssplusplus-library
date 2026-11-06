@@ -860,7 +860,14 @@ inline bool computeBroadcastState(const Ephemeris& eph,
     const double earth_rotation = is_beidou ? kBeiDouEarthRotationRate : kEarthRotationRate;
 
     const double n0 = std::sqrt(earth_mu / (a * a * a));
-    const double n = n0 + eph.delta_n;
+    double n = n0 + eph.delta_n;
+    // CNAV / CNAV-2 / B-CNAV: A_k = A0 + ADOT tk, delta-n_A = delta-n0 +
+    // delta-n0-dot tk / 2 (IS-GPS-200 Table 30-II, BDS-SIS-ICD-B1C 7.8).
+    double a_k = a;
+    if (eph.cnav_data) {
+        a_k += eph.cnav_data->a_dot * tk;
+        n += 0.5 * eph.cnav_data->delta_n0_dot * tk;
+    }
     const double mean_anomaly = eph.m0 + n * tk;
     const double eccentric_anomaly = solveKepler(mean_anomaly, eph.e);
 
@@ -876,7 +883,7 @@ inline bool computeBroadcastState(const Ephemeris& eph,
     const double di = eph.cis * std::sin(two_phi) + eph.cic * std::cos(two_phi);
 
     const double u = phi + du;
-    const double r = a * (1.0 - eph.e * cos_e) + dr;
+    const double r = a_k * (1.0 - eph.e * cos_e) + dr;
     const double inclination = eph.i0 + eph.idot * tk + di;
     const double toe_seconds = eph.toes != 0.0 ? eph.toes : eph.toe.tow;
 

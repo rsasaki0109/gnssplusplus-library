@@ -162,6 +162,11 @@ void printCounts(libgnss::io::RINEXReader& reader,
             return;
         }
         std::cout << "  ephemeris count: " << nav_data.ephemeris_data.size() << "\n";
+        if (!nav_data.cnav_ephemeris_data.empty()) {
+            // RINEX 4 CNAV / CNAV-2 / B-CNAV records, kept apart from LNAV / D1.
+            std::cout << "  CNAV / B-CNAV ephemeris count: "
+                      << nav_data.cnav_ephemeris_data.size() << "\n";
+        }
     }
 }
 

@@ -40,7 +40,8 @@ bool parseNavigationRecordHeader(const std::string& line,
                                  NavigationRecordHeader& record);
 
 /**
- * @brief Check whether an EPH message can reuse the existing body parser.
+ * @brief Check whether an EPH message is read (by the legacy LNAV / D1 / FDMA
+ * body parser or by one of the strict RINEX 4 body parsers below).
  */
 bool supportsEphemerisMessage(char system, const std::string& message_type);
 
@@ -55,7 +56,7 @@ NavigationMessageType navigationMessageTypeFromRinexToken(const std::string& tok
 const char* navigationMessageTypeName(NavigationMessageType type);
 
 /**
- * @brief Check whether a typed EPH message can reuse the existing body parser.
+ * @brief Typed form of supportsEphemerisMessage(char, const std::string&).
  */
 bool supportsEphemerisMessage(char system, NavigationMessageType type);
 
@@ -121,6 +122,99 @@ bool parseGlonassCdmaEphemerisRecord(
     const NavigationRecordHeader& header,
     const std::vector<std::string>& body,
     GlonassCdmaEphemerisRecord& record);
+
+/**
+ * @brief Strictly parsed RINEX 4 modernized Keplerian ephemeris body:
+ * GPS / QZSS CNAV and CNAV-2 (A31-A34) and BeiDou B-CNAV1/2/3 (A27-A29).
+ *
+ * Epoch and the seconds-of-week fields stay in the file's time scale (GPST
+ * for G/J, BDT for C); RINEXReader converts them.  Spare fields may be blank.
+ * A field a message type does not carry keeps its default (std::nullopt where
+ * a blank is meaningful).
+ *
+ * Line layouts (after the epoch line SV, toc, af0, af1, af2):
+ *  1  ADOT, Crs, delta-n0, M0
+ *  2  Cuc, e, Cus, sqrt(A)
+ *  3  G/J: t_op, Cic, OMEGA0, Cis      C: toe, Cic, OMEGA0, Cis
+ *  4  i0, Crc, omega, OMEGA DOT
+ *  5  G/J: IDOT, delta-n0-dot, URAI_NED0, URAI_NED1
+ *     C: IDOT, delta-n0-dot, SatType, t_op
+ *  6  G/J: URAI_ED, health, TGD, URAI_NED2
+ *     C: SISAI_oe, SISAI_ocb, SISAI_oc1, SISAI_oc2
+ *  7  G/J: ISC_L1CA, ISC_L2C, ISC_L5I5, ISC_L5Q5
+ *     C CNV1: ISC_B1Cd, spare, TGD_B1Cp, TGD_B2ap
+ *     C CNV2: spare, ISC_B2ad, TGD_B1Cp, TGD_B2ap   (no line 7 in CNV3)
+ *  8  G/J CNAV-2: ISC_L1Cd, ISC_L1Cp, then the t_tm line below
+ *     G/J: t_tm, WN_op, [integrity flags]
+ *     C CNV1/2: SISMAI, health, integrity flags, IODC
+ *     C CNV3: SISMAI, health, integrity flags, TGD_B2bI
+ *  9  C: t_tm, spare, spare, IODE (CNV1/2; t_tm alone in CNV3)
+ */
+struct CnavEphemerisRecord {
+    NavigationRecordHeader header;
+    CalendarTime toc;
+    double af0 = 0.0;
+    double af1 = 0.0;
+    double af2 = 0.0;
+    double a_dot = 0.0;         ///< Semi-major axis rate ADOT (m/s).
+    double crs = 0.0;
+    double delta_n0 = 0.0;      ///< Mean motion difference at toe (rad/s).
+    double m0 = 0.0;
+    double cuc = 0.0;
+    double e = 0.0;
+    double cus = 0.0;
+    double sqrt_a = 0.0;        ///< sqrt of the semi-major axis at toe.
+    double toe = 0.0;           ///< BeiDou toe (BDT s of week); 0 for G/J (toe = toc).
+    double cic = 0.0;
+    double omega0 = 0.0;
+    double cis = 0.0;
+    double i0 = 0.0;
+    double crc = 0.0;
+    double omega = 0.0;
+    double omega_dot = 0.0;
+    double idot = 0.0;
+    double delta_n0_dot = 0.0;  ///< Rate of the mean motion difference (rad/s^2).
+    double t_op = 0.0;          ///< Data predict time of week (s).
+    int health = 0;
+    std::optional<int> integrity_flags;  ///< Optional for G/J; present for C.
+    double transmission_time = 0.0;      ///< t_tm (s of week, as written).
+    // GPS / QZSS CNAV, CNAV-2
+    int urai_ed = 0;
+    int urai_ned0 = 0;
+    int urai_ned1 = 0;
+    int urai_ned2 = 0;
+    double tgd = 0.0;
+    std::optional<double> isc_l1ca;  ///< Inter-signal corrections; blank is absent.
+    std::optional<double> isc_l2c;
+    std::optional<double> isc_l5i5;
+    std::optional<double> isc_l5q5;
+    std::optional<double> isc_l1cd;  ///< CNAV-2 only.
+    std::optional<double> isc_l1cp;  ///< CNAV-2 only.
+    int wn_op = 0;                   ///< Data predict week number, as written.
+    // BeiDou B-CNAV1/2/3
+    int satellite_type = 0;  ///< 1 GEO, 2 IGSO, 3 MEO.
+    int sisai_oe = 0;
+    int sisai_ocb = 0;
+    int sisai_oc1 = 0;
+    int sisai_oc2 = 0;
+    int sismai = 0;
+    std::optional<double> isc_b1cd;  ///< CNV1 only.
+    std::optional<double> isc_b2ad;  ///< CNV2 only.
+    double tgd_b1cp = 0.0;           ///< CNV1/CNV2.
+    double tgd_b2ap = 0.0;           ///< CNV1/CNV2.
+    double tgd_b2bi = 0.0;           ///< CNV3.
+    int iodc = 0;                    ///< CNV1/CNV2 (10 bits).
+    int iode = 0;                    ///< CNV1/CNV2 (8 bits).
+};
+
+/**
+ * @brief Parse a complete GPS/QZSS CNAV/CNV2 or BeiDou CNV1/2/3 body
+ * transactionally (record is untouched on failure).
+ */
+bool parseCnavEphemerisRecord(
+    const NavigationRecordHeader& header,
+    const std::vector<std::string>& body,
+    CnavEphemerisRecord& record);
 
 /**
  * @brief Strictly parsed RINEX 4 SBAS (GEO) ephemeris body.

@@ -637,7 +637,7 @@ TEST(RINEXReaderTest, DispatchesRinex4LnavAndSkipsUnsupportedRecordBoundary) {
         file << "> EPH C01 D1\n";
         file << bds_d1_body;
         file << "> EPH G04 CNAV\n";
-        file << "this EPH message type is deliberately unsupported\n";
+        file << "this CNAV body is deliberately malformed\n";
     }
 
     io::RINEXReader reader;
@@ -661,7 +661,7 @@ TEST(RINEXReaderTest, DispatchesRinex4LnavAndSkipsUnsupportedRecordBoundary) {
               std::string::npos);
     EXPECT_NE(diagnostic.find("Skipping malformed RINEX 4 GLONASS L3OC body"),
               std::string::npos);
-    EXPECT_NE(diagnostic.find("Skipping unsupported RINEX 4 EPH G04 CNAV"),
+    EXPECT_NE(diagnostic.find("Skipping malformed RINEX 4 CNAV body for G04"),
               std::string::npos);
 
     const auto it = nav_data.ephemeris_data.find(SatelliteId(GNSSSystem::GPS, 4));
