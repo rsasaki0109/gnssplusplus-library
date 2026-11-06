@@ -121,6 +121,14 @@ BdsB2bMessage clockMessage(int iodssr, int iodp, const std::vector<std::pair<int
     return w.finish(kReception);
 }
 
+std::vector<BdsB2bUpdate> usableUpdates(const BdsB2bDecoder& decoder) {
+    std::vector<BdsB2bUpdate> usable;
+    for (const auto& update : decoder.updates()) {
+        if (update.usable) usable.push_back(update);
+    }
+    return usable;
+}
+
 const SatelliteId kC19(GNSSSystem::BeiDou, 19);
 const SatelliteId kC20(GNSSSystem::BeiDou, 20);
 const SatelliteId kC21(GNSSSystem::BeiDou, 21);
@@ -207,10 +215,14 @@ TEST(BdsPppB2bTest, DecodesMaskOrbitClockAndPairsByIodCorr) {
     EXPECT_EQ(clocks[3].satellite, kG01);
     EXPECT_EQ(clocks[3].iod_corr, 5);
 
-    // Updates for the satellites whose orbit and clock share an IOD Corr and
-    // whose orbit is valid: C19 and G01 (C20's orbit is invalid).
-    ASSERT_EQ(decoder.updates().size(), 2U);
-    const BdsB2bUpdate& c19 = decoder.updates()[0];
+    // Updates for the satellites with both an orbit and a clock: C19 and G01
+    // pair by IOD Corr; C20's orbit is invalid, so its update only marks that
+    // it has no usable correction.
+    ASSERT_EQ(decoder.updates().size(), 3U);
+    EXPECT_EQ(decoder.updates()[1].satellite, kC20);
+    EXPECT_FALSE(decoder.updates()[1].usable);
+    ASSERT_EQ(usableUpdates(decoder).size(), 2U);
+    const BdsB2bUpdate c19 = usableUpdates(decoder)[0];
     EXPECT_EQ(c19.satellite, kC19);
     EXPECT_EQ(c19.iodn, 0x30c);
     EXPECT_EQ(c19.iode, 0x0c);
@@ -218,22 +230,36 @@ TEST(BdsPppB2bTest, DecodesMaskOrbitClockAndPairsByIodCorr) {
     EXPECT_NEAR(c19.radial_m, 0.16, 1e-12);
     EXPECT_NEAR(c19.c0_m, -0.48, 1e-12);
     ASSERT_TRUE(c19.ura_m.has_value());
-    EXPECT_EQ(decoder.updates()[1].satellite, kG01);
-    EXPECT_EQ(decoder.updates()[1].iode, 77);
+    EXPECT_EQ(usableUpdates(decoder)[1].satellite, kG01);
+    EXPECT_EQ(usableUpdates(decoder)[1].iode, 77);
 
     // The C19 clock moves to IOD Corr 3: the orbit (still IOD Corr 2) pairs
     // with the previous clock, then with the new one once its orbit follows.
     ASSERT_EQ(decoder.addMessage(clockMessage(1, 3, {{3, -310}, {0, 10}, {1, 20}, {5, 410}, {0, 5}})), 4);
-    ASSERT_EQ(decoder.updates().size(), 4U);
-    EXPECT_EQ(decoder.updates()[2].satellite, kC19);
-    EXPECT_EQ(decoder.updates()[2].iod_corr, 2);
-    EXPECT_NEAR(decoder.updates()[2].c0_m, -0.48, 1e-12);
-    EXPECT_NEAR(decoder.updates()[3].c0_m, 410 * 0.0016, 1e-12);
+    auto usable = usableUpdates(decoder);
+    ASSERT_EQ(usable.size(), 4U);
+    EXPECT_EQ(usable[2].satellite, kC19);
+    EXPECT_EQ(usable[2].iod_corr, 2);
+    EXPECT_NEAR(usable[2].c0_m, -0.48, 1e-12);
+    EXPECT_NEAR(usable[3].c0_m, 410 * 0.0016, 1e-12);
     ASSERT_EQ(decoder.addMessage(orbitMessage(1, {{19, 0x30d, 3, 101, -50, 25}})), 2);
-    ASSERT_EQ(decoder.updates().size(), 5U);
-    EXPECT_EQ(decoder.updates()[4].iod_corr, 3);
-    EXPECT_EQ(decoder.updates()[4].iode, 0x0d);
-    EXPECT_NEAR(decoder.updates()[4].c0_m, -310 * 0.0016, 1e-12);
+    usable = usableUpdates(decoder);
+    ASSERT_EQ(usable.size(), 5U);
+    EXPECT_EQ(usable[4].iod_corr, 3);
+    EXPECT_EQ(usable[4].iode, 0x0d);
+    EXPECT_NEAR(usable[4].c0_m, -310 * 0.0016, 1e-12);
+
+    // An invalid clock (raw -2^14) leaves C19 without a correction until the
+    // next valid one.
+    ASSERT_EQ(decoder.addMessage(clockMessage(1, 3, {{3, -16384}, {0, 10}, {1, 20}, {5, 410}, {0, 5}})), 4);
+    const size_t after_invalid = decoder.updates().size();
+    bool c19_cut = false;
+    for (size_t i = 5; i < after_invalid; ++i) {
+        if (decoder.updates()[i].satellite == kC19) {
+            c19_cut = !decoder.updates()[i].usable;
+        }
+    }
+    EXPECT_TRUE(c19_cut);
 }
 
 TEST(BdsPppB2bTest, IodssrAndIodpGateTheCorrections) {
@@ -253,14 +279,14 @@ TEST(BdsPppB2bTest, IodssrAndIodpGateTheCorrections) {
 
     ASSERT_EQ(decoder.addMessage(orbitMessage(1, {{19, 1, 0, 1, 1, 1}})), 2);
     ASSERT_EQ(decoder.addMessage(clockMessage(1, 3, {{0, 1}})), 4);
-    EXPECT_EQ(decoder.updates().size(), 1U);
+    EXPECT_EQ(usableUpdates(decoder).size(), 1U);
 
     // A new IODP resets every correction: a clock alone does not pair with
     // the orbit decoded under the previous mask.
     ASSERT_EQ(decoder.addMessage(maskMessage(4, 2)), 1);
     EXPECT_EQ(decoder.stats().mask_changes, 1U);
     ASSERT_EQ(decoder.addMessage(clockMessage(2, 4, {{0, 1}})), 4);
-    EXPECT_EQ(decoder.updates().size(), 1U);
+    EXPECT_EQ(usableUpdates(decoder).size(), 1U);
 }
 
 TEST(BdsPppB2bTest, ReferenceTimeFollowsTheBdtDayOfReception) {
@@ -317,8 +343,8 @@ TEST(BdsPppB2bTest, CodeBiasesAndOneSatelliteStream) {
     // The held update carries the satellite's code biases.
     ASSERT_EQ(decoder.addMessage(orbitMessage(0, {{19, 1, 0, 1, 1, 1}})), 2);
     ASSERT_EQ(decoder.addMessage(clockMessage(0, 5, {{0, 1}})), 4);
-    ASSERT_EQ(decoder.updates().size(), 1U);
-    EXPECT_EQ(decoder.updates()[0].code_bias_m.size(), 2U);
+    ASSERT_EQ(usableUpdates(decoder).size(), 1U);
+    EXPECT_EQ(usableUpdates(decoder)[0].code_bias_m.size(), 2U);
 }
 
 TEST(BdsPppB2bTest, ReadsCssrlibTextLogs) {
