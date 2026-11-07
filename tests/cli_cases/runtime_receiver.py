@@ -616,6 +616,64 @@ class RuntimeReceiverCases:
             )
             self.assertEqual(replay.returncode, 0, msg=replay.stderr)
             self.assertIn("written_solutions=", replay.stdout)
+    def test_solve_causal_mode_uses_no_later_base_epoch(self) -> None:
+        # The stress fixture has 201 rover epochs and 41 base epochs: the
+        # default solve interpolates the base towards the next epoch, --causal
+        # does not, and --base-hold-seconds holds the latest past one instead.
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        with tempfile.TemporaryDirectory(prefix="gnss_solve_causal_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_obs = temp_root / "rover.obs"
+            base_obs = temp_root / "base.obs"
+            base_nav = temp_root / "base.nav"
+            for source, outputs in (
+                ("rover.rtcm", ("--obs-out", str(rover_obs))),
+                ("base.rtcm", ("--obs-out", str(base_obs), "--nav-out", str(base_nav))),
+            ):
+                converted = self.run_gnss(
+                    "convert", "--format", "rtcm", "--input", str(fixture / source), *outputs,
+                    "--gps-week", "2324", "--quiet",
+                )
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            inputs = ("--rover", str(rover_obs), "--base", str(base_obs), "--nav", str(base_nav),
+                      "--no-kml", "--out", str(temp_root / "out.pos"))
+
+            def summary(*extra: str) -> dict[str, str]:
+                result = self.run_gnss("solve", *inputs, *extra)
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                values = {}
+                for line in result.stdout.splitlines():
+                    key, sep, value = line.strip().partition(": ")
+                    if sep:
+                        values[key] = value
+                return values
+
+            default = summary()
+            self.assertEqual(default["causal"], "no")
+            self.assertEqual(default["interpolated base epochs"], "160")
+            causal = summary("--causal")
+            self.assertEqual(causal["causal"], "yes")
+            self.assertEqual(causal["interpolated base epochs"], "0")
+            self.assertEqual(causal["held base epochs"], "0")
+            self.assertEqual(causal["skipped rover epochs"], "160")
+            held = summary("--causal", "--base-hold-seconds", "2")
+            self.assertEqual(held["held base epochs"], "160")
+            self.assertEqual(held["skipped rover epochs"], "0")
+
+            for extra, message in (
+                (("--causal", "--fixed-bridge-burst-guard"),
+                 "--causal cannot use --fixed-bridge-burst-guard"),
+                (("--causal", "--safe-availability-fallback"),
+                 "--causal cannot use --safe-availability-fallback"),
+                (("--causal", "--rover-seed-pos", str(temp_root / "seed.pos")),
+                 "--causal cannot use --rover-seed-pos"),
+                (("--base-hold-seconds", "-1"), "--base-hold-seconds must be >= 0"),
+            ):
+                with self.subTest(extra=extra):
+                    result = self.run_gnss("solve", *inputs, *extra)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(message, result.stderr + result.stdout)
+
     def test_solve_urban_preset_is_the_cdme_recipe(self) -> None:
         # --preset urban packages the opt-in CDME recipe (docs/rtk_doppler_consensus_age.md). It must solve exactly
         # like the explicit flags, an explicit flag must still win, and runs without it must not report the gates.

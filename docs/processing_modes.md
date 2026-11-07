@@ -6,7 +6,7 @@ epoch *t* may use, not in the solver.
 | Mode | May use | Tools | Use it for |
 |---|---|---|---|
 | Real-time | Data received up to *t* (with its latency) | `gnss live`, `gnss online` | Operation |
-| Post-processing, causal (`--causal`) | Data tagged up to *t* | `gnss ppp --causal`, `gnss spp --causal` | Real-time performance from recorded data |
+| Post-processing, causal (`--causal`) | Data tagged up to *t* | `gnss solve --causal`, `gnss ppp --causal`, `gnss spp --causal` | Real-time performance from recorded data |
 | Post-processing | Anything in the files, including data after *t* | `gnss solve`, `gnss ppp`, `gnss spp`, `gnss fgo` | Best accuracy after the fact |
 
 A causal run is meant to give what a real-time receiver would have given on
@@ -85,6 +85,34 @@ below 0.20 m):
     existing no-future switch `GNSS_PPP_CLAS_BASE_CLOCK_PARITY=1`, and
     0.72 m with `GNSS_PPP_CLAS_ATMOS_LIFECYCLE=1`.
 
+## RTK: `gnss solve --causal`
+
+- **No base interpolation.** By default `gnss solve` interpolates the base
+  observations to the rover epoch between the base epochs around it.
+  `--causal` uses only an exact base epoch. With `--base-hold-seconds <s>` it
+  also uses the latest past base epoch up to *s* seconds old, modeled to the
+  rover time (`rtk_base_alignment::holdBaseEpoch()`, the hold of the online
+  RTK / IMU processor's 2 s `rtk_base_extrapolation_v1` candidate).
+- **No look-ahead guards.** The non-FIX drift guard and the FLOAT
+  bridge-tail guard are off: both check an epoch against the next FIX.
+  `--fixed-bridge-burst-guard`, `--safe-availability-fallback` and
+  `--rover-seed-pos` (external per-epoch positions) are refused.
+- **Ephemerides only once broadcast**, as for PPP.
+- **`--integrity-shadow-csv` must carry its `solution_latency_s` and
+  `causal_provenance_verified` columns.** Without them a smoother's output
+  would be read as zero-latency and causal.
+- **Summary.** The summary prints `causal: yes` and the number of held base
+  epochs.
+
+On the `tests/fixtures/realtime_stress` drive (201 rover epochs at 5 Hz, 41
+base epochs at 1 Hz), against its reference trajectory:
+
+| Run | Epochs | FIX | H median / 95 % |
+|---|---:|---:|---|
+| `gnss solve` (default, base interpolation) | 201 | 197 | 0.043 / 0.108 m |
+| `gnss solve --causal` | 41 | 12 | 0.171 / 0.318 m |
+| `gnss solve --causal --base-hold-seconds 2` | 201 | 197 | 0.043 / 0.113 m |
+
 ## Not covered yet
 
 These parts still see data after the epoch, also with `--causal`; they are
@@ -94,10 +122,6 @@ the next steps of this work:
   - Corrections are tagged with their reference epoch, not the time a
     receiver has them (a few seconds later; CLAS about 15 s).
   - A causal run therefore uses each update slightly early.
-- **RTK (`gnss solve`)** has no causal mode yet. It uses:
-  - base interpolation towards the next base epoch;
-  - the non-FIX drift and FLOAT bridge-tail guards, which look at the next
-    FIX.
 - **`gnss replay`** preloads its streams, so it is not a real-time reference
   either. Only `gnss online` processes received events in order.
 
