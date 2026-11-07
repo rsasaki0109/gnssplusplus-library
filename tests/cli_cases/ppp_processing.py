@@ -490,6 +490,45 @@ class PPPProcessingCases:
                     self.assertIn("failed to load MADOCA L6E corrections", by_flags.stderr)
                     self.assertEqual(by_config.returncode, by_flags.returncode)
                     self.assertEqual(by_config.stderr, by_flags.stderr)
+    def test_ppp_cli_b2b_arguments_and_bcnav1_requirement(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_b2b_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+            obs = str(temp_root / "rover.obs")
+            nav = str(temp_root / "base.nav")
+            for args in (["--input", str(fixture / "rover.rtcm"), "--obs-out", obs],
+                         ["--input", str(fixture / "base.rtcm"), "--nav-out", nav]):
+                converted = self.run_gnss("convert", *args, "--format", "rtcm",
+                                          "--gps-week", "2324", "--quiet")
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            log = temp_root / "b2b.txt"
+            log.write_text("2353 579600 59 34 64 " + "00" * 64 + "\n", encoding="ascii")
+            out = str(temp_root / "out.pos")
+            cases = [
+                (["--sp3", str(log), "--b2b", str(log)], "--b2b requires --nav"),
+                (["--nav", nav, "--b2b-prn", "59"], "--b2b-prn requires --b2b"),
+                (["--nav", nav, "--b2b", str(log), "--has-pages", str(log)],
+                 "--b2b cannot be combined with"),
+            ]
+            for args, message in cases:
+                with self.subTest(args=args):
+                    result = self.run_gnss("ppp", "--obs", obs, "--out", out, *args)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(message, result.stderr + result.stdout)
+            # A RINEX 2/3 NAV has no B-CNAV1 records for the BDS corrections
+            # to refer to; the TOML key runs the same check.
+            by_flags = self.run_gnss("ppp", "--obs", obs, "--nav", nav, "--b2b", str(log),
+                                     "--b2b-prn", "59", "--max-epochs", "1", "--out", out)
+            self.assertNotEqual(by_flags.returncode, 0)
+            self.assertIn("--b2b needs BeiDou B-CNAV1 ephemerides", by_flags.stderr)
+            config_path = temp_root / "b2b.toml"
+            config_path.write_text(
+                f"[gnss_ppp]\nb2b = {json.dumps(str(log))}\nb2b_prn = 59\n", encoding="utf-8")
+            by_config = self.run_gnss("ppp", "--obs", obs, "--nav", nav, "--max-epochs", "1",
+                                      "--out", out, "--config", str(config_path))
+            self.assertEqual(by_config.returncode, by_flags.returncode)
+            self.assertEqual(by_config.stderr, by_flags.stderr)
+
     def test_nav_products_cli_generates_sp3_and_clk_from_static_sample(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_nav_products_cli_") as temp_dir:
             temp_root = Path(temp_dir)

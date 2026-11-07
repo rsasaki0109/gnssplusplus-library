@@ -314,6 +314,10 @@ inline bool ephemerisMatchesSsrIode(const SatelliteId& sat,
 }  // namespace
 
 const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat, const GNSSTime& time) const {
+    if (sat.system == GNSSSystem::BeiDou &&
+        beidou_ephemeris_source_ == BeiDouEphemerisSource::BCnav1) {
+        return getCnavEphemeris(sat, time, NavigationMessageType::CNV1);
+    }
     auto it = ephemeris_data.find(sat);
     if (it == ephemeris_data.end()) {
         return nullptr;
@@ -344,6 +348,10 @@ const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat,
                                               int desired_iode) const {
     if (desired_iode < 0) {
         return getEphemeris(sat, time);
+    }
+    if (sat.system == GNSSSystem::BeiDou &&
+        beidou_ephemeris_source_ == BeiDouEphemerisSource::BCnav1) {
+        return getCnavEphemeris(sat, time, NavigationMessageType::CNV1, desired_iode);
     }
     auto it = ephemeris_data.find(sat);
     if (it == ephemeris_data.end()) {
@@ -529,6 +537,15 @@ bool NavigationData::hasEphemeris(const SatelliteId& sat, const GNSSTime& time) 
 }
 
 NavigationData::NavigationData() = default;
+
+void NavigationData::setBeiDouEphemerisSource(BeiDouEphemerisSource source) {
+    if (source == beidou_ephemeris_source_) {
+        return;
+    }
+    beidou_ephemeris_source_ = source;
+    satellite_state_cache_.clear();
+    ++revision_;
+}
 
 void NavigationData::setGalileoEphemerisSource(GalileoEphemerisSource source) {
     if (source == galileo_ephemeris_source_) {

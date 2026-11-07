@@ -6,6 +6,8 @@
 #include <libgnss++/algorithms/ppp_bias_identity.hpp>
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/algorithms/ppp_multifrequency.hpp>
+#include <libgnss++/algorithms/ppp_utils.hpp>
+#include <libgnss++/io/bds_ppp_b2b.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
@@ -3835,4 +3837,108 @@ TEST(PPPMadocaPostfitSeedReference, EpochDecisionSkipsScoreRejectionOnlyAfterSee
     // Below the threshold nothing is rejected in either case.
     EXPECT_FALSE(PPPProcessorTestAccess::postfitScoreRejectsEpoch(
         processor, false, true, false, true, 0.89));
+}
+
+TEST(PPPTest, B2bRacFrameTakesRadialFromThePosition) {
+    // A velocity with a radial component separates the two frames: RTCM takes
+    // along-track from the velocity, PPP-B2b takes radial from the position.
+    const Vector3d position(26.0e6, 0.0, 0.0);
+    const Vector3d velocity(300.0, 3800.0, 0.0);
+    const Vector3d radial_only(1.0, 0.0, 0.0);
+    const Vector3d b2b = ppp_utils::b2bRacToEcef(position, velocity, radial_only);
+    EXPECT_NEAR(b2b.x(), -1.0, 1e-12);
+    EXPECT_NEAR(b2b.y(), 0.0, 1e-12);
+    EXPECT_NEAR(b2b.z(), 0.0, 1e-12);
+    const Vector3d rtcm = ppp_utils::ssrRacToEcef(position, velocity, radial_only);
+    EXPECT_GT(std::abs(rtcm.y()), 0.05);  // RTCM radial = along x cross: tilted
+
+    const Vector3d along_only(0.0, 2.0, 0.0);
+    const Vector3d along = ppp_utils::b2bRacToEcef(position, velocity, along_only);
+    EXPECT_NEAR(along.x(), 0.0, 1e-12);
+    EXPECT_NEAR(along.y(), -2.0, 1e-12);
+    const Vector3d cross_only(0.0, 0.0, 3.0);
+    EXPECT_NEAR(ppp_utils::b2bRacToEcef(position, velocity, cross_only).z(), -3.0, 1e-12);
+}
+
+TEST(PPPTest, ProcessorLoadsBdsB2bUpdates) {
+    NavigationData nav_data;
+    const Ephemeris gps = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(gps);
+    // A B-CNAV1 record for C25 (IODE 12) and a D1 one the B2b path must not use.
+    Ephemeris bds = gps;
+    bds.satellite = SatelliteId(GNSSSystem::BeiDou, 25);
+    bds.sqrt_a = 5282.63;
+    bds.iode = 12;
+    bds.iodc = 12;
+    bds.navigation_message_type = NavigationMessageType::CNV1;
+    bds.cnav_data = CnavNavigationData{};
+    nav_data.addCnavEphemeris(bds);
+    Ephemeris d1 = bds;
+    d1.navigation_message_type = NavigationMessageType::D1;
+    d1.cnav_data.reset();
+    d1.omega0 += 0.01;
+    nav_data.addEphemeris(d1);
+    nav_data.setBeiDouEphemerisSource(NavigationData::BeiDouEphemerisSource::BCnav1);
+
+    const GNSSTime t0 = gps.toe;
+    std::vector<io::BdsB2bUpdate> updates(3);
+    updates[0].satellite = gps.satellite;
+    updates[0].time = t0;
+    updates[0].iode = 77;
+    updates[0].iod_corr = 2;
+    updates[0].radial_m = 0.1;
+    updates[0].along_m = -0.2;
+    updates[0].cross_m = 0.3;
+    updates[0].c0_m = 0.5;
+    updates[0].ura_m = 0.02;
+    updates[1].satellite = bds.satellite;
+    updates[1].time = t0;
+    updates[1].iode = 12;
+    updates[1].radial_m = 0.05;
+    updates[1].c0_m = -1.0;
+    updates[1].code_bias_m = {{0, 3.8}, {2, 1.0}, {12, 0.0}};  // B1I, B1C (pilot), B3I
+    // G01's orbit / clock pair turns invalid 30 s later.
+    updates[2].satellite = gps.satellite;
+    updates[2].time = t0 + 30.0;
+    updates[2].usable = false;
+
+    PPPProcessor processor;
+    ASSERT_TRUE(processor.loadBdsB2bProducts(updates, nav_data, 1.0));
+
+    const GNSSTime t = t0 + 10.0;
+    Vector3d orbit = Vector3d::Zero();
+    double clock_m = 0.0;
+    double ura_m = 0.0;
+    std::map<uint8_t, double> code_bias_m;
+    ASSERT_TRUE(processor.interpolateLoadedSSRCorrection(gps.satellite, t, orbit, clock_m, &ura_m,
+                                                         &code_bias_m));
+    Vector3d position, velocity;
+    double clock_bias = 0.0, clock_drift = 0.0;
+    ASSERT_TRUE(nav_data.calculateSatelliteState(gps.satellite, t, position, velocity, clock_bias,
+                                                 clock_drift, 77));
+    const Vector3d expected =
+        ppp_utils::b2bRacToEcef(position, velocity, Vector3d(0.1, -0.2, 0.3));
+    EXPECT_LT((orbit - expected).norm(), 1e-9);
+    EXPECT_NEAR(clock_m, -0.5, 1e-12);  // t = t_brdc - C0 / c
+    EXPECT_NEAR(ura_m, 0.02, 1e-12);
+    EXPECT_TRUE(code_bias_m.empty());
+
+    // The B-CNAV1 record (not D1) and the B2b code biases of B1I / B3I.
+    ASSERT_TRUE(processor.interpolateLoadedSSRCorrection(bds.satellite, t, orbit, clock_m, nullptr,
+                                                         &code_bias_m));
+    ASSERT_TRUE(nav_data.calculateSatelliteState(bds.satellite, t, position, velocity, clock_bias,
+                                                 clock_drift, 12));
+    Vector3d bcnav1_position, ignored_velocity;
+    ASSERT_TRUE(bds.calculateSatelliteState(t, bcnav1_position, ignored_velocity, clock_bias,
+                                            clock_drift));
+    EXPECT_LT((position - bcnav1_position).norm(), 1e-6);
+    EXPECT_LT((orbit - ppp_utils::b2bRacToEcef(position, velocity, Vector3d(0.05, 0.0, 0.0))).norm(),
+              1e-9);
+    EXPECT_NEAR(clock_m, 1.0, 1e-12);
+    ASSERT_EQ(code_bias_m.size(), 2U);
+    EXPECT_NEAR(code_bias_m.at(rtcmSsrSignalId(GNSSSystem::BeiDou, SignalType::BDS_B1I)), 3.8, 1e-12);
+    EXPECT_NEAR(code_bias_m.at(rtcmSsrSignalId(GNSSSystem::BeiDou, SignalType::BDS_B3I)), 0.0, 1e-12);
+
+    // After the unusable update G01 has no correction.
+    EXPECT_FALSE(processor.interpolateLoadedSSRCorrection(gps.satellite, t0 + 40.0, orbit, clock_m));
 }

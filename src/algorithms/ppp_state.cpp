@@ -354,8 +354,10 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     const bool broadcast_beidou_clocks = broadcastClockIonosphereFree(
         ppp_config_.use_ionosphere_free, precise_products_loaded_,
         ssr_products_loaded_, dcb_products_loaded_);
+    // PPP-B2b BDS clocks refer to B3I like the broadcast ones: the same
+    // receiver delays apply (one clock: B2b corrects BDS-3 only).
     if ((env_overrides_.estimate_isb_bds || require_coherent_ssr_ ||
-         broadcast_beidou_clocks) &&
+         broadcast_beidou_clocks || bds_b2b_corrections_) &&
         visible_systems.count(GNSSSystem::BeiDou)) {
         filter_state_.bds_clock_index = isb_start++;
         if (require_coherent_ssr_ || broadcast_beidou_clocks) {
@@ -1190,10 +1192,11 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
         // the B3I loss-of-lock flag.
         const bool broadcast_beidou3 =
             ppp_internal::isBeiDou3Satellite(satellite) &&
-            broadcastClockIonosphereFree(ppp_config_.use_ionosphere_free,
-                                         precise_products_loaded_,
-                                         ssr_products_loaded_,
-                                         dcb_products_loaded_);
+            (broadcastClockIonosphereFree(ppp_config_.use_ionosphere_free,
+                                          precise_products_loaded_,
+                                          ssr_products_loaded_,
+                                          dcb_products_loaded_) ||
+             (bds_b2b_corrections_ && ppp_config_.use_ionosphere_free));
         const Observation* secondary =
             !use_combination_slip_detection ? nullptr
             : broadcast_beidou3

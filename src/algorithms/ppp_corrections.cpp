@@ -1357,9 +1357,18 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         // as antenna-phase-centre orbits (gnss nav-products), already refer
         // to the antenna phase centre; apply_satellite_antenna_pco forces
         // the shift there as well.
+        // PPP-B2b BDS orbits and clocks refer to the B3I antenna phase
+        // centre (as the B-CNAV1 / D1 broadcast ones do): a B1I / B3I row
+        // needs the difference of its combination's PCO from the B3I PCO,
+        // 2.94 x (PCO_B1I - PCO_B3I), 0.8-1.1 m on BDS-3 MEO in igs20
+        // (cssrlib antModelTx with the B3I reference signal). GPS rows use
+        // the L1 / L2 reference frequencies themselves.
+        const bool b2b_bds_pco_difference =
+            bds_b2b_corrections_ && !have_precise &&
+            observation.satellite.system == GNSSSystem::BeiDou;
         if (satellite_antex_loaded_ &&
             ((have_precise && !precise_products_.orbits_at_antenna_phase_center) ||
-             ppp_config_.apply_satellite_antenna_pco)) {
+             ppp_config_.apply_satellite_antenna_pco || b2b_bds_pco_difference)) {
             Vector3d pco_body_if = Vector3d::Zero();
             bool have_pco = false;
             for (const auto& entry : satellite_antex_offsets_) {
@@ -1378,6 +1387,11 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         observation.secondary_code_bias_coeff * secondary_it->second;
                 } else {
                     pco_body_if = primary_it->second;
+                }
+                if (b2b_bds_pco_difference && !ppp_config_.apply_satellite_antenna_pco) {
+                    const auto reference_it = entry.body_offsets_m.find(SignalType::BDS_B3I);
+                    if (reference_it == entry.body_offsets_m.end()) break;
+                    pco_body_if -= reference_it->second;
                 }
                 have_pco = true;
                 break;

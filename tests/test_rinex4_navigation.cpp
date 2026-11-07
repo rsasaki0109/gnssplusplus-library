@@ -603,3 +603,42 @@ TEST(Rinex4NavigationTest, CnavSatelliteStatesMatchCssrlib) {
 
     std::filesystem::remove(path);
 }
+
+TEST(Rinex4NavigationTest, BeiDouSourceBCnav1SelectsBCnav1ByIode) {
+    std::string content = rinex4Header();
+    content += "> EPH C25 D1\n" + beidouD1Body("C25");
+    content += "> EPH C25 CNV1\n" + beidouCnavBody("C25", "CNV1");
+    content += "> EPH C25 CNV2\n" + beidouCnavBody("C25", "CNV2");
+    const auto path = writeTempFile("libgnss_rinex4_nav_bds_source.rnx", content);
+    ReadResult result = readNavigation(path);
+    ASSERT_TRUE(result.ok) << result.diagnostics;
+    NavigationData& nav = result.nav;
+    const SatelliteId c25(GNSSSystem::BeiDou, 25);
+    const GNSSTime time(2355, 562000.0);
+
+    // Default: the D1 record; an SSR IODE is matched against its toe index.
+    ASSERT_NE(nav.getEphemeris(c25, time), nullptr);
+    EXPECT_EQ(nav.getEphemeris(c25, time)->navigation_message_type, NavigationMessageType::D1);
+    EXPECT_EQ(nav.getEphemeris(c25, time, 12), nullptr);
+
+    nav.setBeiDouEphemerisSource(NavigationData::BeiDouEphemerisSource::BCnav1);
+    ASSERT_NE(nav.getEphemeris(c25, time), nullptr);
+    EXPECT_EQ(nav.getEphemeris(c25, time)->navigation_message_type, NavigationMessageType::CNV1);
+    const Ephemeris* matched = nav.getEphemeris(c25, time, 12);
+    ASSERT_NE(matched, nullptr);
+    EXPECT_EQ(matched->navigation_message_type, NavigationMessageType::CNV1);
+    EXPECT_EQ(nav.getEphemeris(c25, time, 13), nullptr);
+    // The satellite state comes from the B-CNAV1 record, CNAV terms included.
+    Vector3d pos, vel, expected_pos, expected_vel;
+    double clk = 0.0, drift = 0.0, expected_clk = 0.0, expected_drift = 0.0;
+    ASSERT_TRUE(nav.calculateSatelliteState(c25, time, pos, vel, clk, drift, 12));
+    ASSERT_TRUE(matched->calculateSatelliteState(time, expected_pos, expected_vel, expected_clk,
+                                                 expected_drift));
+    EXPECT_EQ(pos, expected_pos);
+    EXPECT_EQ(clk, expected_clk);
+
+    // GPS and the other systems are unaffected.
+    nav.setBeiDouEphemerisSource(NavigationData::BeiDouEphemerisSource::D1D2);
+    EXPECT_EQ(nav.getEphemeris(c25, time)->navigation_message_type, NavigationMessageType::D1);
+    std::filesystem::remove(path);
+}
