@@ -306,3 +306,42 @@ TEST(RinexCrlfTest, CrlfNavigationFileParsesLikeLf) {
         }
     }
 }
+
+TEST(RinexCrlfTest, EpochsReadAgainBackwardFromTheirPositions) {
+    // gnss solve --combined records where each epoch starts and reads the
+    // epochs again backward for its second pass.
+    for (const bool crlf : {false, true}) {
+        SCOPED_TRACE(crlf);
+        const std::string text = rinex3ObsBody(' ', ' ');
+        const auto path = writeTemp(crlf ? toCrlf(text) : text, crlf ? "seek_crlf.obs" : "seek_lf.obs");
+        io::RINEXReader reader;
+        io::RINEXReader::RINEXHeader header;
+        ASSERT_TRUE(reader.open(path.string()));
+        ASSERT_TRUE(reader.readHeader(header));
+        std::vector<std::streampos> positions;
+        std::vector<ObservationData> forward;
+        while (true) {
+            const std::streampos position = reader.tell();
+            ObservationData epoch;
+            if (!reader.readObservationEpoch(epoch)) {
+                break;
+            }
+            ASSERT_NE(position, std::streampos(-1));
+            positions.push_back(position);
+            forward.push_back(epoch);
+        }
+        ASSERT_EQ(forward.size(), 3U);
+        std::vector<ObservationData> backward;
+        for (auto it = positions.rbegin(); it != positions.rend(); ++it) {
+            ObservationData epoch;
+            ASSERT_TRUE(reader.seekTo(*it));
+            ASSERT_TRUE(reader.readObservationEpoch(epoch));
+            backward.insert(backward.begin(), epoch);
+        }
+        expectSameObservations(forward, backward);
+        EXPECT_FALSE(reader.seekTo(std::streampos(-1)));
+        reader.close();
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+    }
+}

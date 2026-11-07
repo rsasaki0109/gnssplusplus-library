@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <libgnss++/algorithms/integrity_consensus.hpp>
+#include <array>
 #include <libgnss++/algorithms/fix_recovery_guard.hpp>
 #include <libgnss++/algorithms/forward_backward.hpp>
 #include <libgnss++/algorithms/nlos_weights.hpp>
@@ -3933,8 +3934,16 @@ int main(int argc, char* argv[]) {
         libgnss::ObservationData base_obs;
         libgnss::ObservationData previous_base_obs;
         bool has_previous_base = false;
+        // --combined: file positions of the current rover / base epochs, to
+        // read them again on the backward pass.
+        const auto position_of = [&](libgnss::io::RINEXReader& reader) {
+            return config.combined ? reader.tell() : std::streampos(-1);
+        };
+        std::streampos rover_offset = position_of(rover_reader);
         bool rover_ok = rover_reader.readObservationEpoch(rover_obs);
+        std::streampos base_offset = position_of(base_reader);
         bool base_ok = base_reader.readObservationEpoch(base_obs);
+        std::streampos previous_base_offset = std::streampos(-1);
 
         if (!rover_ok) {
             std::cerr << "Error: no rover epochs available" << std::endl;
@@ -3954,6 +3963,7 @@ int main(int argc, char* argv[]) {
         int skipped_initial_epochs = 0;
         while (rover_ok && skipped_initial_epochs < config.skip_epochs) {
             const Eigen::Vector3d saved_rover_pos = rover_obs.receiver_position;
+            rover_offset = position_of(rover_reader);
             rover_ok = rover_reader.readObservationEpoch(rover_obs);
             if (rover_ok) {
                 rover_obs.receiver_position = saved_rover_pos;
@@ -4037,16 +4047,21 @@ int main(int argc, char* argv[]) {
         libgnss::PositionSolution last_real_output;
         bool have_last_real_output = false;
 
-        // --combined: the forward pass stores each epoch with its aligned base
-        // epoch. Once it ends, a fresh filter runs them backward through the
-        // same loop (same guards), and the two passes are combined below.
+        // --combined: the forward pass records where each epoch and its base
+        // epochs are in the files, and how the base was aligned. Once it ends,
+        // a fresh filter reads them again backward and runs them through the
+        // same loop (same guards); the two passes are combined below.
         struct CombinedEpoch {
-            libgnss::ObservationData rover;
-            libgnss::ObservationData base;
-            bool interpolated_base = false;
+            enum class Base { Exact, Interpolated, Held };
+            libgnss::GNSSTime time;
+            std::streampos rover_offset = std::streampos(-1);
+            std::streampos base_offset = std::streampos(-1);        // exact, interpolated
+            std::streampos lower_base_offset = std::streampos(-1);  // interpolated, held
+            Base base = Base::Exact;
         };
         std::vector<CombinedEpoch> combined_epochs;
         bool backward_pass = false;
+        bool backward_read_failed = false;
         std::size_t backward_index = 0;
         libgnss::forward_backward::Pass forward_pass;
         std::unique_ptr<libgnss::RTKProcessor> backward_rtk_processor;
@@ -4054,6 +4069,77 @@ int main(int argc, char* argv[]) {
         libgnss::RTKProcessor* active_rtk = &rtk_processor;
         libgnss::SPPProcessor* active_spp = &spp_processor;
         const Eigen::Vector3d initial_rover_seed = rover_obs.receiver_position;
+        // The two base epochs read last on the backward pass (consecutive
+        // rover epochs share them).
+        std::array<std::pair<std::streampos, libgnss::ObservationData>, 2> backward_base_cache{
+            std::make_pair(std::streampos(-1), libgnss::ObservationData{}),
+            std::make_pair(std::streampos(-1), libgnss::ObservationData{})};
+        std::size_t backward_base_cache_next = 0;
+        const auto read_base_at = [&](std::streampos offset, libgnss::ObservationData& out) {
+            for (const auto& [cached_offset, cached] : backward_base_cache) {
+                if (cached_offset == offset) {
+                    out = cached;
+                    return true;
+                }
+            }
+            if (!base_reader.seekTo(offset) || !base_reader.readObservationEpoch(out)) {
+                return false;
+            }
+            backward_base_cache[backward_base_cache_next] = {offset, out};
+            backward_base_cache_next ^= 1U;
+            return true;
+        };
+        const auto read_rover_at = [&](const CombinedEpoch& epoch, libgnss::ObservationData& out) {
+            if (!rover_reader.seekTo(epoch.rover_offset) ||
+                !rover_reader.readObservationEpoch(out) ||
+                std::abs(timeDiffSeconds(out.time, epoch.time)) > kExactTimeToleranceSeconds) {
+                backward_read_failed = true;
+                return false;
+            }
+            return true;
+        };
+        // An LLI flag marks a slip since the previous epoch. Going backward
+        // that slip lies before the next epoch processed, so each epoch takes
+        // the flag of the epoch after it in time, processed just before it
+        // (as RTKLIB does).
+        using SlipFlags = std::map<std::pair<libgnss::SatelliteId, libgnss::SignalType>, bool>;
+        SlipFlags later_rover_slips;
+        SlipFlags later_base_slips;
+        const auto shift_loss_of_lock = [](libgnss::ObservationData& epoch, SlipFlags& later_slips) {
+            SlipFlags own;
+            for (const auto& observation : epoch.observations) {
+                own[{observation.satellite, observation.signal}] = (observation.lli & 0x01) != 0;
+            }
+            for (auto& observation : epoch.observations) {
+                const auto it = later_slips.find({observation.satellite, observation.signal});
+                const bool slip = it != later_slips.end() && it->second;
+                observation.lli = static_cast<uint8_t>((observation.lli & ~0x01) | (slip ? 0x01 : 0x00));
+                observation.loss_of_lock = slip;
+            }
+            later_slips = std::move(own);
+        };
+        // The base epoch of a backward-pass epoch, aligned as on the forward pass.
+        const auto align_backward_base = [&](const CombinedEpoch& epoch,
+                                             const libgnss::ObservationData& rover,
+                                             libgnss::ObservationData& aligned) {
+            libgnss::ObservationData lower;
+            libgnss::ObservationData upper;
+            switch (epoch.base) {
+                case CombinedEpoch::Base::Exact:
+                    return read_base_at(epoch.base_offset, aligned);
+                case CombinedEpoch::Base::Interpolated:
+                    return read_base_at(epoch.lower_base_offset, lower) &&
+                           read_base_at(epoch.base_offset, upper) &&
+                           interpolateBaseEpoch(lower, upper, rover.time, base_position, nav_data,
+                                                aligned, config.base_interpolation_curvature);
+                case CombinedEpoch::Base::Held:
+                    return read_base_at(epoch.lower_base_offset, lower) &&
+                           libgnss::rtk_base_alignment::holdBaseEpoch(
+                               lower, rover.time, base_position, nav_data,
+                               config.base_hold_seconds, aligned);
+            }
+            return false;
+        };
         const auto begin_backward_pass = [&]() {
             if (!config.combined || backward_pass || combined_epochs.empty()) {
                 return false;
@@ -4082,32 +4168,15 @@ int main(int argc, char* argv[]) {
             have_last_guard_output = false;
             last_real_output = libgnss::PositionSolution{};
             have_last_real_output = false;
-            // Each epoch keeps the base epoch aligned to it forward.
+            // Each epoch takes the base epochs aligned to it forward.
             base_ok = false;
             has_previous_base = false;
-            // An LLI flag marks a slip since the previous epoch. Going
-            // backward that slip lies before the next epoch processed, so each
-            // epoch takes the flag of the epoch after it (as RTKLIB does).
-            const auto shift_loss_of_lock = [&](libgnss::ObservationData CombinedEpoch::*member) {
-                for (std::size_t index = 0; index < combined_epochs.size(); ++index) {
-                    std::map<std::pair<libgnss::SatelliteId, libgnss::SignalType>, bool> next_slip;
-                    if (index + 1 < combined_epochs.size()) {
-                        for (const auto& next : (combined_epochs[index + 1].*member).observations) {
-                            next_slip[{next.satellite, next.signal}] = (next.lli & 0x01) != 0;
-                        }
-                    }
-                    for (auto& observation : (combined_epochs[index].*member).observations) {
-                        const auto it = next_slip.find({observation.satellite, observation.signal});
-                        const bool slip = it != next_slip.end() && it->second;
-                        observation.lli = static_cast<uint8_t>((observation.lli & ~0x01) | (slip ? 0x01 : 0x00));
-                        observation.loss_of_lock = slip;
-                    }
-                }
-            };
-            shift_loss_of_lock(&CombinedEpoch::rover);
-            shift_loss_of_lock(&CombinedEpoch::base);
+            later_rover_slips.clear();
+            later_base_slips.clear();
             backward_index = combined_epochs.size() - 1;
-            rover_obs = combined_epochs[backward_index].rover;
+            if (!read_rover_at(combined_epochs[backward_index], rover_obs)) {
+                return false;
+            }
             rover_obs.receiver_position = initial_rover_seed;
             return true;
         };
@@ -4123,17 +4192,22 @@ int main(int argc, char* argv[]) {
 
             libgnss::ObservationData lower_base_obs = previous_base_obs;
             bool have_lower_base = has_previous_base;
+            std::streampos lower_base_offset = previous_base_offset;
 
             while (base_ok && timeDiffSeconds(base_obs.time, rover_obs.time) < -kExactTimeToleranceSeconds) {
                 lower_base_obs = base_obs;
                 have_lower_base = true;
                 previous_base_obs = base_obs;
                 has_previous_base = true;
+                lower_base_offset = base_offset;
+                previous_base_offset = base_offset;
 
                 libgnss::ObservationData next_base_obs;
+                const std::streampos next_base_offset = position_of(base_reader);
                 base_ok = base_reader.readObservationEpoch(next_base_obs);
                 if (base_ok) {
                     base_obs = std::move(next_base_obs);
+                    base_offset = next_base_offset;
                 }
             }
 
@@ -4142,6 +4216,7 @@ int main(int argc, char* argv[]) {
                                             : std::numeric_limits<double>::infinity();
             bool have_aligned_base = false;
             bool used_interpolated_base = false;
+            bool used_held_base = false;
 
             if (base_ok && exact_dt <= kExactTimeToleranceSeconds) {
                 aligned_base_obs = base_obs;
@@ -4175,6 +4250,7 @@ int main(int argc, char* argv[]) {
                 // gnss online --base-extrapolation does): no later base data.
                 held_base_epochs++;
                 have_aligned_base = true;
+                used_held_base = true;
                 if (config.pos_uncertainty) {
                     differential_age_s[differentialAgeKey(rover_obs.time)] =
                         timeDiffSeconds(rover_obs.time, lower_base_obs.time);
@@ -4183,14 +4259,21 @@ int main(int argc, char* argv[]) {
 
             if (backward_pass) {
                 // --combined backward pass: the base epoch aligned forward.
-                aligned_base_obs = combined_epochs[backward_index].base;
-                used_interpolated_base = combined_epochs[backward_index].interpolated_base;
+                const CombinedEpoch& epoch = combined_epochs[backward_index];
+                if (!align_backward_base(epoch, rover_obs, aligned_base_obs)) {
+                    backward_read_failed = true;
+                    break;
+                }
+                used_interpolated_base = epoch.base == CombinedEpoch::Base::Interpolated;
                 have_aligned_base = true;
+                shift_loss_of_lock(rover_obs, later_rover_slips);
+                shift_loss_of_lock(aligned_base_obs, later_base_slips);
             }
 
             if (!have_aligned_base) {
                 skipped_rover_epochs++;
                 const Eigen::Vector3d saved_rover_pos = rover_obs.receiver_position;
+                rover_offset = position_of(rover_reader);
                 rover_ok = rover_reader.readObservationEpoch(rover_obs);
                 if (rover_ok) {
                     rover_obs.receiver_position = saved_rover_pos;
@@ -4210,14 +4293,15 @@ int main(int argc, char* argv[]) {
             }
 
             if (config.combined && !backward_pass) {
-                CombinedEpoch stored{rover_obs, aligned_base_obs, used_interpolated_base};
-                // RTK reads only the selected observations: drop the full
-                // RINEX tracking-code sets to keep the stored epochs small.
-                for (auto* epoch : {&stored.rover, &stored.base}) {
-                    epoch->rinex_tracking_observations.clear();
-                    epoch->rinex_frequency_slots.clear();
-                }
-                combined_epochs.push_back(std::move(stored));
+                CombinedEpoch stored;
+                stored.time = rover_obs.time;
+                stored.rover_offset = rover_offset;
+                stored.base_offset = base_offset;
+                stored.lower_base_offset = lower_base_offset;
+                stored.base = used_interpolated_base ? CombinedEpoch::Base::Interpolated
+                              : used_held_base       ? CombinedEpoch::Base::Held
+                                                     : CombinedEpoch::Base::Exact;
+                combined_epochs.push_back(stored);
             }
 
             // Per-epoch logs describe the forward pass.
@@ -4753,9 +4837,10 @@ int main(int argc, char* argv[]) {
                 rover_ok = backward_index > 0;
                 if (rover_ok) {
                     --backward_index;
-                    rover_obs = combined_epochs[backward_index].rover;
+                    rover_ok = read_rover_at(combined_epochs[backward_index], rover_obs);
                 }
             } else {
+                rover_offset = position_of(rover_reader);
                 rover_ok = rover_reader.readObservationEpoch(rover_obs);
                 if (!rover_ok) {
                     // --combined: the backward pass starts from its own seed.
@@ -4780,6 +4865,11 @@ int main(int argc, char* argv[]) {
         if (integrity_gate) {
             record_integrity_emissions(integrity_gate->flush());
         }
+        if (backward_read_failed) {
+            std::cerr << "Error: --combined could not read the epochs again for the backward pass"
+                      << std::endl;
+            return 1;
+        }
         libgnss::forward_backward::CombineStats combine_stats;
         if (backward_pass) {
             libgnss::forward_backward::Pass backward;
@@ -4790,7 +4880,6 @@ int main(int argc, char* argv[]) {
             solution.solutions = libgnss::forward_backward::combine(
                 forward_pass, backward, combine_config, &combine_stats);
             combined_epochs.clear();
-            combined_epochs.shrink_to_fit();
         }
         const std::vector<libgnss::PositionSolution>
             availability_source_solutions =

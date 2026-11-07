@@ -550,6 +550,24 @@ bool RINEXReader::open(const std::string& filename) {
     return file_.is_open();
 }
 
+std::streampos RINEXReader::tell() {
+    if (!file_.is_open() || !file_.good()) {
+        return std::streampos(-1);
+    }
+    return file_.tellg();
+}
+
+bool RINEXReader::seekTo(std::streampos position) {
+    if (!file_.is_open() || position == std::streampos(-1)) {
+        return false;
+    }
+    file_.clear();
+    file_.seekg(position);
+    last_rinex4_epoch_was_event_ = false;
+    last_rinex2_epoch_was_event_ = false;
+    return static_cast<bool>(file_);
+}
+
 void RINEXReader::close() {
     if (file_.is_open()) {
         file_.close();

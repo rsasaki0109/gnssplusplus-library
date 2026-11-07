@@ -146,6 +146,18 @@ public:
      * @brief Read observation data
      */
     bool readObservationEpoch(ObservationData& obs_data);
+
+    /**
+     * @brief Position of the next record, to read from there again with
+     * seekTo() (gnss solve --combined reads its epochs again backward).
+     * -1 when the file is not open or no longer readable.
+     */
+    std::streampos tell();
+
+    /**
+     * @brief Continue reading at a position returned by tell().
+     */
+    bool seekTo(std::streampos position);
     
     /**
      * @brief Read all observation data
