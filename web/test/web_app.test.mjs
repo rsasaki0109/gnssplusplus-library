@@ -227,7 +227,7 @@ test('options TOML export matches the CLI --config schema and round-trips', () =
   const back = importOptionsToml(toml);
   assert.equal(back.mode, 'static');
   assert.deepEqual(back.fields, {
-    kml: false, verbose: true, enableAr: false, basePos: 'ecef', preset: 'survey', iono: 'iflc', ratio: '2.5',
+    kml: false, verbose: true, enableAr: false, realtime: false, basePos: 'ecef', preset: 'survey', iono: 'iflc', ratio: '2.5',
     elevationMask: '15', baseX: '-3961905.0275', baseY: '3348993.7526', baseZ: '3698211.7831',
   });
   assert.equal(back.extra, '--arfilter --min-ar-sats 6 --no-glonass --rtk-snr-reference-dbhz 42');
@@ -237,6 +237,33 @@ test('options TOML export matches the CLI --config schema and round-trips', () =
   assert.equal(importOptionsToml(ppp).mode, 'ppp-kinematic');
   assert.throws(() => exportOptionsToml({ mode: 'single' }), /gnss spp has no --config/);
   assert.throws(() => extraArgsToEntries('stray --x'), /does not follow an --option/);
+});
+
+test('Real-time equivalent checkbox: --realtime and its TOML key', () => {
+  const rtk = buildPostCommand({ mode: 'kinematic', rover: 'r.obs', base: 'b.obs', nav: 'b.nav', realtime: true });
+  assert.ok(rtk.args.includes('--realtime'), rtk.commandLine);
+  const spp = buildPostCommand({ mode: 'single', rover: 'r.obs', nav: 'b.nav', realtime: true });
+  assert.ok(spp.args.includes('--realtime'), spp.commandLine);
+  const ppp = buildPostCommand({
+    mode: 'ppp-static', rover: 'r.obs', nav: 'b.nav', corrections: 'has-idd', hasIdd: 'idd.rtc', realtime: true,
+  });
+  assert.ok(ppp.args.includes('--realtime'), ppp.commandLine);
+  assert.ok(!buildPostCommand({ mode: 'kinematic', rover: 'r.obs', base: 'b.obs', nav: 'b.nav' }).args.includes('--realtime'));
+  // Final orbit / clock products are post-processed; batch FGO and RTK + IMU have no such mode.
+  assert.throws(() => buildPostCommand({ mode: 'ppp-static', rover: 'r.obs', nav: 'b.nav', sp3: 'x.sp3', clk: 'x.clk', realtime: true }),
+    /cannot use SP3/);
+  assert.throws(() => buildPostCommand({ mode: 'fgo', rover: 'r.obs', base: 'b.obs', nav: 'b.nav', realtime: true }),
+    /no real-time equivalent mode/);
+
+  for (const mode of ['kinematic', 'ppp-kinematic']) {
+    const toml = exportOptionsToml({ mode, realtime: true, kml: true, extra: '' });
+    assert.match(toml, /^realtime = true$/m);
+    const back = importOptionsToml(toml);
+    assert.equal(back.mode, mode);
+    assert.equal(back.fields.realtime, true);
+    assert.equal(back.extra, '');
+  }
+  assert.equal(importOptionsToml(exportOptionsToml({ mode: 'kinematic', kml: true, extra: '' })).fields.realtime, false);
 });
 
 test('options import reads the repository example configs', () => {

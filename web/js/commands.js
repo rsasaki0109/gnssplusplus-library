@@ -165,7 +165,7 @@ export function defaultPosName(rover, mode, corrections) {
  * Post-processing (RTKPOST equivalent).
  * opts: { mode, rover, base, nav, sp3, clk, out, elevationMask, maxEpochs,
  *         preset, iono, ratio, baseEcef: [x,y,z] | null, kml, verbose,
- *         ionoFree, enableAr, imu, leverArm: [x,y,z] | null, tightCoupling,
+ *         ionoFree, enableAr, realtime, imu, leverArm: [x,y,z] | null, tightCoupling,
  *         imuFormat, fgoPreset, corrections, l6e: [names], l6d: [names],
  *         clasL6, hasIdd, hasPages, hasPagesFormat, b2bLog, antex, extra, workspaceNames }
  */
@@ -196,6 +196,14 @@ export function buildPostCommand(opts) {
     }
     if (corrections === 'b2b' && !opts.b2bLog) throw new Error('BeiDou PPP-B2b needs a B2b message log');
   }
+  // --realtime (gnss spp / solve / ppp): no data from after each epoch, so
+  // no final (post-processed) orbit / clock products either.
+  if (opts.realtime && !['gnss_spp', 'gnss_solve', 'gnss_ppp'].includes(mode.tool)) {
+    throw new Error(`${mode.label} has no real-time equivalent mode`);
+  }
+  if (opts.realtime && mode.tool !== 'gnss_solve' && corrections === 'products' && (opts.sp3 || opts.clk)) {
+    throw new Error('Real-time equivalent (--realtime) cannot use SP3 / CLK products (they are post-processed)');
+  }
   const out = opts.out || defaultPosName(opts.rover, opts.mode, corrections);
   const elevation = finite(opts.elevationMask);
   const maxEpochs = finite(opts.maxEpochs);
@@ -209,6 +217,7 @@ export function buildPostCommand(opts) {
     if (elevation !== null) cmd.flag('--elevation-mask-deg', elevation);
     if (maxEpochs) cmd.flag('--max-epochs', maxEpochs);
     if (opts.ionoFree) cmd.flag('--ionosphere-free');
+    if (opts.realtime) cmd.flag('--realtime');
     cmd.output('--summary-json', `${stem(out)}_summary.json`);
   } else if (mode.tool === 'gnss_solve') {
     cmd.input('--rover', opts.rover).input('--base', opts.base).input('--nav', opts.nav);
@@ -228,6 +237,7 @@ export function buildPostCommand(opts) {
     if (opts.kml) cmd.output('--kml', `${stem(out)}.kml`);
     else cmd.flag('--no-kml');
     if (opts.verbose) cmd.flag('--verbose');
+    if (opts.realtime) cmd.flag('--realtime');
   } else if (mode.tool === 'gnss_fuse') {
     // GNSS/IMU fusion: the fused trajectory (--out) plus the RTK solution the
     // fusion ran on (--rtk-pos-out), which --navi776-tc refines with the IMU.
@@ -298,6 +308,7 @@ export function buildPostCommand(opts) {
     if (opts.antex) cmd.input('--antex', opts.antex);
     cmd.output('--out', out);
     cmd.flag(mode.pppMotion);
+    if (opts.realtime) cmd.flag('--realtime');
     if (elevation !== null) cmd.flag('--elevation-mask', elevation);
     if (maxEpochs) cmd.flag('--max-epochs', maxEpochs);
     if (corrections === 'madoca') {
