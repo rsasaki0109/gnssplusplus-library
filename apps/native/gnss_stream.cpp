@@ -1,3 +1,4 @@
+#include "cli_numbers.hpp"
 #include <libgnss++/io/rtcm.hpp>
 
 #include <algorithm>
@@ -9,6 +10,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <stdexcept>
 #include <sstream>
 #include <string>
 
@@ -316,7 +318,7 @@ void writeStreamStatsJson(const std::string& path,
 
 }  // namespace
 
-int main(int argc, char** argv) {
+static int runTool(int argc, char** argv) {
     std::string input_path;
     std::string output_path;
     std::string stats_json_path;
@@ -334,11 +336,11 @@ int main(int argc, char** argv) {
         } else if (arg == "--output" && i + 1 < argc) {
             output_path = argv[++i];
         } else if (arg == "--limit" && i + 1 < argc) {
-            limit = static_cast<size_t>(std::stoull(argv[++i]));
+            limit = static_cast<size_t>(libgnss_apps::optionUnsigned(arg, argv[++i]));
         } else if (arg == "--reconnect") {
             reconnect = true;
         } else if (arg == "--reconnect-delay-ms" && i + 1 < argc) {
-            reconnect_delay_ms = std::stoi(argv[++i]);
+            reconnect_delay_ms = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--stats-json" && i + 1 < argc) {
             stats_json_path = argv[++i];
         } else if (arg == "--decode-observations") {
@@ -465,4 +467,14 @@ int main(int argc, char** argv) {
               << " decode_errors=" << stats.decode_errors
               << " reconnect_count=" << reconnect_count << "\n";
     return 0;
+}
+
+int main(int argc, char** argv) {
+    try {
+        return runTool(argc, argv);
+    } catch (const std::invalid_argument& error) {
+        // A malformed option value (cli_numbers.hpp).
+        std::cerr << "Error: " << error.what() << "\n";
+        return 1;
+    }
 }

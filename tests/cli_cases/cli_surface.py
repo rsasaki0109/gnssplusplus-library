@@ -80,6 +80,72 @@ class CLISurfaceCases:
             self.assertIn("<coordinates>", kml_text)
             self.assertIn("</coordinates>", kml_text)
 
+    def test_tools_fail_on_inputs_without_data(self) -> None:
+        # An input with nothing usable in it is an error, not an empty success.
+        with tempfile.TemporaryDirectory(prefix="gnss_no_data_") as temp_dir:
+            temp_root = Path(temp_dir)
+            fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+            nav = temp_root / "base.nav"
+            converted = self.run_gnss("convert", "--input", str(fixture / "base.rtcm"),
+                                      "--nav-out", str(nav), "--format", "rtcm",
+                                      "--gps-week", "2324", "--quiet")
+            self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            header_only = temp_root / "header_only.obs"
+            header_only.write_text(
+                format_rinex_header_line("     3.04           O                   M",
+                                         "RINEX VERSION / TYPE")
+                + format_rinex_header_line("", "END OF HEADER"),
+                encoding="ascii",
+            )
+            empty = temp_root / "empty.obs"
+            empty.write_bytes(b"")
+            junk = temp_root / "junk.bin"
+            junk.write_bytes(b"not GNSS data\n" * 8)
+            out = str(temp_root / "out.pos")
+            cases = [
+                (("spp", "--obs", str(header_only), "--nav", str(nav), "--out", out),
+                 f"no observation epochs were read from {header_only}"),
+                (("rinex-info", str(empty)), f"not a RINEX file (no RINEX VERSION / TYPE line): {empty}"),
+                (("rinex-info", str(junk)), "not a RINEX file"),
+                (("convert", "--input", str(junk), "--format", "rtcm",
+                  "--obs-out", str(temp_root / "c.obs")),
+                 f"no RTCM messages were decoded from {junk}"),
+                (("convert", "--input", str(junk), "--format", "ubx",
+                  "--obs-out", str(temp_root / "c.obs")),
+                 f"no UBX messages were decoded from {junk}"),
+                (("ubx-info", "--input", str(junk)), f"no UBX messages were found in {junk}"),
+            ]
+            for args, message in cases:
+                with self.subTest(args=args[:2]):
+                    result = self.run_gnss(*args)
+                    self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+                    self.assertIn(message, result.stderr)
+
+            # A header without epochs is still a RINEX file to inspect.
+            result = self.run_gnss("rinex-info", str(header_only))
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            # Epochs without a single position (no ephemeris for these
+            # satellites): the outputs are kept for diagnosis, the run fails.
+            obs_path, _, _, _ = build_synthetic_ppp_inputs(temp_root, epochs=4)
+            summary = temp_root / "spp_summary.json"
+            result = self.run_gnss("spp", "--obs", str(obs_path), "--nav", str(nav),
+                                   "--out", out, "--summary-json", str(summary), "--quiet")
+            self.assertEqual(result.returncode, 1, msg=result.stderr)
+            self.assertIn("SPP produced no valid solutions (4 epochs processed)", result.stderr)
+            self.assertEqual(json.loads(summary.read_text())["valid_solutions"], 0)
+
+            # A stream without observations (here SSR only) converted with
+            # --obs-out still succeeds, with a warning about the empty output.
+            ssr = temp_root / "ssr.rtcm3"
+            ssr.write_bytes(build_rtcm1060(3, 518400))
+            ssr_obs = temp_root / "ssr.obs"
+            result = self.run_gnss("convert", "--input", str(ssr), "--format", "rtcm",
+                                   "--gps-week", "2324", "--quiet", "--obs-out", str(ssr_obs))
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn(f"Warning: no observation epochs were written to {ssr_obs}",
+                          result.stderr)
+
     def test_odaiba_benchmark_help_is_available(self) -> None:
         result = self.run_gnss("odaiba-benchmark", "--help")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
@@ -101,6 +167,34 @@ class CLISurfaceCases:
         self.assertIn("--madoca-l6d-shadow", result.stdout)
         self.assertIn("--madoca-materialization-dump", result.stdout)
         self.assertIn("--madoca-materialization-dump-only", result.stdout)
+    def test_numeric_options_refuse_malformed_values(self) -> None:
+        # A value must be a whole, finite number (a count has no sign); the
+        # error names the option instead of a bare "stod".
+        cases = [
+            (("solve", "--ratio", "abc"), "invalid number for --ratio: abc"),
+            (("ppp", "--obs", "x.obs", "--nav", "x.nav", "--out", "x.pos",
+              "--ssr-latency", "1x"), "invalid number for --ssr-latency: 1x"),
+            (("spp", "--obs", "x.obs", "--nav", "x.nav", "--out", "x.pos",
+              "--elevation-mask", "nan"), "invalid number for --elevation-mask: nan"),
+            (("fgo", "--max-epochs", "1e2"), "invalid integer for --max-epochs: 1e2"),
+            (("fuse", "--imu", "x.csv", "--gnss-pos", "x.pos", "--lever-arm", "0,0,inf"),
+             "invalid number for --lever-arm: inf"),
+            (("replay", "--max-epochs", "-2"), "--max-epochs must be >= 0"),
+            (("visibility", "--obs", "x.obs", "--nav", "x.nav", "--min-elevation-deg", "10deg"),
+             "invalid number for --min-elevation-deg: 10deg"),
+            (("convert", "--limit", "-5"), "invalid count for --limit: -5"),
+            (("live", "--ratio", "3.0.1"), "invalid number for --ratio: 3.0.1"),
+            (("stream", "--limit", "-3"), "invalid count for --limit: -3"),
+            (("ubx-info", "--limit", "1.5", "x.ubx"), "invalid count for --limit: 1.5"),
+            (("rtcm-encode", "--duration", "nan"), "invalid number for --duration: nan"),
+            (("nav-products", "--max-epochs", "zz"), "invalid integer for --max-epochs: zz"),
+        ]
+        for args, message in cases:
+            with self.subTest(args=args):
+                result = self.run_gnss(*args)
+                self.assertEqual(result.returncode, 1, msg=result.stderr)
+                self.assertIn(message, result.stderr)
+                self.assertNotIn("terminate called", result.stderr)
     def test_ppp_cli_rejects_madocalib_oracle_selector(self) -> None:
         result = self.run_gnss(
             "ppp",
@@ -161,6 +255,69 @@ class CLISurfaceCases:
                 "--madoca-materialization-dump-only requires --madoca-materialization-dump",
                 result.stderr,
             )
+    def test_rtk_input_errors_name_the_file_and_the_cause(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_input_errors_") as temp_dir:
+            temp_root = Path(temp_dir)
+            fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+            rover = temp_root / "rover.obs"
+            base = temp_root / "base.obs"
+            nav = temp_root / "base.nav"
+            for args in (("--input", str(fixture / "rover.rtcm"), "--obs-out", str(rover)),
+                         ("--input", str(fixture / "base.rtcm"), "--obs-out", str(base),
+                          "--nav-out", str(nav))):
+                converted = self.run_gnss("convert", *args, "--format", "rtcm",
+                                          "--gps-week", "2324", "--quiet")
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            header_only = temp_root / "header_only.obs"
+            header_only.write_text(
+                format_rinex_header_line("     3.04           O                   M",
+                                         "RINEX VERSION / TYPE")
+                + format_rinex_header_line("  -3961904.0000  3348993.0000  3698211.0000",
+                                           "APPROX POSITION XYZ")
+                + format_rinex_header_line("", "END OF HEADER"),
+                encoding="ascii",
+            )
+            empty = temp_root / "empty.obs"
+            empty.write_bytes(b"")
+            missing = temp_root / "missing.obs"
+            directory = temp_root / "a_directory"
+            directory.mkdir()
+            out = str(temp_root / "out.pos")
+
+            def solve(rover_path: Path, base_path: Path, nav_path: Path) -> tuple[str, ...]:
+                return ("solve", "--rover", str(rover_path), "--base", str(base_path),
+                        "--nav", str(nav_path), "--out", out)
+
+            def replay(rover_path: Path, base_path: Path, nav_path: Path) -> tuple[str, ...]:
+                return ("replay", "--rover-rinex", str(rover_path), "--base-rinex",
+                        str(base_path), "--nav-rinex", str(nav_path), "--out", out)
+
+            cases = [
+                (solve(missing, base, nav),
+                 f"Error: cannot open rover observation file: {missing} (no such file)"),
+                (solve(directory, base, nav),
+                 f"Error: cannot open rover observation file: {directory} (is a directory)"),
+                (solve(rover, empty, nav),
+                 f"Error: not a RINEX file (no RINEX VERSION / TYPE line): {empty}"),
+                (solve(rover, header_only, nav),
+                 f"Error: no observation epochs in base file: {header_only}"),
+                (solve(rover, base, missing),
+                 f"Error: cannot open navigation file: {missing} (no such file)"),
+                (replay(missing, base, nav),
+                 f"Error: cannot open rover RINEX observation file: {missing} (no such file)"),
+                (replay(header_only, base, nav),
+                 f"Error: no observation epochs in rover RINEX file: {header_only}"),
+                (replay(rover, empty, nav),
+                 f"Error: not a RINEX file (no RINEX VERSION / TYPE line): {empty}"),
+                (replay(rover, base, directory),
+                 f"Error: cannot open navigation file: {directory} (is a directory)"),
+            ]
+            for args, message in cases:
+                with self.subTest(args=args):
+                    result = self.run_gnss(*args)
+                    self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+                    self.assertIn(message, result.stderr)
+
     def test_public_rtk_benchmarks_cli_lists_matrix(self) -> None:
         result = self.run_gnss("public-rtk-benchmarks", "--format", "json")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
@@ -175,6 +332,49 @@ class CLISurfaceCases:
         self.assertIn("Septentrio mosaic-X5", profiles["ppc-dataset"]["receiver_artifacts"])
         self.assertEqual(profiles["smartloc"]["status"], "receiver-fix-signoff")
         self.assertIn("not the Trimble RTK engine", profiles["urban-nav-tokyo"]["caveat"])
+    def test_output_directories_are_prepared_before_processing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_output_dirs_") as temp_dir:
+            temp_root = Path(temp_dir)
+            fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+            # A missing directory is created (convert and spp here).
+            rover = temp_root / "converted" / "rover.obs"
+            nav = temp_root / "converted" / "base.nav"
+            converted = self.run_gnss("convert", "--input", str(fixture / "rover.rtcm"),
+                                      "--obs-out", str(rover), "--format", "rtcm",
+                                      "--gps-week", "2324", "--quiet")
+            self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            converted = self.run_gnss("convert", "--input", str(fixture / "base.rtcm"),
+                                      "--nav-out", str(nav), "--format", "rtcm",
+                                      "--gps-week", "2324", "--quiet")
+            self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            out = temp_root / "results" / "spp" / "rover.pos"
+            summary = temp_root / "results" / "json" / "rover.json"
+            result = self.run_gnss("spp", "--obs", str(rover), "--nav", str(nav),
+                                   "--out", str(out), "--summary-json", str(summary), "--quiet")
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(out.is_file())
+            self.assertTrue(summary.is_file())
+
+            # An output that cannot be written fails before processing.
+            not_a_directory = temp_root / "plain_file"
+            not_a_directory.write_text("x\n", encoding="ascii")
+            cases = [
+                (str(not_a_directory / "rover.pos"),
+                 f"Error: cannot create the output directory {not_a_directory} for "
+                 f"{not_a_directory / 'rover.pos'}"),
+                (str(temp_root), f"Error: output path is a directory: {temp_root}"),
+            ]
+            for target, message in cases:
+                for args in (("spp", "--obs", str(rover), "--nav", str(nav), "--out", target),
+                             ("ppp", "--obs", str(rover), "--nav", str(nav), "--out", target),
+                             ("solve", "--rover", str(rover), "--base", str(rover),
+                              "--nav", str(nav), "--out", target)):
+                    with self.subTest(tool=args[0], target=target):
+                        result = self.run_gnss(*args)
+                        self.assertEqual(result.returncode, 1, msg=result.stderr)
+                        self.assertIn(message, result.stderr)
+                        self.assertNotIn("Processed epochs", result.stdout)
+
     def test_smartloc_adapter_cli_exports_reference_and_receiver_csv(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_smartloc_adapter_cli_") as temp_dir:
             temp_root = Path(temp_dir)

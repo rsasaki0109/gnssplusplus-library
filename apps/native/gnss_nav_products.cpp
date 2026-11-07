@@ -1,3 +1,4 @@
+#include "cli_numbers.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -56,9 +57,9 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--clk-out" && i + 1 < argc) {
             options.clk_out = argv[++i];
         } else if (arg == "--max-epochs" && i + 1 < argc) {
-            options.max_epochs = std::stoi(argv[++i]);
+            options.max_epochs = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--epoch-step" && i + 1 < argc) {
-            options.epoch_step = std::stoi(argv[++i]);
+            options.epoch_step = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {

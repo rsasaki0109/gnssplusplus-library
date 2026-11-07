@@ -289,8 +289,19 @@ then kinematic ones, H at 10 / 30 min and the time after which H stays below
 - **OBE4 gets worse.** Its E1 / E5a drift (see [Galileo HAS
   support](galileo_has.md)) gives the two passes different height biases,
   and their mean is further from the reference in the middle of the hour.
-- **MADOCA PPP-AR** (MIZU sample, kinematic, 118 epochs): 91 → 92 FIX; 25
-  epochs where the passes fixed positions more than 5 cm apart are FLOAT.
+- **MADOCA PPP-AR** (MIZU sample with L6D, kinematic, 118 epochs), against
+  a 24 h static PPP of MIZU with the IGS final orbits and clocks:
+
+  | | FIX | H RMS | U RMS |
+  |---|---|---|---|
+  | Forward | 91 | 0.099 m | 0.154 m |
+  | `--combined` | 113 | 0.032 m | 0.031 m |
+
+  No FIX is more than 0.1 m off horizontally. The two passes' PPP-AR fixes
+  agree to a few cm horizontally but up to 10 cm in height, so
+  `--combined-fix-tolerance` defaults to 0.10 m in `gnss ppp` (5 cm would
+  have kept 21 correct FIX epochs FLOAT); pairs further apart had one fix
+  0.2-0.4 m off.
 - **Not with CLAS** (`--clas-osr`): its SIS continuity and atmosphere
   handling only run forward. Nor with `--realtime`, `--live-output` or
   `--madocalib-bridge`.

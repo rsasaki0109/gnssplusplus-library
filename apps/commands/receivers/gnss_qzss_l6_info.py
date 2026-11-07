@@ -3678,12 +3678,17 @@ class InputSource:
         self._fd = None
 
     def __enter__(self) -> "InputSource":
-        if self.spec.startswith("serial://") or self.spec.startswith("/dev/"):
-            device, baud = parse_serial_path(self.spec)
-            self._fd = os.open(device, os.O_RDONLY | os.O_NOCTTY)
-            configure_serial(self._fd, baud)
-        else:
-            self._file = open(self.spec, "rb")
+        try:
+            if self.spec.startswith("serial://") or self.spec.startswith("/dev/"):
+                device, baud = parse_serial_path(self.spec)
+                self._fd = os.open(device, os.O_RDONLY | os.O_NOCTTY)
+                configure_serial(self._fd, baud)
+            else:
+                self._file = open(self.spec, "rb")
+        except OSError as exc:
+            raise SystemExit(
+                f"Error: cannot open input {self.spec}: {exc.strerror or exc}"
+            ) from None
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:

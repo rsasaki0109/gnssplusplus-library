@@ -181,6 +181,8 @@ test('post-processing commands mirror the CLI', () => {
   assert.deepEqual(ppp.args.slice(ppp.args.indexOf('--elevation-mask'), ppp.args.indexOf('--elevation-mask') + 2), ['--elevation-mask', '10']);
 
   assert.throws(() => buildPostCommand({ mode: 'kinematic', rover: 'r.obs', nav: 'n.nav' }), /needs a base file/);
+  assert.throws(() => buildPostCommand({ mode: 'single', rover: 'r.obs', nav: 'n.nav', maxEpochs: '10.5' }),
+    /Max epochs must be a whole number >= 0: 10.5/);
   assert.throws(() => buildPostCommand({ mode: 'ppp-static', rover: 'r.obs', sp3: 's.sp3' }), /navigation file or both SP3 and CLK/);
   assert.equal(defaultPosName('run/rover.24o', 'single'), 'run/rover_spp.pos');
 });
@@ -194,6 +196,10 @@ test('convert and rinex-info commands', () => {
   const ubx = buildConvertCommand({ input: 'log.ubx', format: 'ubx', gpsWeek: 2324, obsOut: 'log.obs', navOut: 'log.nav' });
   assert.deepEqual(ubx.args, ['--input', '/in/log.ubx', '--format', 'ubx', '--obs-out', '/out/log.obs', '--nav-rinex-out', '/out/log.nav']);
   assert.throws(() => buildConvertCommand({ input: 'x.rtcm', format: 'rtcm' }), /at least one RINEX output/);
+  assert.throws(() => buildConvertCommand({ input: 'x.rtcm', format: 'rtcm', gpsWeek: '2324.5', obsOut: 'x.obs' }),
+    /GPS week must be a whole number >= 0: 2324.5/);
+  assert.throws(() => buildConvertCommand({ input: 'x.rtcm', format: 'rtcm', limit: '-3', obsOut: 'x.obs' }),
+    /Limit must be a whole number >= 0: -3/);
 
   const info = buildInfoCommand({ files: ['rover.obs', 'base.nav'], countRecords: true });
   assert.deepEqual(info.args, ['--count-records', '/in/rover.obs', '/in/base.nav']);

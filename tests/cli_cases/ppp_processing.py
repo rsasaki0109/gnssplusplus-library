@@ -596,6 +596,34 @@ class PPPProcessingCases:
                 self.assertEqual(result.returncode, 0, msg=result.stderr)
                 self.assertIs(json.loads(spp_summary.read_text())["realtime"], causal)
 
+    def test_ppp_cli_refuses_products_that_do_not_load(self) -> None:
+        # A requested product that does not load used to be ignored: the run
+        # went on with broadcast orbits (or no SSR) and exited 0.
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_products_") as temp_dir:
+            temp_root = Path(temp_dir)
+            fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+            obs = str(temp_root / "rover.obs")
+            nav = str(temp_root / "base.nav")
+            for args in (["--input", str(fixture / "rover.rtcm"), "--obs-out", obs],
+                         ["--input", str(fixture / "base.rtcm"), "--nav-out", nav]):
+                converted = self.run_gnss("convert", *args, "--format", "rtcm",
+                                          "--gps-week", "2324", "--quiet")
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            missing = str(temp_root / "missing")
+            not_a_product = temp_root / "notes.txt"
+            not_a_product.write_text("not a product\n", encoding="ascii")
+            for args, message in (
+                (["--sp3", missing + ".sp3"], "failed to load SP3 orbit file: " + missing + ".sp3"),
+                (["--clk", missing + ".clk"], "failed to load clock file: " + missing + ".clk"),
+                (["--sp3", str(not_a_product)], "failed to load SP3 orbit file"),
+                (["--ssr", missing + ".csv"], "failed to load SSR corrections: " + missing + ".csv"),
+            ):
+                with self.subTest(args=args):
+                    result = self.run_gnss("ppp", "--obs", obs, "--nav", nav, "--max-epochs", "3",
+                                           "--out", str(temp_root / "out.pos"), *args)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn(message, result.stderr)
+
     def test_ppp_cli_combined_runs_a_backward_pass(self) -> None:
         # --combined (post-processing) runs a copy of the loaded processor
         # backward over the same epochs and combines both passes per epoch.

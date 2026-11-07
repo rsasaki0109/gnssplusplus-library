@@ -167,4 +167,8 @@ def main():
     print(f'Saved: {out_path}')
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except OSError as exc:  # a missing or unreadable file: no traceback
+        where = f": {exc.filename}" if exc.filename else ""
+        raise SystemExit(f"Error: {exc.strerror or exc}{where}") from None

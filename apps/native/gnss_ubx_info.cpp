@@ -1,3 +1,4 @@
+#include "cli_numbers.hpp"
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/ubx.hpp>
 #include <libgnss++/io/ubx_nav_decode.hpp>
@@ -9,6 +10,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <stdexcept>
 #include <map>
 #include <system_error>
 #include <string>
@@ -66,7 +68,7 @@ libgnss::io::RINEXReader::RINEXHeader makeObservationHeader(
 
 }  // namespace
 
-int main(int argc, char** argv) {
+static int runTool(int argc, char** argv) {
     std::string input_path;
     std::string obs_rinex_out;
     size_t limit = 0;
@@ -79,7 +81,7 @@ int main(int argc, char** argv) {
         if (arg == "--input" && i + 1 < argc) {
             input_path = argv[++i];
         } else if (arg == "--limit" && i + 1 < argc) {
-            limit = static_cast<size_t>(std::stoull(argv[++i]));
+            limit = static_cast<size_t>(libgnss_apps::optionUnsigned(arg, argv[++i]));
         } else if (arg == "--decode-nav") {
             decode_nav = true;
         } else if (arg == "--decode-observations") {
@@ -273,5 +275,19 @@ int main(int argc, char** argv) {
               << " sfrbx=" << sfrbx_count
               << " rawx=" << rawx_count
               << " exported_obs_epochs=" << exported_obs_epochs << "\n";
+    if (stats.valid_messages == 0) {
+        std::cerr << "Error: no UBX messages were found in " << input_path << "\n";
+        return 1;
+    }
     return obs_file_ok ? 0 : 1;
+}
+
+int main(int argc, char** argv) {
+    try {
+        return runTool(argc, argv);
+    } catch (const std::invalid_argument& error) {
+        // A malformed option value (cli_numbers.hpp).
+        std::cerr << "Error: " << error.what() << "\n";
+        return 1;
+    }
 }

@@ -11,6 +11,7 @@
 // are attached to, so a consumer can pace the stream per epoch without
 // parsing RTCM.
 
+#include "cli_numbers.hpp"
 #include <libgnss++/core/navigation.hpp>
 #include <libgnss++/core/observation.hpp>
 #include <libgnss++/io/rinex.hpp>
@@ -23,6 +24,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <stdexcept>
 #include <map>
 #include <set>
 #include <sstream>
@@ -164,7 +166,7 @@ libgnss::ObservationData filterGpsLegacyPairs(const libgnss::ObservationData& in
 
 }  // namespace
 
-int main(int argc, char** argv) {
+static int runTool(int argc, char** argv) {
     Config cfg;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -190,15 +192,15 @@ int main(int argc, char** argv) {
             else { std::cerr << "unsupported --format " << v << "\n"; return 1; }
         } else if (arg == "--station") cfg.station = true;
         else if (arg == "--station-ecef" && need(3)) {
-            const double x = std::stod(argv[++i]);
-            const double y = std::stod(argv[++i]);
-            const double z = std::stod(argv[++i]);
+            const double x = libgnss_apps::optionDouble(arg, argv[++i]);
+            const double y = libgnss_apps::optionDouble(arg, argv[++i]);
+            const double z = libgnss_apps::optionDouble(arg, argv[++i]);
             cfg.station_ecef[0] = x; cfg.station_ecef[1] = y; cfg.station_ecef[2] = z;
             cfg.have_station_ecef = true;
             cfg.station = true;
-        } else if (arg == "--start-offset" && need(1)) cfg.start_offset_s = std::stod(argv[++i]);
-        else if (arg == "--duration" && need(1)) cfg.duration_s = std::stod(argv[++i]);
-        else if (arg == "--decimate" && need(1)) cfg.decimate = std::max(1, std::stoi(argv[++i]));
+        } else if (arg == "--start-offset" && need(1)) cfg.start_offset_s = libgnss_apps::optionDouble(arg, argv[++i]);
+        else if (arg == "--duration" && need(1)) cfg.duration_s = libgnss_apps::optionDouble(arg, argv[++i]);
+        else if (arg == "--decimate" && need(1)) cfg.decimate = std::max(1, libgnss_apps::optionInt(arg, argv[++i]));
         else if (arg == "--eph-systems" && need(1)) {
             cfg.eph_systems.clear();
             for (char c : std::string(argv[++i])) {
@@ -215,8 +217,8 @@ int main(int argc, char** argv) {
                 return 1;
             }
         }
-        else if (arg == "--eph-interval" && need(1)) cfg.eph_interval_s = std::stod(argv[++i]);
-        else if (arg == "--station-interval" && need(1)) cfg.station_interval_s = std::stod(argv[++i]);
+        else if (arg == "--eph-interval" && need(1)) cfg.eph_interval_s = libgnss_apps::optionDouble(arg, argv[++i]);
+        else if (arg == "--station-interval" && need(1)) cfg.station_interval_s = libgnss_apps::optionDouble(arg, argv[++i]);
         else if (arg == "--no-eph-burst") cfg.eph_burst = false;
         else { std::cerr << "unknown or incomplete argument: " << arg << "\n"; usage(argv[0]); return 1; }
     }
@@ -482,4 +484,14 @@ int main(int argc, char** argv) {
         std::ofstream(cfg.summary_path) << summary.str();
     }
     return epochs_written > 0 ? 0 : 1;
+}
+
+int main(int argc, char** argv) {
+    try {
+        return runTool(argc, argv);
+    } catch (const std::invalid_argument& error) {
+        // A malformed option value (cli_numbers.hpp).
+        std::cerr << "Error: " << error.what() << "\n";
+        return 1;
+    }
 }

@@ -1,3 +1,4 @@
+#include "cli_numbers.hpp"
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -21,6 +22,7 @@
 #include <libgnss++/io/rinex.hpp>
 
 #include "json_output_helpers.hpp"
+#include "cli_output_paths.hpp"
 
 namespace {
 
@@ -100,12 +102,14 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--summary-json" && i + 1 < argc) {
             options.summary_json_path = argv[++i];
         } else if (arg == "--max-epochs" && i + 1 < argc) {
-            options.max_epochs = std::stoi(argv[++i]);
+            options.max_epochs = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--min-elevation-deg" && i + 1 < argc) {
-            options.min_elevation_deg = std::stod(argv[++i]);
+            options.min_elevation_deg = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--receiver-ecef" && i + 3 < argc) {
             options.receiver_ecef = libgnss::Vector3d(
-                std::stod(argv[i + 1]), std::stod(argv[i + 2]), std::stod(argv[i + 3]));
+                libgnss_apps::optionDouble(arg, argv[i + 1]),
+                libgnss_apps::optionDouble(arg, argv[i + 2]),
+                libgnss_apps::optionDouble(arg, argv[i + 3]));
             options.has_receiver_ecef = true;
             i += 3;
         } else if (arg == "--quiet") {
@@ -349,6 +353,13 @@ void printSummary(const Options& options,
 int main(int argc, char* argv[]) {
     try {
         const Options options = parseArguments(argc, argv);
+        const std::string output_error = libgnss_apps::prepareOutputFiles(
+                {options.csv_path,
+                 options.summary_json_path});
+        if (!output_error.empty()) {
+            std::cerr << "Error: " << output_error << "\n";
+            return 1;
+        }
 
         libgnss::io::RINEXReader obs_reader;
         if (!obs_reader.open(options.obs_path)) {

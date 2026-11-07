@@ -1,3 +1,4 @@
+#include "cli_numbers.hpp"
 #include <Eigen/Dense>
 
 #include <cmath>
@@ -10,6 +11,7 @@
 #include <limits>
 #include <map>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -22,8 +24,10 @@
 #include <libgnss++/io/solution_writer.hpp>
 #include <libgnss++/io/ubx.hpp>
 
+#include "cli_files.hpp"
 #include "navigation_merge.hpp"
 #include "rtcm_frame_common.hpp"
+#include "cli_output_paths.hpp"
 
 namespace {
 
@@ -325,7 +329,7 @@ ReplayConfig parseArguments(int argc, char** argv) {
         } else if (arg == "--mode" && i + 1 < argc) {
             config.mode = parseMode(argv[++i], argv[0]);
         } else if (arg == "--ratio" && i + 1 < argc) {
-            config.ratio_threshold = std::stod(argv[++i]);
+            config.ratio_threshold = libgnss_apps::optionDouble(arg, argv[++i]);
             config.ratio_threshold_set = true;
         } else if (arg == "--preset" && i + 1 < argc) {
             config.preset = parseRTKTuningPreset(argv[++i], argv[0]);
@@ -336,62 +340,62 @@ ReplayConfig parseArguments(int argc, char** argv) {
             config.enable_ar_filter = false;
             config.has_ar_filter_override = true;
         } else if (arg == "--arfilter-margin" && i + 1 < argc) {
-            config.ar_filter_margin = std::stod(argv[++i]);
+            config.ar_filter_margin = libgnss_apps::optionDouble(arg, argv[++i]);
             config.ar_filter_margin_set = true;
         } else if (arg == "--min-ar-sats" && i + 1 < argc) {
-            config.min_satellites_for_ar = std::stoi(argv[++i]);
+            config.min_satellites_for_ar = libgnss_apps::optionInt(arg, argv[++i]);
             config.min_satellites_for_ar_set = true;
         } else if (arg == "--min-hold-count" && i + 1 < argc) {
-            config.min_hold_count = std::stoi(argv[++i]);
+            config.min_hold_count = libgnss_apps::optionInt(arg, argv[++i]);
             config.min_hold_count_set = true;
         } else if (arg == "--hold-ratio-threshold" && i + 1 < argc) {
-            config.hold_ratio_threshold = std::stod(argv[++i]);
+            config.hold_ratio_threshold = libgnss_apps::optionDouble(arg, argv[++i]);
             config.hold_ratio_threshold_set = true;
         } else if (arg == "--hold-fix-unchanged-set") {
             config.hold_fix_unchanged_set = true;
         } else if (arg == "--hold-fix-min-matched-pairs" && i + 1 < argc) {
-            config.hold_fix_min_matched_pairs = std::stoi(argv[++i]);
+            config.hold_fix_min_matched_pairs = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--min-fix-satellites" && i + 1 < argc) {
-            config.min_fix_satellites = std::stoi(argv[++i]);
+            config.min_fix_satellites = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--min-full-ratio-for-subset-ar" && i + 1 < argc) {
-            config.min_full_ratio_for_subset_ar = std::stod(argv[++i]);
+            config.min_full_ratio_for_subset_ar = libgnss_apps::optionDouble(arg, argv[++i]);
             config.min_full_ratio_for_subset_ar_set = true;
         } else if (arg == "--max-fixed-anchor-age" && i + 1 < argc) {
-            config.max_fixed_anchor_age_s = std::stod(argv[++i]);
+            config.max_fixed_anchor_age_s = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_fixed_anchor_age_s_set = true;
         } else if (arg == "--max-fixed-doppler-consensus" && i + 1 < argc) {
-            config.max_fixed_doppler_consensus_m = std::stod(argv[++i]);
+            config.max_fixed_doppler_consensus_m = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_fixed_doppler_consensus_m_set = true;
         } else if (arg == "--max-fixed-doppler-consensus-age" && i + 1 < argc) {
-            config.max_fixed_doppler_consensus_age_s = std::stod(argv[++i]);
+            config.max_fixed_doppler_consensus_age_s = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_fixed_doppler_consensus_age_s_set = true;
         } else if (arg == "--low-ratio-guard-threshold" && i + 1 < argc) {
-            config.low_ratio_guard_threshold = std::stod(argv[++i]);
+            config.low_ratio_guard_threshold = libgnss_apps::optionDouble(arg, argv[++i]);
             config.low_ratio_guard_threshold_set = true;
         } else if (arg == "--low-ratio-min-fixed-ambiguities" && i + 1 < argc) {
-            config.low_ratio_min_fixed_ambiguities = std::stoi(argv[++i]);
+            config.low_ratio_min_fixed_ambiguities = libgnss_apps::optionInt(arg, argv[++i]);
             config.low_ratio_min_fixed_ambiguities_set = true;
         } else if (arg == "--fix-history-motion-compensation") {
             config.fix_history_motion_compensation = true;
         } else if (arg == "--max-position-jump-motion-compensation") {
             config.max_position_jump_motion_compensation = true;
         } else if (arg == "--max-pos-jump-min" && i + 1 < argc) {
-            config.max_position_jump_min_m = std::stod(argv[++i]);
+            config.max_position_jump_min_m = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_position_jump_min_m_set = true;
         } else if (arg == "--max-pos-jump-rate" && i + 1 < argc) {
-            config.max_position_jump_rate_mps = std::stod(argv[++i]);
+            config.max_position_jump_rate_mps = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_position_jump_rate_mps_set = true;
         } else if (arg == "--max-float-prefit-rms" && i + 1 < argc) {
-            config.max_float_prefit_residual_rms_m = std::stod(argv[++i]);
+            config.max_float_prefit_residual_rms_m = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_float_prefit_residual_rms_m_set = true;
         } else if (arg == "--max-float-prefit-max" && i + 1 < argc) {
-            config.max_float_prefit_residual_max_m = std::stod(argv[++i]);
+            config.max_float_prefit_residual_max_m = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_float_prefit_residual_max_m_set = true;
         } else if (arg == "--max-float-prefit-reset-streak" && i + 1 < argc) {
-            config.max_float_prefit_residual_reset_streak = std::stoi(argv[++i]);
+            config.max_float_prefit_residual_reset_streak = libgnss_apps::optionInt(arg, argv[++i]);
             config.max_float_prefit_residual_reset_streak_set = true;
         } else if (arg == "--elevation-mask-deg" && i + 1 < argc) {
-            config.elevation_mask_deg = std::stod(argv[++i]);
+            config.elevation_mask_deg = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--no-glonass") {
             config.enable_glonass = false;
         } else if (arg == "--no-beidou") {
@@ -399,18 +403,22 @@ ReplayConfig parseArguments(int argc, char** argv) {
         } else if (arg == "--glonass-ar" && i + 1 < argc) {
             config.glonass_ar = parseGlonassARChoice(argv[++i], argv[0]);
         } else if (arg == "--max-epochs" && i + 1 < argc) {
-            config.max_epochs = std::stoi(argv[++i]);
+            config.max_epochs = libgnss_apps::optionInt(arg, argv[++i]);
+            // -1 is the historical spelling of "no limit", like 0.
+            if (config.max_epochs < -1) {
+                argumentError("--max-epochs must be >= 0 (0: no limit)", argv[0]);
+            }
         } else if (arg == "--no-rtcm-epoch-assembly") {
             config.assemble_rtcm_epochs = false;
         } else if (arg == "--rtcm-message-limit" && i + 1 < argc) {
-            config.rtcm_message_limit = static_cast<size_t>(std::stoull(argv[++i]));
+            config.rtcm_message_limit = static_cast<size_t>(libgnss_apps::optionUnsigned(arg, argv[++i]));
         } else if (arg == "--base-ecef" && i + 3 < argc) {
             // Do not increment i multiple times in constructor arguments: C++
             // does not guarantee their evaluation order, and MSVC builds read
             // the supplied XYZ reversed.
-            const double base_x = std::stod(argv[++i]);
-            const double base_y = std::stod(argv[++i]);
-            const double base_z = std::stod(argv[++i]);
+            const double base_x = libgnss_apps::optionDouble(arg, argv[++i]);
+            const double base_y = libgnss_apps::optionDouble(arg, argv[++i]);
+            const double base_z = libgnss_apps::optionDouble(arg, argv[++i]);
             config.base_position_ecef = Eigen::Vector3d(base_x, base_y, base_z);
             config.base_position_override = true;
         } else if (arg == "--quiet") {
@@ -512,8 +520,10 @@ bool loadRoverRinex(const std::string& path,
                     std::vector<libgnss::ObservationData>& epochs,
                     libgnss::io::RINEXReader::RINEXHeader& header) {
     libgnss::io::RINEXReader reader;
-    if (!reader.open(path) || !reader.readHeader(header)) {
-        return false;
+    const std::string error =
+        libgnss_apps::openRinexObservation(reader, header, "rover RINEX observation file", path);
+    if (!error.empty()) {
+        throw std::runtime_error(error);
     }
 
     libgnss::ObservationData epoch;
@@ -525,7 +535,10 @@ bool loadRoverRinex(const std::string& path,
         epochs.push_back(epoch);
     }
     reader.close();
-    return !epochs.empty();
+    if (epochs.empty()) {
+        throw std::runtime_error("no observation epochs in rover RINEX file: " + path);
+    }
+    return true;
 }
 
 bool loadRoverUbx(const std::string& path,
@@ -565,11 +578,13 @@ bool loadBaseRinex(const std::string& obs_path,
     libgnss::io::RINEXReader nav_reader;
     libgnss::io::RINEXReader::RINEXHeader base_header;
 
-    if (!base_reader.open(obs_path) || !base_reader.readHeader(base_header)) {
-        return false;
+    std::string error = libgnss_apps::openRinexObservation(
+        base_reader, base_header, "base RINEX observation file", obs_path);
+    if (error.empty()) {
+        error = libgnss_apps::readRinexNavigation(nav_reader, nav_data, nav_path);
     }
-    if (!nav_reader.open(nav_path) || !nav_reader.readNavigationData(nav_data)) {
-        return false;
+    if (!error.empty()) {
+        throw std::runtime_error(error);
     }
 
     libgnss::ObservationData epoch;
@@ -583,7 +598,10 @@ bool loadBaseRinex(const std::string& obs_path,
         base_position = base_header.approximate_position;
         have_base_position = true;
     }
-    return !base_epochs.empty();
+    if (base_epochs.empty()) {
+        throw std::runtime_error("no observation epochs in base RINEX file: " + obs_path);
+    }
+    return true;
 }
 
 bool loadNavigationRinex(const std::string& path, libgnss::NavigationData& nav_data);
@@ -711,13 +729,10 @@ bool loadBaseRtcm(const std::string& source,
 
 bool loadNavigationRinex(const std::string& path, libgnss::NavigationData& nav_data) {
     libgnss::io::RINEXReader reader;
-    if (!reader.open(path)) {
-        return false;
-    }
     libgnss::NavigationData loaded;
-    if (!reader.readNavigationData(loaded)) {
-        reader.close();
-        return false;
+    const std::string error = libgnss_apps::readRinexNavigation(reader, loaded, path);
+    if (!error.empty()) {
+        throw std::runtime_error(error);
     }
     reader.close();
     mergeNavigationData(nav_data, loaded);
@@ -946,6 +961,11 @@ size_t runReplay(const ReplayConfig& config) {
 int main(int argc, char** argv) {
     try {
         const ReplayConfig config = parseArguments(argc, argv);
+        const std::string output_error = libgnss_apps::prepareOutputFiles({config.output_pos_path});
+        if (!output_error.empty()) {
+            std::cerr << "Error: " << output_error << "\n";
+            return 1;
+        }
         const size_t written_solutions = runReplay(config);
         return written_solutions == 0 ? 1 : 0;
     } catch (const std::exception& e) {
