@@ -221,8 +221,9 @@ lies between the two), and runs every in-loop guard. The guards after the
 loop (non-FIX drift, FLOAT bridge tail, kinematic post-filter) run on the
 combined solution. `--combined` cannot be used with `--realtime`,
 `--fix-recovery`, `--realtime-fix-integrity` or `--pos-fix-diagnostics`;
-per-epoch logs describe the forward pass. It keeps every epoch in memory:
-about twice the memory and 1.6 times the run time of a forward run.
+per-epoch logs describe the forward pass. The backward pass reads the epochs
+from the files again (the forward pass records where each one starts): about
+10 % more memory and twice the run time of a forward run.
 
 The six PPC Tokyo / Nagoya runs with the sign-off profile
 (`configs/benchmarks/ppc_sigma_demote_nis2_ratio4.toml`), against their
