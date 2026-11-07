@@ -424,6 +424,11 @@ void PPPProcessor::applyEnvironmentOverridesToPPPConfig() {
 }
 
 bool PPPProcessor::initialize(const ProcessorConfig& config) {
+    initialize_error_.clear();
+    const auto fail = [this](const std::string& what, const std::string& path) {
+        initialize_error_ = "failed to load " + what + ": " + path;
+        return false;
+    };
     config_ = config;
     ppp_config_.use_precise_orbits = config.use_precise_orbits;
     ppp_config_.use_precise_clocks = config.use_precise_clocks;
@@ -451,7 +456,7 @@ bool PPPProcessor::initialize(const ProcessorConfig& config) {
         satellite_antex_loaded_ =
             loadSatelliteAntexOffsets(ppp_config_.antex_file_path, satellite_antex_offsets_);
         if (!receiver_antex_loaded_ && !satellite_antex_loaded_) {
-            return false;
+            return fail("ANTEX file", ppp_config_.antex_file_path);
         }
     }
 
@@ -468,33 +473,47 @@ bool PPPProcessor::initialize(const ProcessorConfig& config) {
             ocean_loading_coefficients_.west_phases_deg,
             ocean_loading_coefficients_.south_phases_deg);
         if (!ocean_loading_loaded_) {
-            return false;
+            return fail("ocean loading (BLQ) coefficients for station \"" +
+                            ppp_config_.ocean_loading_station_name + "\" from",
+                        ppp_config_.ocean_loading_file_path);
         }
     }
 
+    // A requested product that does not load is an error: running on without
+    // it would quietly fall back to broadcast orbits / no corrections.
     if ((ppp_config_.use_precise_orbits && !ppp_config_.orbit_file_path.empty()) ||
         (ppp_config_.use_precise_clocks && !ppp_config_.clock_file_path.empty())) {
-        loadPreciseProducts(ppp_config_.orbit_file_path, ppp_config_.clock_file_path);
+        precise_products_.clear();
+        if (!ppp_config_.orbit_file_path.empty() &&
+            !precise_products_.loadSP3File(ppp_config_.orbit_file_path)) {
+            return fail("SP3 orbit file", ppp_config_.orbit_file_path);
+        }
+        if (!ppp_config_.clock_file_path.empty() &&
+            !precise_products_.loadClockFile(ppp_config_.clock_file_path)) {
+            return fail("clock file", ppp_config_.clock_file_path);
+        }
+        precise_products_loaded_ = true;
     }
-    if (ppp_config_.use_ssr_corrections && !ppp_config_.ssr_file_path.empty()) {
-        loadSSRProducts(ppp_config_.ssr_file_path);
+    if (ppp_config_.use_ssr_corrections && !ppp_config_.ssr_file_path.empty() &&
+        !loadSSRProducts(ppp_config_.ssr_file_path)) {
+        return fail("SSR corrections", ppp_config_.ssr_file_path);
     }
     if (!ppp_config_.ionex_file_path.empty() &&
         !loadIONEXProducts(ppp_config_.ionex_file_path)) {
-        return false;
+        return fail("IONEX file", ppp_config_.ionex_file_path);
     }
     if (!ppp_config_.dcb_file_path.empty() &&
         !loadDCBProducts(ppp_config_.dcb_file_path)) {
-        return false;
+        return fail("DCB file", ppp_config_.dcb_file_path);
     }
     if (!ppp_config_.eop_path.empty() && !loadEopC04(ppp_config_.eop_path)) {
-        return false;
+        return fail("EOP C04 file", ppp_config_.eop_path);
     }
     atm_tidal_loading_loaded_ = false;
     atm_tidal_loading_coefficients_ = libgnss::iers::AtmosphericTidalLoadingCoefficients{};
     if (!ppp_config_.atm_tidal_loading_path.empty() &&
         !loadAtmosphericTidalLoading(ppp_config_.atm_tidal_loading_path)) {
-        return false;
+        return fail("atmospheric tidal loading file", ppp_config_.atm_tidal_loading_path);
     }
     return true;
 }
