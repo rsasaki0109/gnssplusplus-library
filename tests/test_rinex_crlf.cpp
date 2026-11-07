@@ -345,3 +345,85 @@ TEST(RinexCrlfTest, EpochsReadAgainBackwardFromTheirPositions) {
         std::filesystem::remove(path, ec);
     }
 }
+
+namespace {
+
+struct ReadResult {
+    std::vector<ObservationData> epochs;
+    bool header_ok = false;
+    std::size_t malformed_epochs = 0;
+    std::size_t malformed_values = 0;
+};
+
+ReadResult readObsCounting(const std::string& text, const std::string& name) {
+    const auto path = writeTemp(text, name + ".obs");
+    ReadResult result;
+    io::RINEXReader reader;
+    io::RINEXReader::RINEXHeader header;
+    if (reader.open(path.string())) {
+        result.header_ok = reader.readHeader(header);
+        ObservationData epoch;
+        while (result.header_ok && reader.readObservationEpoch(epoch)) {
+            result.epochs.push_back(epoch);
+        }
+        result.malformed_epochs = reader.malformedEpochCount();
+        result.malformed_values = reader.malformedValueCount();
+    }
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    return result;
+}
+
+std::string replaceOnce(std::string text, const std::string& from, const std::string& to) {
+    const auto pos = text.find(from);
+    if (pos != std::string::npos) {
+        text.replace(pos, from.size(), to);
+    }
+    return text;
+}
+
+}  // namespace
+
+TEST(RinexCrlfTest, AnUnreadableEpochIsSkippedNotTheRestOfTheFile) {
+    // The second epoch line has a non-numeric satellite count: it used to
+    // end the reading, dropping the third epoch as well.
+    const std::string text =
+        replaceOnce(rinex3ObsBody(' ', ' '), epochHeader(30, 2), "> 2024 01 01 00 00 30.0000000  0 x2\n");
+    const auto result = readObsCounting(text, "r3_bad_epoch");
+    ASSERT_TRUE(result.header_ok);
+    ASSERT_EQ(result.epochs.size(), 2U);
+    EXPECT_DOUBLE_EQ(result.epochs[1].time.tow - result.epochs[0].time.tow, 60.0);
+    EXPECT_EQ(result.malformed_epochs, 1U);
+}
+
+TEST(RinexCrlfTest, ANonNumericValueIsReadAsMissing) {
+    // "2197abc4.560" used to be read as its numeric prefix, 2197 m.
+    std::string text = rinex3ObsBody(' ', ' ');
+    const std::string good = field(20000000.0);
+    text = replaceOnce(text, good, "  2197abc4.560  ");
+    const auto result = readObsCounting(text, "r3_bad_value");
+    ASSERT_EQ(result.epochs.size(), 3U);
+    EXPECT_EQ(result.malformed_values, 1U);
+    for (const auto& obs : result.epochs[0].observations) {
+        if (obs.satellite == SatelliteId(GNSSSystem::GPS, 5) && obs.has_pseudorange) {
+            EXPECT_GT(obs.pseudorange, 1.0e7) << "the non-numeric C1C must not survive";
+        }
+    }
+}
+
+TEST(RinexCrlfTest, EventRecordsAreSkippedQuietly) {
+    // Epoch flag 4 with one header record: not an observation epoch, and not
+    // malformed.
+    const std::string event = ">                              4  1\n" +
+                              hdr("operator note", "COMMENT");
+    const std::string text =
+        replaceOnce(rinex3ObsBody(' ', ' '), epochHeader(30, 2), event + epochHeader(30, 2));
+    const auto result = readObsCounting(text, "r3_event");
+    ASSERT_EQ(result.epochs.size(), 3U);
+    EXPECT_EQ(result.malformed_epochs, 0U);
+}
+
+TEST(RinexCrlfTest, AnUnreadableHeaderLineFailsTheHeader) {
+    const std::string text = replaceOnce(rinex3ObsBody(' ', ' '), "G    4 C1C", "G    x C1C");
+    EXPECT_FALSE(readObsCounting(text, "r3_bad_header").header_ok);
+}

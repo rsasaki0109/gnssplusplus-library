@@ -194,6 +194,12 @@ public:
      * @brief Check if file is open
      */
     bool isOpen() const { return file_.is_open(); }
+
+    /// Observation epochs skipped because their epoch line or satellite rows
+    /// could not be read (each reported once on stderr with its line).
+    std::size_t malformedEpochCount() const { return malformed_epochs_; }
+    /// Observation values that were not a number (read as missing).
+    std::size_t malformedValueCount() const { return malformed_values_; }
     
     /**
      * @brief Get current line number
@@ -212,8 +218,13 @@ public:
 
 private:
     std::ifstream file_;
+    std::string filename_;
     RINEXHeader header_;
     int current_line_ = 0;
+    std::size_t malformed_epochs_ = 0;
+    std::size_t malformed_values_ = 0;
+    void reportMalformedEpoch(int line_number);
+    void reportMalformedValue(const std::string& value);
     bool header_read_ = false;
     bool qzss_prefer_l1l_ = false;
     bool qzss_prefer_l5_secondary_ = false;
