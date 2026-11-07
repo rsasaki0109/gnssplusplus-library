@@ -255,6 +255,69 @@ class CLISurfaceCases:
                 "--madoca-materialization-dump-only requires --madoca-materialization-dump",
                 result.stderr,
             )
+    def test_rtk_input_errors_name_the_file_and_the_cause(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_input_errors_") as temp_dir:
+            temp_root = Path(temp_dir)
+            fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+            rover = temp_root / "rover.obs"
+            base = temp_root / "base.obs"
+            nav = temp_root / "base.nav"
+            for args in (("--input", str(fixture / "rover.rtcm"), "--obs-out", str(rover)),
+                         ("--input", str(fixture / "base.rtcm"), "--obs-out", str(base),
+                          "--nav-out", str(nav))):
+                converted = self.run_gnss("convert", *args, "--format", "rtcm",
+                                          "--gps-week", "2324", "--quiet")
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            header_only = temp_root / "header_only.obs"
+            header_only.write_text(
+                format_rinex_header_line("     3.04           O                   M",
+                                         "RINEX VERSION / TYPE")
+                + format_rinex_header_line("  -3961904.0000  3348993.0000  3698211.0000",
+                                           "APPROX POSITION XYZ")
+                + format_rinex_header_line("", "END OF HEADER"),
+                encoding="ascii",
+            )
+            empty = temp_root / "empty.obs"
+            empty.write_bytes(b"")
+            missing = temp_root / "missing.obs"
+            directory = temp_root / "a_directory"
+            directory.mkdir()
+            out = str(temp_root / "out.pos")
+
+            def solve(rover_path: Path, base_path: Path, nav_path: Path) -> tuple[str, ...]:
+                return ("solve", "--rover", str(rover_path), "--base", str(base_path),
+                        "--nav", str(nav_path), "--out", out)
+
+            def replay(rover_path: Path, base_path: Path, nav_path: Path) -> tuple[str, ...]:
+                return ("replay", "--rover-rinex", str(rover_path), "--base-rinex",
+                        str(base_path), "--nav-rinex", str(nav_path), "--out", out)
+
+            cases = [
+                (solve(missing, base, nav),
+                 f"Error: cannot open rover observation file: {missing} (no such file)"),
+                (solve(directory, base, nav),
+                 f"Error: cannot open rover observation file: {directory} (is a directory)"),
+                (solve(rover, empty, nav),
+                 f"Error: not a RINEX file (no RINEX VERSION / TYPE line): {empty}"),
+                (solve(rover, header_only, nav),
+                 f"Error: no observation epochs in base file: {header_only}"),
+                (solve(rover, base, missing),
+                 f"Error: cannot open navigation file: {missing} (no such file)"),
+                (replay(missing, base, nav),
+                 f"Error: cannot open rover RINEX observation file: {missing} (no such file)"),
+                (replay(header_only, base, nav),
+                 f"Error: no observation epochs in rover RINEX file: {header_only}"),
+                (replay(rover, empty, nav),
+                 f"Error: not a RINEX file (no RINEX VERSION / TYPE line): {empty}"),
+                (replay(rover, base, directory),
+                 f"Error: cannot open navigation file: {directory} (is a directory)"),
+            ]
+            for args, message in cases:
+                with self.subTest(args=args):
+                    result = self.run_gnss(*args)
+                    self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+                    self.assertIn(message, result.stderr)
+
     def test_public_rtk_benchmarks_cli_lists_matrix(self) -> None:
         result = self.run_gnss("public-rtk-benchmarks", "--format", "json")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
