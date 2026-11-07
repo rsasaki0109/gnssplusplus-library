@@ -1312,6 +1312,23 @@ bool decodeGalileoInavEphemeris(const libgnss::SatelliteId& satellite,
     return true;
 }
 
+// A run that decoded nothing is an error (wrong --format, not GNSS data,
+// an empty capture); an output that stayed empty is only worth a warning,
+// e.g. --obs-out on an ephemeris-only stream.
+bool reportConversionResult(const ConvertConfig& config, const char* format,
+                            size_t processed_messages, size_t exported_obs_epochs) {
+    if (processed_messages == 0) {
+        std::cerr << "Error: no " << format << " messages were decoded from "
+                  << config.input_path << "\n";
+        return false;
+    }
+    if (!config.obs_out_path.empty() && exported_obs_epochs == 0) {
+        std::cerr << "Warning: no observation epochs were written to "
+                  << config.obs_out_path << "\n";
+    }
+    return true;
+}
+
 int runRTCMConversion(const ConvertConfig& config) {
     libgnss::io::RTCMReader reader;
     if (!reader.open(config.input_path)) {
@@ -1488,6 +1505,9 @@ int runRTCMConversion(const ConvertConfig& config) {
               << " exported_obs_epochs=" << exported_obs_epochs
               << " exported_nav_messages=" << exported_nav_messages
               << " skipped_nav_messages=" << skipped_nav_messages << "\n";
+    if (!reportConversionResult(config, "RTCM", processed_messages, exported_obs_epochs)) {
+        return 1;
+    }
     return outputs_ok ? 0 : 1;
 }
 
@@ -1970,6 +1990,9 @@ int runUBXConversion(const ConvertConfig& config) {
               << " exported_nav_messages=" << exported_nav_messages
               << " skipped_nav_messages=" << skipped_nav_messages
               << " exported_sfrbx_messages=" << exported_sfrbx_messages << "\n";
+    if (!reportConversionResult(config, "UBX", processed_messages, exported_obs_epochs)) {
+        return 1;
+    }
     return outputs_ok ? 0 : 1;
 }
 

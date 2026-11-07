@@ -918,6 +918,12 @@ int main(int argc, char* argv[]) {
             ++summary.processed_epochs;
         }
 
+        if (summary.processed_epochs == 0) {
+            std::cerr << "Error: no observation epochs were read from " << options.obs_path
+                      << "\n";
+            return 1;
+        }
+
         if (!solution.writeToFile(options.out_path)) {
             std::cerr << "Error: failed to write solution file: " << options.out_path << "\n";
             return 1;
@@ -990,6 +996,13 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        // The outputs above are kept for diagnosis (QC counters), but a run
+        // without a single position is a failure, as in gnss ppp / gnss fgo.
+        if (summary.valid_solutions == 0) {
+            std::cerr << "Error: SPP produced no valid solutions ("
+                      << summary.processed_epochs << " epochs processed)\n";
+            return 1;
+        }
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
