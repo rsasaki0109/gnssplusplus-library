@@ -6,7 +6,7 @@ epoch *t* may use, not in the solver.
 | Mode | May use | Tools | Use it for |
 |---|---|---|---|
 | Real-time | Data received up to *t* (with its latency) | `gnss live`, `gnss online` | Operation |
-| Post-processing, causal (`--causal`) | Data tagged up to *t* | `gnss solve --causal`, `gnss ppp --causal`, `gnss spp --causal` | Real-time performance from recorded data |
+| Post-processing, causal (`--causal`) | Data tagged up to *t* | `gnss solve --causal`, `gnss replay --causal`, `gnss ppp --causal`, `gnss spp --causal` | Real-time performance from recorded data |
 | Post-processing | Anything in the files, including data after *t* | `gnss solve`, `gnss ppp`, `gnss spp`, `gnss fgo` | Best accuracy after the fact |
 
 A causal run is meant to give what a real-time receiver would have given on
@@ -113,6 +113,46 @@ base epochs at 1 Hz), against its reference trajectory:
 | `gnss solve --causal` | 41 | 12 | 0.171 / 0.318 m |
 | `gnss solve --causal --base-hold-seconds 2` | 201 | 197 | 0.043 / 0.113 m |
 
+## Replay: `gnss replay --causal`
+
+`gnss replay` reads its whole base stream before solving. With `--causal`
+it still only uses what had arrived by each epoch:
+
+- **Ephemerides.** Only ephemerides already broadcast (`--nav-rinex`) or
+  received are used. The RTCM decoder dates each stream ephemeris with the
+  time of the latest observation epoch decoded before it, and a rebroadcast
+  with that of its first reception. `gnss convert` dates RTCM ephemerides
+  the same way. Ephemerides that arrive before the first observation epoch
+  stay undated and follow the toe rule above.
+- **Base position.** The station position is the first one received, not
+  the last one of the stream, and no rover epoch before it arrived is
+  solved.
+- **Base alignment.** As before, only exactly aligned base epochs are used.
+
+RINEX NAV files written from such streams carry the transmission time;
+an unknown one is written as `0.9999E9` (it used to be 0, which a reader
+takes as broadcast from the start of the week).
+
+## Checking causality
+
+`tests/cli_cases/runtime_receiver.py`
+(`test_causal_solve_and_replay_ignore_later_data_and_agree`) runs the
+stress fixture:
+
+- **Cut the data, compare the epochs before the cut.** The rover and base
+  files are cut between two base epochs (`gnss solve`), or the base stream
+  after 60 messages (`gnss replay --rtcm-message-limit`). Every epoch before
+  the cut must be identical to the full run:
+  - `gnss solve --causal`: identical;
+  - `gnss solve --causal --base-hold-seconds 2`: identical;
+  - `gnss replay --causal`: identical;
+  - default `gnss solve`: the last two epochs before the cut differ (they
+    were interpolated towards the base epoch after it).
+- **Replay against post-processing.** `gnss replay --causal` (base RTCM
+  stream) and `gnss solve --causal` (the same data converted to RINEX)
+  solve the same 41 epochs with the same FIX / FLOAT status, at most 0.8 mm
+  apart.
+
 ## Not covered yet
 
 These parts still see data after the epoch, also with `--causal`; they are
@@ -122,8 +162,6 @@ the next steps of this work:
   - Corrections are tagged with their reference epoch, not the time a
     receiver has them (a few seconds later; CLAS about 15 s).
   - A causal run therefore uses each update slightly early.
-- **`gnss replay`** preloads its streams, so it is not a real-time reference
-  either. Only `gnss online` processes received events in order.
 
 A priori configuration is not treated as future data: the RINEX header
 position, ANTEX, ocean and atmospheric loading and DCB files are used in

@@ -53,6 +53,7 @@ enum class RTKTuningPreset {
 };
 
 struct ReplayConfig {
+    bool causal = false;
     std::string rover_rinex_path;
     std::string rover_ubx_path;
     std::string base_rinex_path;
@@ -188,6 +189,9 @@ void printUsage(const char* argv0) {
         << "    --no-rtcm-epoch-assembly  Treat every base RTCM observation message as its own epoch\n"
         << "                              (default: merge the per-constellation MSM messages of one epoch)\n"
         << "    --base-ecef <x> <y> <z>   Override base ECEF position\n"
+        << "    --causal                  Real-time equivalent: ephemerides only once broadcast or\n"
+        << "                              received, and the base RTCM station position as first\n"
+        << "                              received (no epoch before it is solved)\n"
         << "    --quiet                   Suppress per-epoch prints\n"
         << "    --verbose                 Print per-epoch solve details\n"
         << "    -h, --help                Show this help\n";
@@ -413,6 +417,8 @@ ReplayConfig parseArguments(int argc, char** argv) {
             config.quiet = true;
         } else if (arg == "--verbose") {
             config.verbose = true;
+        } else if (arg == "--causal") {
+            config.causal = true;
         } else {
             argumentError("unknown or incomplete argument: " + arg, argv[0]);
         }
@@ -628,7 +634,9 @@ bool loadBaseRtcm(const std::string& source,
                   std::vector<libgnss::ObservationData>& base_epochs,
                   libgnss::NavigationData& nav_data,
                   Eigen::Vector3d& base_position,
-                  bool& have_base_position) {
+                  bool& have_base_position,
+                  bool first_station_position,
+                  std::optional<libgnss::GNSSTime>& base_position_time) {
     libgnss::io::RTCMReader reader;
     if (!reader.open(source)) {
         return false;
@@ -646,11 +654,26 @@ bool loadBaseRtcm(const std::string& source,
     size_t message_count = 0;
     libgnss::io::RTCMMessage raw_message;
     std::vector<libgnss::io::RTCMStreamDecoder::Event> events;
+    // Stream time: the latest observation epoch decoded so far.
+    std::optional<libgnss::GNSSTime> stream_time;
+    bool station_position_seen = false;
     while ((message_limit == 0 || message_count < message_limit) && reader.readMessage(raw_message)) {
         ++message_count;
         const auto frame = buildRtcmFrame(raw_message);
         decoder.pushFrame(frame.data(), frame.size(), events);
         for (auto& event : events) {
+            if (event.has_station_position && first_station_position && !station_position_seen) {
+                // The position a receiver has from here on; epochs before it
+                // arrived have none (unknown stream time: from the start).
+                station_position_seen = true;
+                base_position = event.station_position;
+                have_base_position = true;
+                base_position_time = stream_time;
+            }
+            if (event.has_observation && event.observation.time.week > 1 &&
+                (!stream_time || event.observation.time > *stream_time)) {
+                stream_time = event.observation.time;
+            }
             if (event.has_observation) {
                 if (assemble_epochs) {
                     for (auto& epoch : assembler.push(event.observation, event.observation_more_follows)) {
@@ -678,7 +701,7 @@ bool loadBaseRtcm(const std::string& source,
             }
         }
     }
-    if (decoder.hasStationPosition()) {
+    if (decoder.hasStationPosition() && !(first_station_position && station_position_seen)) {
         base_position = decoder.getStationPosition();
         have_base_position = true;
     }
@@ -707,6 +730,8 @@ size_t runReplay(const ReplayConfig& config) {
     libgnss::NavigationData nav_data;
     Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
     bool have_base_position = false;
+    // Causal, base RTCM: the stream time the station position arrived at.
+    std::optional<libgnss::GNSSTime> base_position_time;
     libgnss::io::RINEXReader::RINEXHeader rover_header;
 
     if (!config.rover_rinex_path.empty()) {
@@ -753,11 +778,16 @@ size_t runReplay(const ReplayConfig& config) {
                           base_epochs,
                           nav_data,
                           base_position,
-                          have_base_position)) {
+                          have_base_position,
+                          config.causal,
+                          base_position_time)) {
             throw std::runtime_error("failed to load base RTCM observations");
         }
         mergeNavigationData(nav_data, supplemental_nav);
     }
+    // Causal: only ephemerides already broadcast (RINEX) or received (the
+    // stream's own, dated by the decoder) at the epoch.
+    nav_data.setCausal(config.causal);
 
     if (nav_data.ephemeris_data.empty()) {
         throw std::runtime_error("no navigation data available");
@@ -766,6 +796,7 @@ size_t runReplay(const ReplayConfig& config) {
     if (config.base_position_override) {
         base_position = config.base_position_ecef;
         have_base_position = true;
+        base_position_time.reset();
     }
     if (!have_base_position) {
         throw std::runtime_error("base position unavailable; use --base-ecef or a source with base coordinates");
@@ -848,6 +879,11 @@ size_t runReplay(const ReplayConfig& config) {
                timeDiffSeconds(base_epochs[base_index].time, rover_obs.time) < -kExactTimeToleranceSeconds) {
             ++base_index;
         }
+        if (base_position_time &&
+            timeDiffSeconds(rover_obs.time, *base_position_time) < -kExactTimeToleranceSeconds) {
+            ++skipped_rover_epochs;  // causal: the base position has not arrived yet
+            continue;
+        }
 
         if (base_index >= base_epochs.size()) {
             break;
@@ -892,6 +928,7 @@ size_t runReplay(const ReplayConfig& config) {
                   << " skipped_rover_epochs=" << skipped_rover_epochs
                   << " written_solutions=" << written_solutions
                   << " fixed_solutions=" << fixed_solutions
+                  << " causal=" << (config.causal ? "yes" : "no")
                   << " out=" << config.output_pos_path
                   << " format=" << outputFormatString(config.output_format)
                   << "\n";

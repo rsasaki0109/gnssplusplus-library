@@ -15,6 +15,7 @@
 #include <iostream>
 #include <map>
 #include <system_error>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -1328,6 +1329,11 @@ int runRTCMConversion(const ConvertConfig& config) {
                             : currentGpstApprox();
     int resolved_week = start_time.week;
     bool have_last_tow = false;
+    // Stream time for the ephemerides that follow (RTCM carries no
+    // transmission time except for GLONASS) and the records already written,
+    // so a rebroadcast keeps its first reception (stampEphemerisReceptionTimes).
+    std::optional<libgnss::GNSSTime> last_observation_time;
+    libgnss::NavigationData received_navigation;
     double last_tow = 0.0;
     processor.setReferenceTime(start_time);
     libgnss::io::RINEXWriter obs_writer;
@@ -1412,6 +1418,10 @@ int runRTCMConversion(const ConvertConfig& config) {
                     obs_data.time.week = resolved_week;
                     processor.setReferenceTime(libgnss::GNSSTime(resolved_week, tow));
                 }
+                if (obs_data.time.week > 1 &&
+                    (!last_observation_time || obs_data.time > *last_observation_time)) {
+                    last_observation_time = obs_data.time;
+                }
                 if (config.assemble_rtcm_epochs) {
                     for (const auto& epoch :
                          assembler.push(obs_data, processor.lastObservationMoreFollows())) {
@@ -1429,6 +1439,9 @@ int runRTCMConversion(const ConvertConfig& config) {
             libgnss::io::rtcm_utils::isEphemerisMessage(message.type)) {
             libgnss::NavigationData nav_data;
             if (processor.decodeNavigationData(message, nav_data)) {
+                libgnss::stampEphemerisReceptionTimes(
+                    nav_data, received_navigation,
+                    last_observation_time ? &*last_observation_time : nullptr);
                 if (!nav_writer_open) {
                     if (!nav_writer.createNavigationFile(config.nav_out_path, makeNavigationHeader())) {
                         std::cerr << "Error: failed to create navigation RINEX: "

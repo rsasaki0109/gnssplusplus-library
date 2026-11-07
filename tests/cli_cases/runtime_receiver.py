@@ -674,6 +674,92 @@ class RuntimeReceiverCases:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn(message, result.stderr + result.stdout)
 
+    def test_causal_solve_and_replay_ignore_later_data_and_agree(self) -> None:
+        # Causal runs give the same solution for an epoch whatever comes after
+        # it: cutting the files (solve) or the base stream (replay) after it
+        # changes nothing up to the cut. The default solve interpolates the
+        # base towards the next epoch, so its last epochs before a cut change.
+        # gnss replay --causal (base RTCM stream) and gnss solve --causal (the
+        # same data converted to RINEX) agree.
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+
+        def truncate_rinex(source: Path, target: Path, last_second_of_day: float) -> None:
+            lines, keep, header = [], True, True
+            for line in source.read_text(encoding="latin-1").splitlines(keepends=True):
+                if header:
+                    lines.append(line)
+                    header = "END OF HEADER" not in line
+                    continue
+                if line.startswith(">"):
+                    fields = line[1:].split()
+                    keep = int(fields[3]) * 3600 + int(fields[4]) * 60 + float(fields[5]) <= last_second_of_day
+                if keep:
+                    lines.append(line)
+            target.write_text("".join(lines), encoding="latin-1")
+
+        def rows(path: Path) -> dict[float, list[str]]:
+            return {round(float(line.split()[1]), 1): line.split()
+                    for line in path.read_text(encoding="ascii").splitlines()
+                    if line.strip() and not line.startswith("%")}
+
+        with tempfile.TemporaryDirectory(prefix="gnss_causal_truncation_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_obs, base_obs, base_nav = (temp_root / name for name in ("rover.obs", "base.obs", "base.nav"))
+            for source, outputs in (
+                ("rover.rtcm", ("--obs-out", str(rover_obs))),
+                ("base.rtcm", ("--obs-out", str(base_obs), "--nav-out", str(base_nav))),
+            ):
+                converted = self.run_gnss(
+                    "convert", "--format", "rtcm", "--input", str(fixture / source), *outputs,
+                    "--gps-week", "2324", "--quiet",
+                )
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            cut = 4 * 3600 + 4 * 60 + 49.5  # 04:04:49.5, between base epochs
+            truncate_rinex(rover_obs, temp_root / "rover_cut.obs", cut)
+            truncate_rinex(base_obs, temp_root / "base_cut.obs", cut)
+
+            def solve(name: str, rover: Path, base: Path, *extra: str) -> dict[float, list[str]]:
+                out = temp_root / f"{name}.pos"
+                result = self.run_gnss("solve", "--rover", str(rover), "--base", str(base),
+                                       "--nav", str(base_nav), "--no-kml", "--out", str(out), *extra)
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                return rows(out)
+
+            def up_to_cut(solution: dict[float, list[str]]) -> dict[float, list[str]]:
+                return {t: row for t, row in solution.items() if t % 86400 <= cut}
+
+            for extra in (("--causal",), ("--causal", "--base-hold-seconds", "2")):
+                with self.subTest(extra=extra):
+                    full = solve("full", rover_obs, base_obs, *extra)
+                    truncated = solve("cut", temp_root / "rover_cut.obs", temp_root / "base_cut.obs", *extra)
+                    self.assertGreater(len(truncated), 0)
+                    self.assertEqual(up_to_cut(full), truncated)
+            default_full = solve("default_full", rover_obs, base_obs)
+            default_cut = solve("default_cut", temp_root / "rover_cut.obs", temp_root / "base_cut.obs")
+            self.assertNotEqual(up_to_cut(default_full), default_cut)
+
+            def replay(name: str, *extra: str) -> dict[float, list[str]]:
+                out = temp_root / f"{name}.pos"
+                result = self.run_gnss("replay", "--rover-rinex", str(rover_obs),
+                                       "--base-rtcm", str(fixture / "base.rtcm"), "--causal",
+                                       "--out", str(out), *extra)
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                self.assertIn("causal=yes", result.stdout)
+                return rows(out)
+
+            replay_full = replay("replay_full")
+            replay_cut = replay("replay_cut", "--rtcm-message-limit", "60")
+            self.assertGreater(len(replay_cut), 0)
+            self.assertEqual({t: replay_full[t] for t in replay_cut}, replay_cut)
+
+            solve_causal = solve("solve_causal", rover_obs, base_obs, "--causal")
+            self.assertEqual(sorted(replay_full), sorted(solve_causal))
+            for t, row in replay_full.items():
+                other = solve_causal[t]
+                self.assertEqual(row[8], other[8], msg=f"status at {t}")
+                distance = sum((float(a) - float(b)) ** 2 for a, b in zip(row[2:5], other[2:5])) ** 0.5
+                self.assertLess(distance, 0.01, msg=f"position at {t}")
+
     def test_solve_urban_preset_is_the_cdme_recipe(self) -> None:
         # --preset urban packages the opt-in CDME recipe (docs/rtk_doppler_consensus_age.md). It must solve exactly
         # like the explicit flags, an explicit flag must still win, and runs without it must not report the gates.

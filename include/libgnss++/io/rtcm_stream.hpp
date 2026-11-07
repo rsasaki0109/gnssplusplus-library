@@ -53,6 +53,13 @@ public:
     /** Week of a TOW-only time (week 0, or 1 after BeiDou's +14 s wrap) that puts it nearest to the reference. */
     static GNSSTime resolveTowOnlyTime(const GNSSTime& time, const GNSSTime& reference);
 
+    /**
+     * Decode one frame. Ephemerides without a transmission time (RTCM carries
+     * none except for GLONASS) get the time of the latest observation epoch
+     * decoded before them, a rebroadcast that of its first reception
+     * (Ephemeris::tof), so causal ephemeris selection sees them only once
+     * received.
+     */
     bool pushFrame(const uint8_t* buffer, size_t size, std::vector<Event>& events);
 
     const NavigationData& getNavigationData() const { return navigation_data_; }
@@ -64,6 +71,9 @@ private:
     RTCMProcessor processor_;
     NavigationData navigation_data_;
     std::optional<GNSSTime> reference_time_;
+    // Latest normalized observation epoch decoded: the stream time an
+    // ephemeris received now is dated with (stampEphemerisReceptionTimes()).
+    std::optional<GNSSTime> last_observation_time_;
 };
 
 }  // namespace io

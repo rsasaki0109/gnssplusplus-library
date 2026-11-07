@@ -3547,7 +3547,24 @@ bool RINEXWriter::writeNavigationMessage(const Ephemeris& eph) {
     const double week_field = static_cast<double>(eph.week);
     const double line6_col4 =
         (is_beidou || is_galileo) ? eph.tgd_secondary : static_cast<double>(eph.iodc);
-    const double line7_col1 = is_beidou ? gpstToBdt(eph.tof).tow : eph.tof.tow;
+    // Transmission time of message, 0.9999E9 when unknown (RINEX): an unset
+    // tof is not "0 s of the week", which a reader would take as broadcast
+    // from the start of the week.
+    // Counted from the start of the record's week (BeiDou: BDT week), so a
+    // tof in the week before toe comes out negative, as RINEX asks.
+    const bool tof_known = eph.tof.week != 0 || eph.tof.tow != 0.0;
+    double line7_col1 = 0.9999e9;
+    if (tof_known) {
+        const GNSSTime tof_in_system_time = is_beidou ? gpstToBdt(eph.tof) : eph.tof;
+        const double from_record_week =
+            tof_in_system_time -
+            GNSSTime(static_cast<int>(eph.week) + (is_beidou ? 1356 : 0), 0.0);
+        // A record week left modulo 1024 (stream decoded without a reference)
+        // is no anchor: fall back to the seconds of the tof's own week.
+        line7_col1 = std::abs(from_record_week) <= 1.5 * 604800.0
+            ? from_record_week
+            : tof_in_system_time.tow;
+    }
     const double line7_col2 = is_beidou ? static_cast<double>(eph.iodc) : 0.0;
     // Galileo: "data sources" word (RINEX 3.0x Table A8 / 4.0x Table A10);
     // the SV accuracy field holds SISA in metres (Ephemeris::sv_accuracy).

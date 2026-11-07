@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <iomanip>
 #include <sstream>
 #include <vector>
@@ -1355,6 +1356,69 @@ TEST(RINEXWriterTest, WritesGpsNavigationMessageReadableByReader) {
 
     reader.close();
     std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXWriterTest, KeepsAnUnknownTransmissionTimeUnknown) {
+    // An unset tof is written as 0.9999E9 (RINEX "unknown"), not as 0 s of
+    // the week, and a known one survives the round trip in the record week.
+    const auto temp_path = std::filesystem::temp_directory_path() / "libgnss_rinex_writer_tof.nav";
+    std::filesystem::remove(temp_path);
+    io::RINEXWriter writer;
+    io::RINEXReader::RINEXHeader header;
+    header.version = 3.04;
+    header.file_type = io::RINEXReader::FileType::NAVIGATION;
+    header.satellite_system = "M";
+    ASSERT_TRUE(writer.createNavigationFile(temp_path.string(), header));
+    Ephemeris unknown = makeGpsEphemeris();
+    unknown.tof = GNSSTime();
+    Ephemeris known = makeGpsEphemeris();
+    known.satellite = SatelliteId(GNSSSystem::GPS, 4);
+    known.tof = known.toe - 7182.0;
+    ASSERT_TRUE(writer.writeNavigationMessage(unknown));
+    ASSERT_TRUE(writer.writeNavigationMessage(known));
+    writer.close();
+
+    std::ifstream text(temp_path);
+    const std::string content((std::istreambuf_iterator<char>(text)), std::istreambuf_iterator<char>());
+    EXPECT_NE(content.find("9.999000000000"), std::string::npos) << content;
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    NavigationData nav_data;
+    ASSERT_TRUE(reader.readNavigationData(nav_data));
+    reader.close();
+    const auto& read_unknown = nav_data.ephemeris_data.at(unknown.satellite).front();
+    EXPECT_EQ(read_unknown.tof.week, 0);
+    EXPECT_EQ(read_unknown.tof.tow, 0.0);
+    const auto& read_known = nav_data.ephemeris_data.at(known.satellite).front();
+    EXPECT_NEAR(read_known.tof - known.tof, 0.0, 1e-6);
+    std::filesystem::remove(temp_path);
+}
+
+TEST(RINEXWriterTest, StampsStreamEphemeridesWithTheirFirstReception) {
+    // RTCM ephemerides have no transmission time: the stream time they arrive
+    // at stands in, and a rebroadcast keeps the first one.
+    Ephemeris undated_record = makeGpsEphemeris();
+    undated_record.tof = GNSSTime();
+    NavigationData held;
+    const GNSSTime first_reception = undated_record.toe - 600.0;
+    const GNSSTime rebroadcast = first_reception + 30.0;
+    NavigationData decoded;
+    decoded.addEphemeris(undated_record);
+    stampEphemerisReceptionTimes(decoded, held, &first_reception);
+    const SatelliteId g03(GNSSSystem::GPS, 3);
+    EXPECT_NEAR(decoded.ephemeris_data.at(g03).front().tof - first_reception, 0.0, 1e-9);
+    NavigationData again;
+    again.addEphemeris(undated_record);
+    stampEphemerisReceptionTimes(again, held, &rebroadcast);
+    EXPECT_NEAR(again.ephemeris_data.at(g03).front().tof - first_reception, 0.0, 1e-9);
+    EXPECT_EQ(held.ephemeris_data.at(g03).size(), 1U);
+    // Before any stream time, the record stays undated.
+    NavigationData undated;
+    undated.addEphemeris(undated_record);
+    NavigationData fresh;
+    stampEphemerisReceptionTimes(undated, fresh, nullptr);
+    EXPECT_EQ(undated.ephemeris_data.at(g03).front().tof.week, 0);
 }
 
 TEST(RINEXWriterTest, WritesGlonassNavigationMessageReadableByReader) {
