@@ -179,6 +179,38 @@ int compareEphemerisOrder(const Ephemeris& a, const Ephemeris& b) {
         LIBGNSS_EPH_KEY(compareValue(a.glonass_cdma_data->source_flags,
                                      b.glonass_cdma_data->source_flags));
     }
+    LIBGNSS_EPH_KEY(compareValue(a.cnav_data.has_value(), b.cnav_data.has_value()));
+    if (a.cnav_data && b.cnav_data) {
+        const CnavNavigationData& ca = *a.cnav_data;
+        const CnavNavigationData& cb = *b.cnav_data;
+        LIBGNSS_EPH_KEY(compareDouble(ca.a_dot, cb.a_dot));
+        LIBGNSS_EPH_KEY(compareDouble(ca.delta_n0_dot, cb.delta_n0_dot));
+        LIBGNSS_EPH_KEY(compareDouble(ca.t_op, cb.t_op));
+        LIBGNSS_EPH_KEY(compareDouble(ca.transmission_time, cb.transmission_time));
+        LIBGNSS_EPH_KEY(compareValue(ca.integrity_flags, cb.integrity_flags));
+        LIBGNSS_EPH_KEY(compareValue(ca.urai_ed, cb.urai_ed));
+        LIBGNSS_EPH_KEY(compareValue(ca.urai_ned0, cb.urai_ned0));
+        LIBGNSS_EPH_KEY(compareValue(ca.urai_ned1, cb.urai_ned1));
+        LIBGNSS_EPH_KEY(compareValue(ca.urai_ned2, cb.urai_ned2));
+        LIBGNSS_EPH_KEY(compareValue(ca.wn_op, cb.wn_op));
+        LIBGNSS_EPH_KEY(compareValue(ca.satellite_type, cb.satellite_type));
+        LIBGNSS_EPH_KEY(compareValue(ca.sisai_oe, cb.sisai_oe));
+        LIBGNSS_EPH_KEY(compareValue(ca.sisai_ocb, cb.sisai_ocb));
+        LIBGNSS_EPH_KEY(compareValue(ca.sisai_oc1, cb.sisai_oc1));
+        LIBGNSS_EPH_KEY(compareValue(ca.sisai_oc2, cb.sisai_oc2));
+        LIBGNSS_EPH_KEY(compareValue(ca.sismai, cb.sismai));
+        for (const auto member : {&CnavNavigationData::isc_l1ca, &CnavNavigationData::isc_l2c,
+                                  &CnavNavigationData::isc_l5i5, &CnavNavigationData::isc_l5q5,
+                                  &CnavNavigationData::isc_l1cd, &CnavNavigationData::isc_l1cp,
+                                  &CnavNavigationData::isc_b1cd, &CnavNavigationData::isc_b2ad}) {
+            const std::optional<double>& va = ca.*member;
+            const std::optional<double>& vb = cb.*member;
+            LIBGNSS_EPH_KEY(compareValue(va.has_value(), vb.has_value()));
+            if (va && vb) {
+                LIBGNSS_EPH_KEY(compareDouble(*va, *vb));
+            }
+        }
+    }
 #undef LIBGNSS_EPH_KEY
     return 0;
 }
@@ -553,8 +585,45 @@ bool NavigationData::removeEphemeris(const Ephemeris& eph) {
     return true;
 }
 
+void NavigationData::addCnavEphemeris(const Ephemeris& eph) {
+    auto& list = cnav_ephemeris_data[eph.satellite];
+    const auto position = std::lower_bound(
+        list.begin(), list.end(), eph,
+        [](const Ephemeris& a, const Ephemeris& b) { return compareEphemerisOrder(a, b) < 0; });
+    if (position != list.end() && compareEphemerisOrder(*position, eph) == 0) {
+        return;  // the same broadcast, already stored
+    }
+    list.insert(position, eph);
+    ++revision_;
+}
+
+const Ephemeris* NavigationData::getCnavEphemeris(const SatelliteId& sat,
+                                                  const GNSSTime& time,
+                                                  NavigationMessageType type,
+                                                  int desired_iode) const {
+    const auto it = cnav_ephemeris_data.find(sat);
+    if (it == cnav_ephemeris_data.end()) {
+        return nullptr;
+    }
+    const Ephemeris* best = nullptr;
+    double min_age = 1e9;
+    for (const auto& eph : it->second) {
+        if (eph.navigation_message_type != type || !eph.isValid(time) ||
+            (desired_iode >= 0 && static_cast<int>(eph.iode) != desired_iode)) {
+            continue;
+        }
+        const double age = eph.getAge(time);
+        if (age < min_age) {
+            min_age = age;
+            best = &eph;
+        }
+    }
+    return best;
+}
+
 void NavigationData::clear() {
     ephemeris_data.clear();
+    cnav_ephemeris_data.clear();
     satellite_state_cache_.clear();
     ++revision_;
 }

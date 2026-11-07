@@ -68,6 +68,47 @@ struct GlonassCdmaNavigationData {
     std::optional<double> isc_l3ocp;  ///< L3OC A17 ISC_L3OCp; blank is preserved.
 };
 
+/**
+ * @brief Terms of the modernized Keplerian messages: GPS / QZSS CNAV and
+ * CNAV-2, BeiDou B-CNAV1/2/3 (RINEX 4 CNAV, CNV2, CNV1, CNV2, CNV3).
+ *
+ * The Ephemeris keeps the elements these messages share with LNAV: sqrt_a is
+ * sqrt(A0), the semi-major axis at toe, and delta_n is delta-n0.  The orbit
+ * adds the semi-major axis rate and the rate of delta-n (IS-GPS-200 Table
+ * 30-II, BDS-SIS-ICD-B1C 7.8): computeBroadcastState() applies them whenever
+ * Ephemeris::cnav_data is set.  BeiDou TGD_B1Cp / TGD_B2ap are stored in
+ * Ephemeris::tgd / tgd_secondary (B-CNAV3: TGD_B2bI in tgd), GPS / QZSS TGD
+ * in tgd; health is the record's raw health field.
+ */
+struct CnavNavigationData {
+    double a_dot = 0.0;              ///< Semi-major axis rate (m/s).
+    double delta_n0_dot = 0.0;       ///< Rate of the mean motion difference (rad/s^2).
+    double t_op = 0.0;               ///< Data predict time of week (s; BDT for BeiDou).
+    double transmission_time = 0.0;  ///< t_tm as written (s of week).
+    std::optional<int> integrity_flags;  ///< Optional for GPS / QZSS; always set for BeiDou.
+    // GPS / QZSS CNAV, CNAV-2
+    int urai_ed = 0;
+    int urai_ned0 = 0;
+    int urai_ned1 = 0;
+    int urai_ned2 = 0;
+    int wn_op = 0;  ///< Data predict week number, as written.
+    std::optional<double> isc_l1ca;
+    std::optional<double> isc_l2c;
+    std::optional<double> isc_l5i5;
+    std::optional<double> isc_l5q5;
+    std::optional<double> isc_l1cd;  ///< CNAV-2 only.
+    std::optional<double> isc_l1cp;  ///< CNAV-2 only.
+    // BeiDou B-CNAV1/2/3
+    int satellite_type = 0;  ///< 1 GEO, 2 IGSO, 3 MEO.
+    int sisai_oe = 0;
+    int sisai_ocb = 0;
+    int sisai_oc1 = 0;
+    int sisai_oc2 = 0;
+    int sismai = 0;
+    std::optional<double> isc_b1cd;  ///< B-CNAV1 only.
+    std::optional<double> isc_b2ad;  ///< B-CNAV2 only.
+};
+
 /// Bits of the Galileo "data sources" word of a RINEX 3.0x / 4.0x navigation
 /// record (Ephemeris::data_source_code).
 namespace galileo_data_source {
@@ -171,6 +212,9 @@ struct Ephemeris {
     int data_source_code = 0;  ///< RINEX nav "data sources" word (Galileo: bit0 I/NAV E1-B, bit1 F/NAV E5a, bit2 I/NAV E5b, bit8 clock E5a/F-NAV, bit9 clock E5b/I-NAV)
     NavigationMessageType navigation_message_type = NavigationMessageType::Unknown;
     std::optional<GlonassCdmaNavigationData> glonass_cdma_data;
+    /// Set for GPS / QZSS CNAV, CNAV-2 and BeiDou B-CNAV1/2/3 records, which
+    /// NavigationData keeps in cnav_ephemeris_data.
+    std::optional<CnavNavigationData> cnav_data;
 
     bool valid = false;     ///< Ephemeris validity flag
     
@@ -282,6 +326,13 @@ struct TroposphereModel {
 class NavigationData {
 public:
     std::map<SatelliteId, std::vector<Ephemeris>> ephemeris_data;
+    /**
+     * GPS / QZSS CNAV, CNAV-2 and BeiDou B-CNAV1/2/3 records (RINEX 4), kept
+     * apart from ephemeris_data: getEphemeris(), every solver and the RINEX /
+     * RTCM writers keep using the LNAV / D1 / D2 records, and a caller that
+     * wants a modernized message asks for it with getCnavEphemeris().
+     */
+    std::map<SatelliteId, std::vector<Ephemeris>> cnav_ephemeris_data;
     IonosphereModel ionosphere_model;
     TroposphereModel troposphere_model;
 
@@ -343,6 +394,28 @@ public:
      * to conflict with a second copy of the same issue; nothing else calls it.
      */
     bool removeEphemeris(const Ephemeris& eph);
+
+    /**
+     * @brief Add a CNAV / CNAV-2 / B-CNAV record to cnav_ephemeris_data.
+     *
+     * Each satellite's records are sorted by the same total order as
+     * addEphemeris(); a record identical in every field to a stored one is
+     * not added twice.
+     */
+    void addCnavEphemeris(const Ephemeris& eph);
+
+    /**
+     * @brief Best modernized-message record of `type` for `sat` at `time`.
+     *
+     * Among records of that message type that are valid at `time` (the same
+     * window as getEphemeris()), the one whose toe is closest.  With
+     * desired_iode >= 0 only records with that IODE qualify (BeiDou B-CNAV1/2
+     * carry one; CNAV and B-CNAV3 records have IODE 0).  Null when none.
+     */
+    const Ephemeris* getCnavEphemeris(const SatelliteId& sat,
+                                      const GNSSTime& time,
+                                      NavigationMessageType type,
+                                      int desired_iode = -1) const;
     
     /**
      * @brief Get best ephemeris for satellite at given time
@@ -419,6 +492,9 @@ public:
     
     /**
      * @brief Check if navigation data is empty
+     *
+     * Looks at ephemeris_data only: records in cnav_ephemeris_data alone do
+     * not make the data usable by getEphemeris() and the solvers.
      */
     bool isEmpty() const;
     

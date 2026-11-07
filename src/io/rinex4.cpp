@@ -1,6 +1,8 @@
 #include <libgnss++/io/rinex4.hpp>
 
 #include <cctype>
+#include <array>
+#include <optional>
 #include <algorithm>
 #include <cmath>
 #include <iterator>
@@ -124,13 +126,16 @@ const char* navigationMessageTypeName(NavigationMessageType type) {
 }
 
 bool supportsEphemerisMessage(char system, NavigationMessageType type) {
-    // Existing RINEX 2/3 parser compatibility is explicit. GLONASS CDMA
-    // records have their own strict body parser below and are therefore also
-    // enabled here without entering the legacy FDMA path.
+    // Existing RINEX 2/3 parser compatibility is explicit. GLONASS CDMA,
+    // GPS/QZSS CNAV/CNAV-2 and BeiDou B-CNAV1/2/3 records have their own
+    // strict body parsers and are therefore also enabled here without
+    // entering the legacy LNAV/D1/FDMA path.
     switch (system) {
         case 'G':
         case 'J':
-            return type == NavigationMessageType::LNAV;
+            return type == NavigationMessageType::LNAV ||
+                   type == NavigationMessageType::CNAV ||
+                   type == NavigationMessageType::CNV2;
         case 'R':
             return type == NavigationMessageType::FDMA ||
                    type == NavigationMessageType::L1OC ||
@@ -140,7 +145,10 @@ bool supportsEphemerisMessage(char system, NavigationMessageType type) {
                    type == NavigationMessageType::INAV;
         case 'C':
             return type == NavigationMessageType::D1 ||
-                   type == NavigationMessageType::D2;
+                   type == NavigationMessageType::D2 ||
+                   type == NavigationMessageType::CNV1 ||
+                   type == NavigationMessageType::CNV2 ||
+                   type == NavigationMessageType::CNV3;
         case 'S':
             return type == NavigationMessageType::SBAS;
         default:
@@ -613,7 +621,205 @@ bool validIonosphereHeader(const NavigationRecordHeader& header) {
     return false;
 }
 
+// A broadcast-orbit line padded (or cut) to 80 columns; anything past column
+// 80 must be blank.  Writers differ in whether they keep trailing blanks.
+bool padOrbitLine(const std::string& line, std::string& padded) {
+    if (line.size() > 80 && !trim(line.substr(80)).empty()) {
+        return false;
+    }
+    padded = line.substr(0, std::min<size_t>(line.size(), 80));
+    padded.resize(80, ' ');
+    return true;
+}
+
+using OrbitFields = std::array<std::optional<double>, 4>;
+
+// The four D19.12 fields of a broadcast-orbit line (4X then 4 x 19 columns).
+// A blank field is nullopt; a non-blank field must be a complete number.
+bool parseOrbitFields(const std::string& line, OrbitFields& fields) {
+    std::string padded;
+    if (!padOrbitLine(line, padded) || padded.compare(0, 4, "    ") != 0) {
+        return false;
+    }
+    OrbitFields parsed;
+    for (size_t i = 0; i < 4; ++i) {
+        const std::string text = padded.substr(4 + i * 19, 19);
+        if (trim(text).empty()) {
+            continue;
+        }
+        double value = 0.0;
+        if (!parseFloatingField(text, value)) {
+            return false;
+        }
+        parsed[i] = value;
+    }
+    fields = parsed;
+    return true;
+}
+
 }  // namespace
+
+bool parseCnavEphemerisRecord(
+    const NavigationRecordHeader& header,
+    const std::vector<std::string>& body,
+    CnavEphemerisRecord& record) {
+    const NavigationMessageType type = header.navigation_message_type;
+    const bool gps_like = header.system == 'G' || header.system == 'J';
+    const bool beidou = header.system == 'C';
+    if (header.record_type != "EPH" || !header.subtype.empty() ||
+        header.source.size() != 3) {
+        return false;
+    }
+    if (gps_like) {
+        if (type != NavigationMessageType::CNAV && type != NavigationMessageType::CNV2) {
+            return false;
+        }
+    } else if (!beidou || (type != NavigationMessageType::CNV1 &&
+                           type != NavigationMessageType::CNV2 &&
+                           type != NavigationMessageType::CNV3)) {
+        return false;
+    }
+    const bool cnav2 = gps_like && type == NavigationMessageType::CNV2;
+    const bool cnv3 = beidou && type == NavigationMessageType::CNV3;
+    const size_t expected_lines = gps_like ? (cnav2 ? 10U : 9U) : (cnv3 ? 9U : 10U);
+    if (body.size() != expected_lines) {
+        return false;
+    }
+
+    CnavEphemerisRecord parsed;
+    parsed.header = header;
+    std::string epoch_line;
+    if (!padOrbitLine(body[0], epoch_line) ||
+        !parseCdmaEpochPrefix(epoch_line, header.source, parsed.toc) ||
+        !parseFloatingField(epoch_line.substr(23, 19), parsed.af0) ||
+        !parseFloatingField(epoch_line.substr(42, 19), parsed.af1) ||
+        !parseFloatingField(epoch_line.substr(61, 19), parsed.af2)) {
+        return false;
+    }
+
+    std::vector<OrbitFields> lines(body.size());
+    for (size_t i = 1; i < body.size(); ++i) {
+        if (!parseOrbitFields(body[i], lines[i])) {
+            return false;
+        }
+    }
+    const auto get = [&lines](size_t line, size_t index, double& value) {
+        if (!lines[line][index]) {
+            return false;
+        }
+        value = *lines[line][index];
+        return true;
+    };
+    const auto get_int = [&lines](size_t line, size_t index, int minimum, int maximum,
+                                  int& value) {
+        return lines[line][index].has_value() &&
+               parseCdmaInteger(*lines[line][index], minimum, maximum, value);
+    };
+    constexpr int kAnyMin = std::numeric_limits<int>::min();
+    constexpr int kAnyMax = std::numeric_limits<int>::max();
+
+    double line3_time = 0.0;
+    if (!get(1, 0, parsed.a_dot) || !get(1, 1, parsed.crs) ||
+        !get(1, 2, parsed.delta_n0) || !get(1, 3, parsed.m0) ||
+        !get(2, 0, parsed.cuc) || !get(2, 1, parsed.e) ||
+        !get(2, 2, parsed.cus) || !get(2, 3, parsed.sqrt_a) ||
+        !get(3, 0, line3_time) || !get(3, 1, parsed.cic) ||
+        !get(3, 2, parsed.omega0) || !get(3, 3, parsed.cis) ||
+        !get(4, 0, parsed.i0) || !get(4, 1, parsed.crc) ||
+        !get(4, 2, parsed.omega) || !get(4, 3, parsed.omega_dot) ||
+        !get(5, 0, parsed.idot) || !get(5, 1, parsed.delta_n0_dot)) {
+        return false;
+    }
+    if (!(parsed.sqrt_a > 0.0) || parsed.e < 0.0 || parsed.e >= 1.0 ||
+        line3_time < 0.0 || line3_time >= 604800.0) {
+        return false;
+    }
+
+    if (gps_like) {
+        // IS-GPS-200 CNAV: URAI_ED / URAI_NED0 are 5-bit two's complement,
+        // URAI_NED1 / URAI_NED2 3-bit unsigned; health holds the L1/L2/L5 bits.
+        parsed.t_op = line3_time;
+        if (!get_int(5, 2, -16, 15, parsed.urai_ned0) ||
+            !get_int(5, 3, 0, 7, parsed.urai_ned1) ||
+            !get_int(6, 0, -16, 15, parsed.urai_ed) ||
+            !get_int(6, 1, 0, 7, parsed.health) ||
+            !get(6, 2, parsed.tgd) ||
+            !get_int(6, 3, 0, 7, parsed.urai_ned2)) {
+            return false;
+        }
+        parsed.isc_l1ca = lines[7][0];
+        parsed.isc_l2c = lines[7][1];
+        parsed.isc_l5i5 = lines[7][2];
+        parsed.isc_l5q5 = lines[7][3];
+        size_t time_line = 8;
+        if (cnav2) {
+            if (lines[8][2] || lines[8][3]) {
+                return false;
+            }
+            parsed.isc_l1cd = lines[8][0];
+            parsed.isc_l1cp = lines[8][1];
+            time_line = 9;
+        }
+        if (!get(time_line, 0, parsed.transmission_time) ||
+            !get_int(time_line, 1, 0, kAnyMax, parsed.wn_op) ||
+            lines[time_line][3]) {
+            return false;
+        }
+        if (lines[time_line][2]) {
+            int flags = 0;
+            if (!get_int(time_line, 2, 0, kAnyMax, flags)) {
+                return false;
+            }
+            parsed.integrity_flags = flags;
+        }
+    } else {
+        parsed.toe = line3_time;
+        if (!get_int(5, 2, 0, 3, parsed.satellite_type) ||
+            !get(5, 3, parsed.t_op) ||
+            !get_int(6, 0, kAnyMin, kAnyMax, parsed.sisai_oe) ||
+            !get_int(6, 1, kAnyMin, kAnyMax, parsed.sisai_ocb) ||
+            !get_int(6, 2, kAnyMin, kAnyMax, parsed.sisai_oc1) ||
+            !get_int(6, 3, kAnyMin, kAnyMax, parsed.sisai_oc2)) {
+            return false;
+        }
+        size_t status_line = 7;
+        if (!cnv3) {
+            // Line 7 carries the ISC of the record's own signal; the other
+            // ISC column is spare.
+            if (type == NavigationMessageType::CNV1) {
+                parsed.isc_b1cd = lines[7][0];
+            } else {
+                parsed.isc_b2ad = lines[7][1];
+            }
+            if (!get(7, 2, parsed.tgd_b1cp) || !get(7, 3, parsed.tgd_b2ap)) {
+                return false;
+            }
+            status_line = 8;
+        }
+        int integrity = 0;
+        if (!get_int(status_line, 0, kAnyMin, kAnyMax, parsed.sismai) ||
+            !get_int(status_line, 1, 0, 3, parsed.health) ||
+            !get_int(status_line, 2, 0, kAnyMax, integrity)) {
+            return false;
+        }
+        parsed.integrity_flags = integrity;
+        const size_t time_line = status_line + 1;
+        if (!get(time_line, 0, parsed.transmission_time)) {
+            return false;
+        }
+        if (cnv3) {
+            if (!get(status_line, 3, parsed.tgd_b2bi) || lines[time_line][3]) {
+                return false;
+            }
+        } else if (!get_int(status_line, 3, 0, 1023, parsed.iodc) ||
+                   !get_int(time_line, 3, 0, 255, parsed.iode)) {
+            return false;
+        }
+    }
+
+    record = std::move(parsed);
+    return true;
+}
 
 bool parseGlonassCdmaEphemerisRecord(
     const NavigationRecordHeader& header,

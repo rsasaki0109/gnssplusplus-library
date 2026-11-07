@@ -211,7 +211,8 @@ Phase 4, system data records (DONE):
 Phase 5, new navigation messages:
 
 - Implement GPS/QZSS CNAV/CNV2, BeiDou CNV1/CNV2/CNV3, and SBAS navigation
-  body models.
+  body models. **DONE**: SBAS by `parseSbasEphemerisRecord`, the modernized
+  Keplerian messages by Phase 5b below.
 - Implement NavIC L1 `L1NV` parsing.
 - Add conformance fixtures from public RINEX 4.02 files before enabling these
   records in production flows.
@@ -227,8 +228,31 @@ Phase 5a, GLONASS CDMA navigation (DONE):
 - Keep the existing GLONASS FDMA path and ephemeris selection policy unchanged;
   malformed CDMA records recover at the next explicit `>` boundary.
 
-The remaining Phase 5 work is GPS/QZSS CNAV/CNV2, BeiDou CNV1/CNV2/CNV3, SBAS,
-and NavIC `L1NV` body models.  Those records remain deliberately unsupported.
+Phase 5b, GPS/QZSS CNAV/CNAV-2 and BeiDou B-CNAV1/2/3 (DONE):
+
+- `rinex4::parseCnavEphemerisRecord` reads `> EPH G../J.. CNAV/CNV2` and
+  `> EPH C.. CNV1/CNV2/CNV3` bodies transactionally with the per-message line
+  counts (9 / 10 / 10 / 10 / 9), required numeric fields, integer and range
+  checks (URAI, health, SatType, IODC / IODE), and blank spare fields; a line
+  may stop after its last non-blank field.
+- The record becomes an `Ephemeris` with `cnav_data` (ADOT, delta-n0-dot,
+  t_op, URAI / SISAI / SISMAI, integrity flags, ISC).  GPS/QZSS toe = toc;
+  BeiDou toc / toe / t_tm are BDT and are moved to GPST (+14 s), each placed
+  in the week within half a week of toc.  TGD_B1Cp / TGD_B2ap go to `tgd` /
+  `tgd_secondary` (CNV3: TGD_B2bI in `tgd`); `health` is the raw field.
+- The records are kept in `NavigationData::cnav_ephemeris_data`, apart from
+  `ephemeris_data`: `getEphemeris()`, the solvers and the RINEX / RTCM
+  writers see exactly the LNAV / D1 / D2 records they saw before.  A caller
+  asks for a modernized record with `getCnavEphemeris(sat, time, type,
+  desired_iode)`.
+- `computeBroadcastState()` applies A_k = A0 + ADOT tk and delta-n0 +
+  delta-n0-dot tk / 2 whenever `cnav_data` is set (IS-GPS-200 Table 30-II,
+  BDS-SIS-ICD-B1C 7.8), as cssrlib `eph2pos` does.
+- Checked on the IGS BRD400DLR merged files of 2025-046 and 2025-233 against
+  the ESA final MGEX orbits and against cssrlib.
+
+The remaining Phase 5 work is the NavIC `L1NV` body model; those records
+remain deliberately unsupported.
 
 Phase 6, writer support:
 
@@ -256,8 +280,8 @@ and 2 are marked by the corresponding status sections below.
   retained in `ObservationData`, and cycle-slip records are consumed rather
   than exposed.
 - No native CRINEX decompressor.
-- No GPS/QZSS CNAV/CNV2, BeiDou CNV1/CNV2/CNV3, SBAS, or NavIC L1NV EPH body
-  implementation; GLONASS CDMA L1OC/L3OC is covered by Phase 5a.
+- No NavIC L1NV EPH body implementation; GLONASS CDMA L1OC/L3OC, SBAS and
+  the GPS/QZSS/BeiDou modernized messages are covered by Phases 5a / 5b.
 - No writer behavior changes.
 - No conversion of system-record epochs into a common GPS time scale or
   application of the parsed system data to navigation selection.

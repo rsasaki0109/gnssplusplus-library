@@ -275,6 +275,13 @@ private:
      * @brief Read RINEX 4 navigation data records after the file header.
      */
     bool readRinex4NavigationData(NavigationData& nav_data);
+
+    /**
+     * @brief Ephemeris (with cnav_data) from a RINEX 4 CNAV / CNV2 / B-CNAV record.
+     *
+     * Times are converted to GPST (BeiDou: BDT + 14 s); GPS / QZSS toe = toc.
+     */
+    Ephemeris cnavEphemerisFromRecord(const rinex4::CnavEphemerisRecord& record);
     
     /**
      * @brief Parse time string
