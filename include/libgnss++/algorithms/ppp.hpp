@@ -131,6 +131,7 @@ public:
     void setPPPConfig(const PPPConfig& config) {
         ppp_config_ = config;
         applyEnvironmentOverridesToPPPConfig();
+        ssr_products_.setCausal(ppp_config_.causal);
     }
     
     /**

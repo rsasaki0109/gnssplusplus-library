@@ -266,6 +266,8 @@ void printUsage(const char* program_name) {
         << "  --clk <clocks.clk>                Optional RINEX CLK precise clock product\n"
         << "  --ssr <corrections.csv>           Optional CSV SSR orbit/clock/code-bias product\n"
         << "  --ionex <maps.ionex>              Optional IONEX TEC map product\n"
+        << "  --causal                          Real-time equivalent: use no --ssr correction\n"
+        << "                                    tagged after the epoch; refuses --sp3/--clk/--ionex\n"
         << "  --dcb <bias.bsx>                  Optional DCB / Bias-SINEX product\n"
         << "  --disable-precise-products        Load SP3/CLK only for inspection, do not apply\n"
         << "  --disable-ssr-corrections         Load SSR only for inspection, do not apply\n"
@@ -425,6 +427,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.baro_telemetry_csv_path = requireValue(arg, i, argc, argv);
         } else if (arg == "--quiet") {
             options.quiet = true;
+        } else if (arg == "--causal") {
+            options.spp_config.causal = true;
         } else {
             argumentError("unknown or incomplete argument: " + arg, argv[0]);
         }
@@ -447,6 +451,11 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.snr_mask < 0.0) {
         argumentError("--snr-mask must be non-negative", argv[0]);
+    }
+    if (options.spp_config.causal &&
+        (!options.sp3_path.empty() || !options.clk_path.empty() || !options.ionex_path.empty())) {
+        argumentError("--causal cannot use --sp3/--clk/--ionex (post-processed products)",
+                      argv[0]);
     }
     {
         const auto& baro = options.spp_config.baro;
@@ -526,6 +535,7 @@ bool writeSummaryJson(const std::string& path,
                    ? "null"
                    : ("\"" + jsonEscape(options.clk_path) + "\""))
            << ",\n";
+    output << "  \"causal\": " << (options.spp_config.causal ? "true" : "false") << ",\n";
     output << "  \"ssr\": "
            << (options.ssr_path.empty()
                    ? "null"

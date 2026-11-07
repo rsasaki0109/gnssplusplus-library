@@ -442,7 +442,7 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
             if (!correction.atmos_valid || correction.atmos_tokens.empty()) {
                 continue;
             }
-            if (pppEnvOverrides().clas_atmos_lifecycle &&
+            if ((pppEnvOverrides().clas_atmos_lifecycle || ssr_products.causal()) &&
                 correction.time > time + 1e-9) {
                 continue;
             }

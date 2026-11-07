@@ -4068,6 +4068,77 @@ TEST(PPPTest, SSRProductsHoldEndStopsTheLastSample) {
     EXPECT_NEAR(clock_m, 0.9, 1e-12);
 }
 
+TEST(PPPTest, CausalSsrProductsNeverUseALaterSample) {
+    SSRProducts products;
+    const SatelliteId g05(GNSSSystem::GPS, 5);
+    const GNSSTime t0(2350, 100000.0);
+    SSROrbitClockCorrection sample;
+    sample.satellite = g05;
+    sample.iode = 40;
+    sample.orbit_valid = true;
+    sample.clock_valid = true;
+    for (const auto& [dt, clock] : {std::pair{0.0, 0.2}, std::pair{10.0, 1.2}}) {
+        sample.time = t0 + dt;
+        sample.orbit_reference_time = sample.time;
+        sample.clock_reference_time = sample.time;
+        sample.clock_correction_m = clock;
+        products.addCorrection(sample);
+    }
+    const auto clock_at = [&](double dt, bool allow_future, double& clock_m) {
+        Vector3d orbit = Vector3d::Zero();
+        return products.interpolateCorrection(
+            g05, t0 + dt, orbit, clock_m, nullptr, nullptr, nullptr, nullptr, nullptr,
+            nullptr, nullptr, 0, nullptr, nullptr, nullptr, allow_future);
+    };
+    double clock_m = 0.0;
+    // Post-processing: interpolated towards the next sample, and the first
+    // sample serves the epochs before it.
+    ASSERT_TRUE(clock_at(5.0, true, clock_m));
+    EXPECT_NEAR(clock_m, 0.7, 1e-12);
+    ASSERT_TRUE(clock_at(-5.0, true, clock_m));
+    EXPECT_NEAR(clock_m, 0.2, 1e-12);
+
+    products.setCausal(true);
+    products.clear();  // a lookup mode: clear() keeps it
+    EXPECT_TRUE(products.causal());
+    for (const auto& [dt, clock] : {std::pair{0.0, 0.2}, std::pair{10.0, 1.2}}) {
+        sample.time = t0 + dt;
+        sample.orbit_reference_time = sample.time;
+        sample.clock_reference_time = sample.time;
+        sample.clock_correction_m = clock;
+        products.addCorrection(sample);
+    }
+    // Causal: the last sample at or before the epoch, whatever the caller asks.
+    for (const bool allow_future : {true, false}) {
+        ASSERT_TRUE(clock_at(5.0, allow_future, clock_m));
+        EXPECT_NEAR(clock_m, 0.2, 1e-12);
+        ASSERT_TRUE(clock_at(10.0, allow_future, clock_m));
+        EXPECT_NEAR(clock_m, 1.2, 1e-12);
+        EXPECT_FALSE(clock_at(-5.0, allow_future, clock_m));
+    }
+}
+
+TEST(PPPTest, CausalPppRefusesTheLegacyRtcmSsrConversion) {
+    // The legacy conversion interpolates its grid samples between updates
+    // while loading, so causal processing cannot use it.
+    const auto rtcm_path = tempFilePath("libgnss_ppp_causal_legacy.rtcm3");
+    NavigationData nav_data;
+    nav_data.addEphemeris(makeBroadcastGpsEphemeris(1));
+    writeBinaryFile(rtcm_path, buildGps1060CombinedFrame(1));
+    PPPProcessor::PPPConfig config;
+    config.causal = true;
+    PPPProcessor causal(config);
+    EXPECT_TRUE(causal.loadedSSRProducts().causal());
+    EXPECT_FALSE(causal.loadRTCMSSRProducts(rtcm_path.string(), nav_data, 1.0));
+    ASSERT_TRUE(causal.loadRTCMSSRProducts(
+        rtcm_path.string(), nav_data, 1.0, PPPProcessor::RTCMSSRProfile::Standard));
+    EXPECT_TRUE(causal.loadedSSRProducts().causal());
+    PPPProcessor post_processing;
+    EXPECT_FALSE(post_processing.loadedSSRProducts().causal());
+    EXPECT_TRUE(post_processing.loadRTCMSSRProducts(rtcm_path.string(), nav_data, 1.0));
+    std::filesystem::remove(rtcm_path);
+}
+
 TEST(PPPTest, RtcmSsrUraWeightsTheCodeOnly) {
     // The same GPS 1060 correction with and without a 1061 URA of 0.22175 m
     // (class 4, value 7): the URA adds URA^2 to the code variance and leaves

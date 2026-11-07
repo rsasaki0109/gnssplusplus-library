@@ -896,6 +896,9 @@ Internet Data Distribution):
   the GPS one, see
   [Galileo HAS support](galileo_has.md#validation-has-sis-kamakura-2025)).
 
+`gnss ppp --causal` takes no correction sample tagged after the epoch on any
+SSR path (see [Real-time and post-processing modes](processing_modes.md)).
+
 `--ssr-rtcm-profile legacy` keeps the conversion used before 2026-11-07, for
 comparison only. It evaluates the broadcast ephemeris nearest in time instead
 of the correction's IODE, interpolates between samples (across an IODE change

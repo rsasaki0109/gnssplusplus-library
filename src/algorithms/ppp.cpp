@@ -407,6 +407,7 @@ PPPProcessor::PPPProcessor(const PPPConfig& ppp_config)
       env_overrides_(PPPEnvOverrides::fromEnvironment()),
       spp_processor_() {
     applyEnvironmentOverridesToPPPConfig();
+    ssr_products_.setCausal(ppp_config_.causal);
     reset();
 }
 

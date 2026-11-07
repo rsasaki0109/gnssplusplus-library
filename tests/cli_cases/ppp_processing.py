@@ -527,6 +527,59 @@ class PPPProcessingCases:
                                    "--ssr-rtcm-profile", "legacy", "--max-epochs", "1", "--out", out)
             self.assertNotIn("merged", legacy.stderr)
 
+    def test_ppp_and_spp_cli_causal_mode(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_causal_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+            obs = str(temp_root / "rover.obs")
+            nav = str(temp_root / "base.nav")
+            for args in (["--input", str(fixture / "rover.rtcm"), "--obs-out", obs],
+                         ["--input", str(fixture / "base.rtcm"), "--nav-out", nav]):
+                converted = self.run_gnss("convert", *args, "--format", "rtcm",
+                                          "--gps-week", "2324", "--quiet")
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            ssr = temp_root / "ssr.rtcm3"
+            ssr.write_bytes(build_rtcm1060(3, 518400))
+            product = temp_root / "product.txt"
+            product.write_text("placeholder\n", encoding="ascii")
+            out = str(temp_root / "out.pos")
+            # Post-processed products and the interpolating legacy RTCM SSR
+            # conversion are refused before any file is read.
+            for args, message in (
+                (["--sp3", str(product)], "--causal cannot use --sp3/--clk"),
+                (["--clk", str(product)], "--causal cannot use --sp3/--clk"),
+                (["--ionex", str(product)], "--causal cannot use --ionex"),
+                (["--ssr-rtcm", str(ssr), "--ssr-rtcm-profile", "legacy"],
+                 "--causal cannot use --ssr-rtcm-profile legacy"),
+            ):
+                with self.subTest(tool="ppp", args=args):
+                    result = self.run_gnss("ppp", "--obs", obs, "--nav", nav, "--out", out,
+                                           "--causal", *args)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(message, result.stderr + result.stdout)
+            for args in (["--sp3", str(product)], ["--ionex", str(product)]):
+                with self.subTest(tool="spp", args=args):
+                    result = self.run_gnss("spp", "--obs", obs, "--nav", nav, "--out", out,
+                                           "--causal", *args)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("--causal cannot use --sp3/--clk/--ionex",
+                                  result.stderr + result.stdout)
+            # The summary records the mode.
+            for causal in (False, True):
+                summary_path = temp_root / f"ppp_{causal}.json"
+                result = self.run_gnss("ppp", "--obs", obs, "--nav", nav,
+                                       "--max-epochs", "3", "--out", out, "--quiet",
+                                       "--summary-json", str(summary_path),
+                                       *(["--causal"] if causal else []))
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                self.assertIs(json.loads(summary_path.read_text())["causal"], causal)
+                spp_summary = temp_root / f"spp_{causal}.json"
+                result = self.run_gnss("spp", "--obs", obs, "--nav", nav, "--max-epochs", "3",
+                                       "--out", out, "--quiet", "--summary-json", str(spp_summary),
+                                       *(["--causal"] if causal else []))
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                self.assertIs(json.loads(spp_summary.read_text())["causal"], causal)
+
     def test_ppp_cli_b2b_arguments_and_bcnav1_requirement(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_b2b_cli_") as temp_dir:
             temp_root = Path(temp_dir)

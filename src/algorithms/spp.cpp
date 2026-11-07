@@ -493,6 +493,7 @@ SPPProcessor::SPPProcessor() {
 }
 
 SPPProcessor::SPPProcessor(const SPPConfig& spp_config) : spp_config_(spp_config) {
+    ssr_products_.setCausal(spp_config_.causal);
     estimated_position_.setZero();
     receiver_clock_bias_ = 0.0;
 }

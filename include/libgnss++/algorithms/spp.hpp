@@ -36,6 +36,8 @@ public:
         bool estimate_receiver_clock = true;          ///< Estimate receiver clock bias
         bool apply_atmospheric_corrections = true;    ///< Apply ionosphere/troposphere corrections
         bool use_multi_constellation = true;          ///< Use multiple GNSS constellations
+        /// Real-time equivalent: SSR corrections tagged after the epoch are not used.
+        bool causal = false;
         
         // Outlier detection
         bool enable_outlier_detection = true;
@@ -209,7 +211,10 @@ public:
     /**
      * @brief Set SPP-specific configuration
      */
-    void setSPPConfig(const SPPConfig& config) { spp_config_ = config; }
+    void setSPPConfig(const SPPConfig& config) {
+        spp_config_ = config;
+        ssr_products_.setCausal(spp_config_.causal);
+    }
     
     /**
      * @brief Get SPP configuration
@@ -244,6 +249,7 @@ public:
     bool loadSSRProducts(const std::string& ssr_file);
     void setSSRProducts(const SSRProducts& products) {
         ssr_products_ = products;
+        ssr_products_.setCausal(spp_config_.causal);
         ssr_products_loaded_ = !ssr_products_.orbit_clock_corrections.empty();
     }
 

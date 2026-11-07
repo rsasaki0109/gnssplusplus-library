@@ -750,6 +750,15 @@ public:
     std::map<SatelliteId, std::vector<SSROrbitClockCorrection>> orbit_clock_corrections;
     std::vector<SSROrbitClockCorrection> clas_trop_bank_corrections;
 
+    /**
+     * Causal (real-time equivalent) lookups: interpolateCorrection() never
+     * uses a sample tagged after the requested time, whatever its
+     * allow_future_samples argument, and returns false before the first
+     * sample of a satellite. The flag is a lookup mode, so clear() keeps it.
+     */
+    void setCausal(bool causal) { causal_ = causal; }
+    bool causal() const { return causal_; }
+
     void addCorrection(const SSROrbitClockCorrection& correction);
     void addCorrections(const std::vector<SSROrbitClockCorrection>& corrections);
 
@@ -879,6 +888,7 @@ private:
     void invalidateHeldTokenCaches() const;
     const std::map<SatelliteId, ClasAtmosRowIndex>& clasAtmosRowIndex() const;
 
+    bool causal_ = false;
     bool orbit_corrections_are_rac_ = false;
     // Memoized held-token lookups for the current epoch. The lookups are pure
     // functions of their arguments and the stored corrections, but CLAS OSR
