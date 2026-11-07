@@ -21,13 +21,14 @@
 # PPP's B1I / B3I combination applies the B1I - B3I PCO difference. IGS
 # week 2405 raised the BDS-3 z-PCOs of every band but B1 by about 0.13 m
 # ("Adjusted BeiDou-3 and QZSS scale"), which halves that difference; with
-# igs20_2425.atx (igs-final-ppp's file) the static runs end at 0.185 m
-# (2025-02-15) and 0.117 m (2025-08-21) after one hour instead of the values
-# below.
+# igs20_2425.atx (igs-final-ppp's file) the static runs end at 0.021 m
+# (2025-02-15) and 0.040 m (2025-08-21) after one hour, and the 2025-08-21
+# hour stays below 0.2 m only from 27.7 min (18.1 min with week 2353).
 #
 # cssrlib 26734271 samples/test_pppbds.py (C59, B1C / B2a, igs20.atx of week
-# 2290, same BDS-3 PCOs as week 2353): 0.10 m (2025-02-15) and 0.03 m
-# (2025-08-21) horizontal after one hour; with B1I / B3I 0.14 m and 0.05 m.
+# 2290, same BDS-3 PCOs as week 2353): 0.09 m (2025-02-15) and 0.04 m
+# (2025-08-21) horizontal after one hour, below 0.2 m from 39.4 and 13.8 min;
+# with B1I / B3I 0.14 m and 0.05 m, from 53.7 and 12.7 min.
 
 [lane]
 name = "bds-b2b-ppp"
@@ -120,7 +121,8 @@ foreach = [
 ]
 
 # PPP gates (reproduced 2026-11-07, Linux gcc): static float PPP on both hours
-# after one hour.
+# after one hour, and how soon the horizontal error stays below 0.2 m (41 min
+# on both hours while the B2b URA also weighted the phase).
 [[metrics]]
 name = "b2b {hour} static H at 60 min (m)"
 source = "{work_dir}/summary.json"
@@ -137,6 +139,14 @@ max = 0.40
 readme = "docs/bds_ppp_b2b.md"
 foreach = [{ hour = "046r" }, { hour = "233h" }]
 
+[[metrics]]
+name = "b2b {hour} static H < 0.20 m from (min)"
+source = "{work_dir}/summary.json"
+path = "runs.b2b_{hour}_static.convergence_h_below_0p20_min"
+max = 25
+readme = "docs/bds_ppp_b2b.md"
+foreach = [{ hour = "046r" }, { hour = "233h" }]
+
 # docs/bds_ppp_b2b.md table values; reported, not gated.
 [[metrics]]
 name = "table: b2b {run} {field} at {t}"
@@ -146,22 +156,22 @@ gate = false
 abs_tol = 0.05
 readme = "docs/bds_ppp_b2b.md table"
 foreach = [
-  { run = "b2b_046r_static", t = "30min", field = "h_m", expected = 0.277 },
-  { run = "b2b_046r_static", t = "30min", field = "up_m", expected = 0.020 },
-  { run = "b2b_046r_static", t = "60min", field = "h_m", expected = 0.142 },
-  { run = "b2b_046r_static", t = "60min", field = "up_m", expected = -0.286 },
-  { run = "b2b_046r_kinematic", t = "30min", field = "h_m", expected = 0.301 },
-  { run = "b2b_046r_kinematic", t = "30min", field = "up_m", expected = 0.141 },
-  { run = "b2b_046r_kinematic", t = "60min", field = "h_m", expected = 0.180 },
-  { run = "b2b_046r_kinematic", t = "60min", field = "up_m", expected = -0.559 },
-  { run = "b2b_233h_static", t = "30min", field = "h_m", expected = 0.218 },
-  { run = "b2b_233h_static", t = "30min", field = "up_m", expected = 0.160 },
-  { run = "b2b_233h_static", t = "60min", field = "h_m", expected = 0.100 },
-  { run = "b2b_233h_static", t = "60min", field = "up_m", expected = -0.105 },
-  { run = "b2b_233h_kinematic", t = "30min", field = "h_m", expected = 0.179 },
-  { run = "b2b_233h_kinematic", t = "30min", field = "up_m", expected = -0.053 },
-  { run = "b2b_233h_kinematic", t = "60min", field = "h_m", expected = 0.060 },
-  { run = "b2b_233h_kinematic", t = "60min", field = "up_m", expected = -0.174 },
+  { run = "b2b_046r_static", t = "30min", field = "h_m", expected = 0.111 },
+  { run = "b2b_046r_static", t = "30min", field = "up_m", expected = -0.439 },
+  { run = "b2b_046r_static", t = "60min", field = "h_m", expected = 0.014 },
+  { run = "b2b_046r_static", t = "60min", field = "up_m", expected = -0.311 },
+  { run = "b2b_046r_kinematic", t = "30min", field = "h_m", expected = 0.108 },
+  { run = "b2b_046r_kinematic", t = "30min", field = "up_m", expected = -0.240 },
+  { run = "b2b_046r_kinematic", t = "60min", field = "h_m", expected = 0.052 },
+  { run = "b2b_046r_kinematic", t = "60min", field = "up_m", expected = -0.526 },
+  { run = "b2b_233h_static", t = "30min", field = "h_m", expected = 0.090 },
+  { run = "b2b_233h_static", t = "30min", field = "up_m", expected = -0.058 },
+  { run = "b2b_233h_static", t = "60min", field = "h_m", expected = 0.078 },
+  { run = "b2b_233h_static", t = "60min", field = "up_m", expected = -0.217 },
+  { run = "b2b_233h_kinematic", t = "30min", field = "h_m", expected = 0.039 },
+  { run = "b2b_233h_kinematic", t = "30min", field = "up_m", expected = -0.249 },
+  { run = "b2b_233h_kinematic", t = "60min", field = "h_m", expected = 0.013 },
+  { run = "b2b_233h_kinematic", t = "60min", field = "up_m", expected = -0.120 },
 ]
 
 [[metrics]]
@@ -172,6 +182,6 @@ gate = false
 abs_tol = 1.5
 readme = "docs/bds_ppp_b2b.md table"
 foreach = [
-  { run = "b2b_046r_static", expected = 41.53 },
-  { run = "b2b_233h_static", expected = 40.78 },
+  { run = "b2b_046r_static", expected = 15.82 },
+  { run = "b2b_233h_static", expected = 18.15 },
 ]

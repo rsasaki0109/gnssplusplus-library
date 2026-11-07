@@ -1250,7 +1250,16 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     const double ura_variance =
                         ura_variance_ratio * ura_sigma_m * ura_sigma_m;
                     deferred_variance_pr += ura_variance;
-                    deferred_variance_cp += ura_variance;
+                    // PPP-B2b: code only. The URA describes an orbit / clock
+                    // error that changes slowly, which the float ambiguity
+                    // absorbs; as white phase noise (0.07-0.22 m on the
+                    // Kamakura hours, against about 15 mm of
+                    // ionosphere-free phase noise) it made code dominate
+                    // and convergence took 40 min. cssrlib does not weight
+                    // by URA at all.
+                    if (!bds_b2b_corrections_) {
+                        deferred_variance_cp += ura_variance;
+                    }
                 }
                 const auto ssr_geometry = nav.calculateGeometry(receiver_position, sat_position);
                 const double trop_correction_m =
