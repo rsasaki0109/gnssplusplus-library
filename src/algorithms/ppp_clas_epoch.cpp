@@ -1008,7 +1008,10 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
 
     if (ppp_config_.use_clas_dd_filter) {
         if (!clas_dd_filter_) {
-            clas_dd_filter_ = std::make_unique<ppp_clas_dd::DdFilterScaffold>();
+            clas_dd_filter_ = std::make_shared<ppp_clas_dd::DdFilterScaffold>();
+        } else if (clas_dd_filter_.use_count() > 1) {
+            // Shared with a copy of this processor: update a copy of its own.
+            clas_dd_filter_ = std::make_shared<ppp_clas_dd::DdFilterScaffold>(*clas_dd_filter_);
         }
         const PositionSolution native_float_solution = ppp_clas::finalizeEpochSolution(
             filter_state_,

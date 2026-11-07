@@ -7,7 +7,7 @@ epoch *t* may use, not in the solver.
 |---|---|---|---|
 | Real-time | Data received up to *t* (with its latency) | `gnss live`, `gnss online` | Operation |
 | Post-processing, real-time equivalent (`--realtime`) | Data tagged up to *t* | `gnss solve --realtime`, `gnss replay --realtime`, `gnss ppp --realtime`, `gnss spp --realtime` | Real-time performance from recorded data |
-| Post-processing | Anything in the files, including data after *t* | `gnss solve`, `gnss solve --combined`, `gnss ppp`, `gnss spp`, `gnss fgo` | Best accuracy after the fact |
+| Post-processing | Anything in the files, including data after *t* | `gnss solve`, `gnss ppp`, `gnss spp`, `gnss fgo`; `--combined` for `gnss solve` / `gnss ppp` | Best accuracy after the fact |
 
 A `--realtime` run is meant to give what a real-time receiver would have
 given on the same data, so results quoted for real-time use should come from
@@ -249,4 +249,36 @@ on every satellite at every epoch (the Doppler prediction used a forward time
 step) and its jump gates, which grow with the elapsed time, rejected every
 epoch once the vehicle had moved.
 
-PPP has no backward pass yet.
+## Forward + backward PPP: `gnss ppp --combined`
+
+The same combination for PPP: a copy of the loaded processor (products,
+configuration) runs the epochs backward after the forward pass, and each
+epoch combines the two passes as above. The PPP filter now predicts with the
+signed time step (backward on that pass) and grows its process noise with
+the elapsed time. The default (forward) output does not change: HAS IDD, HAS
+SIS (both hours), B2b, JPL GDGPS (both hours), MADOCA and CLAS are
+byte-identical.
+
+The backward pass covers the forward filter's convergence: static runs,
+then kinematic ones, H at 10 / 30 min and the time after which H stays below
+0.20 m:
+
+| Run | Static | Static `--combined` | Kinematic | Kinematic `--combined` |
+|---|---|---|---|---|
+| HAS SIS, Kamakura 2025-02-15 | 0.379 / 0.027 m, 41.9 min | 0.126 / 0.084 m, 0 min | 0.409 / 0.052 m | 0.066 / 0.043 m |
+| HAS SIS, Kamakura 2025-08-21 | 0.515 / 0.305 m, 43.9 min | 0.097 / 0.092 m, 0 min | 0.315 / 0.177 m | 0.131 / 0.084 m |
+| PPP-B2b, Kamakura 2025-02-15 | 0.466 / 0.111 m, 15.8 min | 0.022 / 0.007 m, 0 min | 0.493 / 0.108 m | 0.145 / 0.056 m |
+| JPL GDGPS, Kamakura 2025-08-21 | 0.507 / 0.251 m, 42.1 min | 0.188 / 0.153 m, 0 min | 0.216 / 0.063 m | 0.082 / 0.028 m |
+| JPL GDGPS, Kamakura 2024-02-12 | 0.274 / 0.332 m, 38.6 min | 0.172 / 0.112 m, 0 min | 0.198 / 0.215 m | 0.045 / 0.043 m |
+| HAS IDD, OBE4 2023-08-17 | 0.063 / 0.123 m, 5.8 min | 0.122 / 0.250 m, 41.2 min | 0.127 / 0.205 m | 0.223 / 0.240 m |
+
+- **OBE4 gets worse.** Its E1 / E5a drift (see [Galileo HAS
+  support](galileo_has.md)) gives the two passes different height biases,
+  and their mean is further from the reference in the middle of the hour.
+- **MADOCA PPP-AR** (MIZU sample, kinematic, 118 epochs): 91 → 92 FIX; 25
+  epochs where the passes fixed positions more than 5 cm apart are FLOAT.
+- **Not with CLAS** (`--clas-osr`): its SIS continuity and atmosphere
+  handling only run forward. Nor with `--realtime`, `--live-output` or
+  `--madocalib-bridge`.
+- The summary JSON records `"combined"`; the convergence and AR telemetry
+  describe the forward pass.

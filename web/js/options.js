@@ -100,6 +100,7 @@ export function exportOptionsToml(opts, commandHint = '') {
     const l6d = opts.l6d || [];
     entries.push(['kinematic', mode.pppMotion === '--kinematic']);
     if (opts.realtime) entries.push(['realtime', true]);
+    if (opts.combined) entries.push(['combined', true]);
     for (const [field, key] of Object.entries(PPP_KEYS)) {
       if (field === 'ratio') continue;
       if (hasValue(opts[field])) entries.push([key, opts[field]]);
@@ -267,7 +268,7 @@ export function importOptionsToml(text) {
       fields.verbose = true;
     } else if (!isFuse && key === 'realtime' && typeof value === 'boolean') {
       fields.realtime = value;
-    } else if (!isPpp && !isFuse && key === 'combined' && typeof value === 'boolean') {
+    } else if (!isFuse && key === 'combined' && typeof value === 'boolean') {
       fields.combined = value;
     } else if (isPpp && key === 'enable_ar' && typeof value === 'boolean') {
       fields.enableAr = value;
