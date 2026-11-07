@@ -1129,6 +1129,7 @@ HasMt1Status GalileoHasDecoder::addMessage(const std::vector<uint8_t>& message,
         if (mt1.has_orbit) {
             OrbitSet set;
             set.time = reference;
+            set.received = reception_time;
             set.validity_s = hasValidityIntervalSeconds(mt1.orbit_vi);
             for (const auto& entry : mt1.orbits) {
                 set.entries[entry.satellite] = entry;
@@ -1144,6 +1145,7 @@ HasMt1Status GalileoHasDecoder::addMessage(const std::vector<uint8_t>& message,
             }
             ClockState state;
             state.time = reference;
+            state.received = reception_time;
             state.validity_s =
                 hasValidityIntervalSeconds(entry.subset ? mt1.clock_subset_vi : mt1.clock_full_vi);
             state.entry = entry;
@@ -1227,6 +1229,7 @@ void GalileoHasDecoder::tryEmit(const SatelliteId& satellite) {
     update.iod_set_id = clock.iod_set_id;
     update.orbit_time = set.time;
     update.clock_time = clock.time;
+    update.received = clock.received > set.received ? clock.received : set.received;
     update.radial_m = orbit.radial_m;
     update.in_track_m = orbit.in_track_m;
     update.cross_track_m = orbit.cross_track_m;

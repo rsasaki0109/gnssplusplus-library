@@ -919,6 +919,11 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 observation.valid = false;
                 continue;
             }
+            if (ssr_products_loaded_ && ssr_first_available_.week > 0 &&
+                time < ssr_first_available_) {
+                observation.valid = false;
+                continue;
+            }
             if ((env_overrides_.require_ssr_orbit || require_ssr_orbit_correction_) &&
                 ssr_products_loaded_ && ssr_orbit_iode < 0) {
                 observation.valid = false;

@@ -8,6 +8,7 @@
 #include <libgnss++/algorithms/ppp_multifrequency.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/io/bds_ppp_b2b.hpp>
+#include <libgnss++/io/galileo_has.hpp>
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
@@ -4137,6 +4138,159 @@ TEST(PPPTest, CausalPppRefusesTheLegacyRtcmSsrConversion) {
     EXPECT_FALSE(post_processing.loadedSSRProducts().causal());
     EXPECT_TRUE(post_processing.loadRTCMSSRProducts(rtcm_path.string(), nav_data, 1.0));
     std::filesystem::remove(rtcm_path);
+}
+
+TEST(PPPTest, RealtimeRtcmSsrUpdatesApplyAfterTheirLatency) {
+    // Two GPS 1060 updates, 30 s apart, with different clocks. With
+    // --realtime and --ssr-latency 5 each one applies from 5 s after its
+    // reference epoch, and the previous one is held until then.
+    const auto rtcm_path = tempFilePath("libgnss_ppp_realtime_ssr_latency.rtcm3");
+    NavigationData nav_data;
+    const Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(eph);
+    std::vector<uint8_t> frames = buildGps1060CombinedFrame(1, 345600, 77, 1200);
+    const auto second = buildGps1060CombinedFrame(1, 345630, 77, 2400);
+    frames.insert(frames.end(), second.begin(), second.end());
+    writeBinaryFile(rtcm_path, frames);
+
+    const SatelliteId g01(GNSSSystem::GPS, 1);
+    const auto clock_at = [&](const PPPProcessor& processor, double tow, double& clock_m) {
+        Vector3d orbit = Vector3d::Zero();
+        return processor.interpolateLoadedSSRCorrection(
+            g01, GNSSTime(eph.toe.week, tow), orbit, clock_m);
+    };
+    PPPProcessor post_processing;
+    ASSERT_TRUE(post_processing.loadRTCMSSRProducts(
+        rtcm_path.string(), nav_data, 1.0, PPPProcessor::RTCMSSRProfile::Standard));
+    double first_clock = 0.0;
+    double second_clock = 0.0;
+    ASSERT_TRUE(clock_at(post_processing, 345600.0, first_clock));
+    ASSERT_TRUE(clock_at(post_processing, 345630.0, second_clock));
+    ASSERT_GT(std::abs(second_clock - first_clock), 0.05);
+
+    for (const double latency_s : {0.0, 5.0}) {
+        SCOPED_TRACE(latency_s);
+        PPPProcessor::PPPConfig config;
+        config.causal = true;
+        config.ssr_latency_s = latency_s;
+        PPPProcessor realtime(config);
+        ASSERT_TRUE(realtime.loadRTCMSSRProducts(
+            rtcm_path.string(), nav_data, 1.0, PPPProcessor::RTCMSSRProfile::Standard));
+        double clock_m = 0.0;
+        EXPECT_FALSE(clock_at(realtime, 345600.0 + latency_s - 1.0, clock_m));
+        ASSERT_TRUE(clock_at(realtime, 345600.0 + latency_s, clock_m));
+        EXPECT_NEAR(clock_m, first_clock, 1e-9);
+        ASSERT_TRUE(clock_at(realtime, 345630.0 + latency_s - 1.0, clock_m));
+        EXPECT_NEAR(clock_m, first_clock, 1e-9);
+        ASSERT_TRUE(clock_at(realtime, 345630.0 + latency_s, clock_m));
+        EXPECT_NEAR(clock_m, second_clock, 1e-9);
+    }
+
+    // Post-processing ignores the latency.
+    PPPProcessor::PPPConfig config;
+    config.ssr_latency_s = 5.0;
+    PPPProcessor ignored(config);
+    ASSERT_TRUE(ignored.loadRTCMSSRProducts(
+        rtcm_path.string(), nav_data, 1.0, PPPProcessor::RTCMSSRProfile::Standard));
+    double clock_m = 0.0;
+    ASSERT_TRUE(clock_at(ignored, 345630.0, clock_m));
+    EXPECT_NEAR(clock_m, second_clock, 1e-9);
+    std::filesystem::remove(rtcm_path);
+}
+
+TEST(PPPTest, RealtimeHasSisUpdatesApplyFromTheirReception) {
+    // HAS SIS updates carry the reception time of their last message: with
+    // --realtime an update applies from then on, the previous one until then.
+    NavigationData nav_data;
+    const Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(eph);
+    const int week = eph.toe.week;
+    std::vector<io::HasSsrUpdate> updates(2);
+    for (size_t index = 0; index < updates.size(); ++index) {
+        auto& update = updates[index];
+        update.satellite = SatelliteId(GNSSSystem::GPS, 1);
+        update.time = GNSSTime(week, 345600.0 + 30.0 * static_cast<double>(index));
+        update.valid_until = update.time + 300.0;
+        update.iode = static_cast<int>(eph.iode);
+        update.clock_m = 0.1 + 0.4 * static_cast<double>(index);
+        update.received = update.time + 3.0 + static_cast<double>(index);
+    }
+    const auto clock_at = [&](const PPPProcessor& processor, double tow, double& clock_m) {
+        Vector3d orbit = Vector3d::Zero();
+        return processor.interpolateLoadedSSRCorrection(
+            updates[0].satellite, GNSSTime(week, tow), orbit, clock_m);
+    };
+    PPPProcessor post_processing;
+    ASSERT_TRUE(post_processing.loadGalileoHasSisProducts(updates, nav_data, 1.0));
+    double first_clock = 0.0;
+    double second_clock = 0.0;
+    ASSERT_TRUE(clock_at(post_processing, 345600.0, first_clock));
+    ASSERT_TRUE(clock_at(post_processing, 345630.0, second_clock));
+    ASSERT_NEAR(std::abs(second_clock - first_clock), 0.4, 1e-9);
+
+    PPPProcessor::PPPConfig config;
+    config.causal = true;
+    PPPProcessor realtime(config);
+    ASSERT_TRUE(realtime.loadGalileoHasSisProducts(updates, nav_data, 1.0));
+    double clock_m = 0.0;
+    EXPECT_FALSE(clock_at(realtime, 345602.0, clock_m));
+    ASSERT_TRUE(clock_at(realtime, 345603.0, clock_m));
+    EXPECT_NEAR(clock_m, first_clock, 1e-9);
+    ASSERT_TRUE(clock_at(realtime, 345633.0, clock_m));
+    EXPECT_NEAR(clock_m, first_clock, 1e-9);
+    ASSERT_TRUE(clock_at(realtime, 345634.0, clock_m));
+    EXPECT_NEAR(clock_m, second_clock, 1e-9);
+}
+
+TEST(PPPTest, RealtimeB2bUpdatesApplyInReceptionOrder) {
+    // B2b reception delays vary: here the update with the later reference
+    // epoch arrives first. Post-processing orders the updates by epoch;
+    // --realtime uses each one from its reception, the latest received.
+    NavigationData nav_data;
+    const Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(eph);
+    const int week = eph.toe.week;
+    const auto make_update = [&](double tow, double received_tow, double c0_m) {
+        io::BdsB2bUpdate update;
+        update.satellite = SatelliteId(GNSSSystem::GPS, 1);
+        update.time = GNSSTime(week, tow);
+        update.received = GNSSTime(week, received_tow);
+        update.iode = static_cast<int>(eph.iode);
+        update.c0_m = c0_m;
+        return update;
+    };
+    // Decoder (reception) order.
+    const std::vector<io::BdsB2bUpdate> updates = {
+        make_update(345606.0, 345608.0, 0.5),
+        make_update(345600.0, 345620.0, 0.1),
+    };
+    const auto clock_at = [&](const PPPProcessor& processor, double tow, double& clock_m) {
+        Vector3d orbit = Vector3d::Zero();
+        return processor.interpolateLoadedSSRCorrection(
+            updates[0].satellite, GNSSTime(week, tow), orbit, clock_m);
+    };
+    PPPProcessor post_processing;
+    ASSERT_TRUE(post_processing.loadBdsB2bProducts(updates, nav_data, 1.0));
+    double early_epoch_clock = 0.0;
+    double late_epoch_clock = 0.0;
+    ASSERT_TRUE(clock_at(post_processing, 345600.0, early_epoch_clock));
+    ASSERT_TRUE(clock_at(post_processing, 345606.0, late_epoch_clock));
+    ASSERT_NEAR(std::abs(late_epoch_clock - early_epoch_clock), 0.4, 1e-9);
+    double clock_m = 0.0;
+    ASSERT_TRUE(clock_at(post_processing, 345620.0, clock_m));
+    EXPECT_NEAR(clock_m, late_epoch_clock, 1e-9);
+
+    PPPProcessor::PPPConfig config;
+    config.causal = true;
+    PPPProcessor realtime(config);
+    ASSERT_TRUE(realtime.loadBdsB2bProducts(updates, nav_data, 1.0));
+    EXPECT_FALSE(clock_at(realtime, 345607.0, clock_m));
+    ASSERT_TRUE(clock_at(realtime, 345608.0, clock_m));
+    EXPECT_NEAR(clock_m, late_epoch_clock, 1e-9);
+    ASSERT_TRUE(clock_at(realtime, 345619.0, clock_m));
+    EXPECT_NEAR(clock_m, late_epoch_clock, 1e-9);
+    ASSERT_TRUE(clock_at(realtime, 345620.0, clock_m));
+    EXPECT_NEAR(clock_m, early_epoch_clock, 1e-9);
 }
 
 TEST(PPPTest, RtcmSsrUraWeightsTheCodeOnly) {

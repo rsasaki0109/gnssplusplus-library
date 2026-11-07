@@ -227,6 +227,7 @@ TEST(BdsPppB2bTest, DecodesMaskOrbitClockAndPairsByIodCorr) {
     EXPECT_EQ(c19.iodn, 0x30c);
     EXPECT_EQ(c19.iode, 0x0c);
     EXPECT_EQ(c19.iod_corr, 2);
+    EXPECT_EQ(c19.received, kReception);  // the clock message that completed it
     EXPECT_NEAR(c19.radial_m, 0.16, 1e-12);
     EXPECT_NEAR(c19.c0_m, -0.48, 1e-12);
     ASSERT_TRUE(c19.ura_m.has_value());

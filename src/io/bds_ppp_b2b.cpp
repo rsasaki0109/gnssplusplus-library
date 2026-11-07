@@ -246,7 +246,9 @@ bool BdsB2bDecoder::masked(const SatelliteId& satellite) const {
     return false;
 }
 
-void BdsB2bDecoder::emit(const SatelliteId& satellite, const GNSSTime& time) {
+void BdsB2bDecoder::emit(const SatelliteId& satellite,
+                         const GNSSTime& time,
+                         const GNSSTime& received) {
     const auto orbit = orbits_.find(satellite);
     const auto clock = clocks_.find(satellite);
     if (orbit == orbits_.end() || clock == clocks_.end()) {
@@ -271,6 +273,7 @@ void BdsB2bDecoder::emit(const SatelliteId& satellite, const GNSSTime& time) {
     BdsB2bUpdate update;
     update.satellite = satellite;
     update.time = time;
+    update.received = received;
     if (!paired || !o.available) {
         update.usable = false;
         updates_.push_back(std::move(update));
@@ -390,7 +393,7 @@ int BdsB2bDecoder::addMessage(const BdsB2bMessage& message) {
             orbit.cross_m = static_cast<double>(cross) * kOrbitCrossScale;
             orbits_[orbit.satellite] = OrbitState{time, orbit};
             decoded.orbits.push_back(orbit);
-            emit(orbit.satellite, time);
+            emit(orbit.satellite, time, message.time);
         }
     } else if (type == 3) {
         ++stats_.code_bias_messages;
@@ -451,7 +454,7 @@ int BdsB2bDecoder::addMessage(const BdsB2bMessage& message) {
             state.c0_m = clock.c0_m;
             state.available = clock.available;
             decoded.clocks.push_back(clock);
-            emit(clock.satellite, time);
+            emit(clock.satellite, time, message.time);
         }
     }
 

@@ -31,6 +31,21 @@ data from after its epoch (`PPPConfig::causal`, `SPPConfig::causal`,
 
   This applies to the corrections, the ambiguity-resolution helpers and the
   CLAS OSR path alike (`SSRProducts::setCausal`).
+- **SSR reception.** An update applies from the time a receiver has it, not
+  from its reference epoch; the previous one stays in use until then:
+  - HAS SIS (`--has-pages`) and PPP-B2b (`--b2b`): from the reception of the
+    page or message that completes it. On the Kamakura hours that is 1 to 4 s
+    after the reference epoch for HAS (median 1 s), 6 to 29 s for B2b
+    (median 7 s). Updates apply in the order they are received.
+  - RTCM SSR (`--ssr-rtcm`): the files hold no reception time.
+    `--ssr-latency <s>` applies each update *s* seconds after its reference
+    epoch (default 0).
+  - With RTCM SSR, PPP starts once the first update is in hand; the epochs
+    before it are SPP. Starting on broadcast orbits and switching every
+    satellite to its correction a few seconds later jumps the filter (HAS
+    IDD with a 5 s latency: H 1.9 m at 2 min, converged after 20 min instead
+    of 5.6). Satellites the stream never corrects stay on their broadcast
+    orbit, as in post-processing.
 - **Broadcast ephemerides.** Only records already broadcast at the epoch
   are candidates (`NavigationData::setCausal`). A record is available from
   its transmission time, which the RINEX reader now keeps for GPS, Galileo,
@@ -49,7 +64,8 @@ data from after its epoch (`PPPConfig::causal`, `SPPConfig::causal`,
   hold final products, interpolated around the epoch.
   `--ssr-rtcm-profile legacy` interpolates its samples between updates while
   loading. `--madocalib-bridge` hands the run to MADOCALIB.
-- **Summary.** The summary JSON records `"realtime": true`.
+- **Summary.** The summary JSON records `"realtime": true` and
+  `"ssr_latency_s"`.
 
 Without `--realtime`, `gnss ppp` already takes no future SSR sample on the
 held-update paths: RTCM SSR standard / `has-idd`, `--has-pages`, `--b2b`, and
@@ -66,9 +82,9 @@ below 0.20 m):
 | HAS IDD, OBE4 2023-08-17 | 0.123 / 0.116 m, 5.8 min | 0.115 / 0.123 m, 5.6 min |
 | JPL GDGPS RTCM SSR, Kamakura 2025-08-21 | 0.251 / 0.057 m, 42.1 min | 0.264 / 0.050 m, 42.0 min |
 | JPL GDGPS RTCM SSR, Kamakura 2024-02-12 | 0.332 / 0.029 m, 38.6 min | 0.332 / 0.028 m, 38.2 min |
-| HAS SIS, Kamakura 2025-02-15 | 0.027 / 0.118 m, 41.9 min | 0.074 / 0.072 m, 15.2 min |
-| HAS SIS, Kamakura 2025-08-21 | 0.305 / 0.118 m, 43.9 min | 0.121 / 0.091 m, 33.9 min |
-| PPP-B2b, Kamakura 2025-02-15 | 0.111 / 0.014 m, 15.8 min | 0.111 / 0.065 m, 15.8 min |
+| HAS SIS, Kamakura 2025-02-15 | 0.027 / 0.118 m, 41.9 min | 0.075 / 0.071 m, 15.2 min |
+| HAS SIS, Kamakura 2025-08-21 | 0.305 / 0.118 m, 43.9 min | 0.119 / 0.091 m, 34.0 min |
+| PPP-B2b, Kamakura 2025-02-15 | 0.111 / 0.014 m, 15.8 min | 0.113 / 0.063 m, 16.2 min |
 | MADOCA (L6E + L6D), MIZU sample, kinematic PPP-AR (120 epochs) | 91 FIX of 118 | 91 FIX of 118 |
 | CLAS L6, CLASLIB sample (300 epochs) | H RMS 1.56 m, last 100 epochs | 3.05 m |
 
@@ -81,6 +97,9 @@ below 0.20 m):
 - **HAS SIS and B2b: changed.** These recordings start together with the
   observations, so with `--realtime` a satellite has no correction, and is not
   used, until its first update.
+- **Reception time: small changes.** Using HAS SIS and B2b updates from
+  their reception moved H at 30 / 60 min by at most 2 mm. The RTCM SSR rows
+  above use no latency; see the table below.
 - **CLAS: changed.**
   - CLAS loses its interpolation towards the next update and its later
     atmosphere rows.
@@ -88,6 +107,14 @@ below 0.20 m):
     100 epochs against the published antenna coordinate is 1.36 m with the
     existing no-future switch `GNSS_PPP_CLAS_BASE_CLOCK_PARITY=1`, and
     0.72 m with `GNSS_PPP_CLAS_ATMOS_LIFECYCLE=1`.
+
+RTCM SSR with `--realtime --ssr-latency <s>` (same columns):
+
+| Run | 0 s | 5 s | 10 s |
+|---|---|---|---|
+| HAS IDD, OBE4 2023-08-17 | 0.115 / 0.123 m, 5.6 min | 0.117 / 0.122 m, 5.9 min | 0.120 / 0.121 m, 7.5 min |
+| JPL GDGPS, Kamakura 2025-08-21 | 0.264 / 0.050 m, 42.0 min | 0.279 / 0.051 m, 42.1 min | 0.269 / 0.051 m, 42.1 min |
+| JPL GDGPS, Kamakura 2024-02-12 | 0.332 / 0.028 m, 38.2 min | 0.327 / 0.029 m, 38.6 min | 0.308 / 0.031 m, 38.1 min |
 
 ## RTK: `gnss solve --realtime`
 
@@ -162,10 +189,9 @@ stress fixture:
 These parts still see data after the epoch, also with `--realtime`; they are
 the next steps of this work:
 
-- **SSR reception time.**
-  - Corrections are tagged with their reference epoch, not the time a
-    receiver has them (a few seconds later; CLAS about 15 s).
-  - A `--realtime` run therefore uses each update slightly early.
+- **MADOCA and CLAS L6 reception time.** Their corrections are still tagged
+  with their reference epoch, not the time a receiver has them (CLAS about
+  15 s later), so a `--realtime` run uses each update slightly early.
 
 A priori configuration is not treated as future data: the RINEX header
 position, ANTEX, ocean and atmospheric loading and DCB files are used in

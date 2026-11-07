@@ -557,6 +557,19 @@ class PPPProcessingCases:
                                            "--realtime", *args)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn(message, result.stderr + result.stdout)
+            # --ssr-latency models the reception of an RTCM SSR stream in
+            # --realtime runs only.
+            for args, message in (
+                (["--ssr-rtcm", str(ssr), "--ssr-latency", "5"],
+                 "--ssr-latency requires --realtime"),
+                (["--realtime", "--ssr-latency", "5"], "--ssr-latency requires --ssr-rtcm"),
+                (["--realtime", "--ssr-rtcm", str(ssr), "--ssr-latency", "-1"],
+                 "--ssr-latency must be >= 0"),
+            ):
+                with self.subTest(tool="ppp", args=args):
+                    result = self.run_gnss("ppp", "--obs", obs, "--nav", nav, "--out", out, *args)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(message, result.stderr + result.stdout)
             for args in (["--sp3", str(product)], ["--ionex", str(product)]):
                 with self.subTest(tool="spp", args=args):
                     result = self.run_gnss("spp", "--obs", obs, "--nav", nav, "--out", out,
@@ -572,7 +585,9 @@ class PPPProcessingCases:
                                        "--summary-json", str(summary_path),
                                        *(["--realtime"] if causal else []))
                 self.assertEqual(result.returncode, 0, msg=result.stderr)
-                self.assertIs(json.loads(summary_path.read_text())["realtime"], causal)
+                summary = json.loads(summary_path.read_text())
+                self.assertIs(summary["realtime"], causal)
+                self.assertEqual(summary["ssr_latency_s"], 0)
                 spp_summary = temp_root / f"spp_{causal}.json"
                 result = self.run_gnss("spp", "--obs", obs, "--nav", nav, "--max-epochs", "3",
                                        "--out", out, "--quiet", "--summary-json", str(spp_summary),
