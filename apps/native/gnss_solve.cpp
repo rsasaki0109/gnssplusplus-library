@@ -32,6 +32,7 @@
 #include <libgnss++/io/solution_writer.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
+#include "cli_files.hpp"
 #include "cli_toml_config.hpp"
 #include "rtk_base_epoch_align.hpp"
 #include <libgnss++/algorithms/rtk_base_alignment.hpp>
@@ -3877,33 +3878,25 @@ int main(int argc, char* argv[]) {
         libgnss::io::RINEXReader base_reader;
         libgnss::io::RINEXReader nav_reader;
 
-        if (!rover_reader.open(config.rover_obs_path)) {
-            std::cerr << "Error: cannot open rover observation file" << std::endl;
-            return 1;
-        }
+        const auto input_failed = [](const std::string& input_error) {
+            if (input_error.empty()) {
+                return false;
+            }
+            std::cerr << "Error: " << input_error << std::endl;
+            return true;
+        };
         libgnss::io::RINEXReader::RINEXHeader rover_header;
-        if (!rover_reader.readHeader(rover_header)) {
-            std::cerr << "Error: failed to read rover observation header" << std::endl;
-            return 1;
-        }
-
-        if (!base_reader.open(config.base_obs_path)) {
-            std::cerr << "Error: cannot open base observation file" << std::endl;
+        if (input_failed(libgnss_apps::openRinexObservation(
+                rover_reader, rover_header, "rover observation file", config.rover_obs_path))) {
             return 1;
         }
         libgnss::io::RINEXReader::RINEXHeader base_header;
-        if (!base_reader.readHeader(base_header)) {
-            std::cerr << "Error: failed to read base observation header" << std::endl;
-            return 1;
-        }
-
-        if (!nav_reader.open(config.nav_path)) {
-            std::cerr << "Error: cannot open navigation file" << std::endl;
+        if (input_failed(libgnss_apps::openRinexObservation(
+                base_reader, base_header, "base observation file", config.base_obs_path))) {
             return 1;
         }
         libgnss::NavigationData nav_data;
-        if (!nav_reader.readNavigationData(nav_data)) {
-            std::cerr << "Error: failed to read navigation data" << std::endl;
+        if (input_failed(libgnss_apps::readRinexNavigation(nav_reader, nav_data, config.nav_path))) {
             return 1;
         }
         // Causal: only ephemerides already broadcast at the epoch.
@@ -3946,11 +3939,13 @@ int main(int argc, char* argv[]) {
         std::streampos previous_base_offset = std::streampos(-1);
 
         if (!rover_ok) {
-            std::cerr << "Error: no rover epochs available" << std::endl;
+            std::cerr << "Error: no observation epochs in rover file: " << config.rover_obs_path
+                      << std::endl;
             return 1;
         }
         if (!base_ok) {
-            std::cerr << "Error: no base epochs available" << std::endl;
+            std::cerr << "Error: no observation epochs in base file: " << config.base_obs_path
+                      << std::endl;
             return 1;
         }
 

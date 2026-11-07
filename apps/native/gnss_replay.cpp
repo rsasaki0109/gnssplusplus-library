@@ -10,6 +10,7 @@
 #include <limits>
 #include <map>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,7 @@
 #include <libgnss++/io/solution_writer.hpp>
 #include <libgnss++/io/ubx.hpp>
 
+#include "cli_files.hpp"
 #include "navigation_merge.hpp"
 #include "rtcm_frame_common.hpp"
 
@@ -512,8 +514,10 @@ bool loadRoverRinex(const std::string& path,
                     std::vector<libgnss::ObservationData>& epochs,
                     libgnss::io::RINEXReader::RINEXHeader& header) {
     libgnss::io::RINEXReader reader;
-    if (!reader.open(path) || !reader.readHeader(header)) {
-        return false;
+    const std::string error =
+        libgnss_apps::openRinexObservation(reader, header, "rover RINEX observation file", path);
+    if (!error.empty()) {
+        throw std::runtime_error(error);
     }
 
     libgnss::ObservationData epoch;
@@ -525,7 +529,10 @@ bool loadRoverRinex(const std::string& path,
         epochs.push_back(epoch);
     }
     reader.close();
-    return !epochs.empty();
+    if (epochs.empty()) {
+        throw std::runtime_error("no observation epochs in rover RINEX file: " + path);
+    }
+    return true;
 }
 
 bool loadRoverUbx(const std::string& path,
@@ -565,11 +572,13 @@ bool loadBaseRinex(const std::string& obs_path,
     libgnss::io::RINEXReader nav_reader;
     libgnss::io::RINEXReader::RINEXHeader base_header;
 
-    if (!base_reader.open(obs_path) || !base_reader.readHeader(base_header)) {
-        return false;
+    std::string error = libgnss_apps::openRinexObservation(
+        base_reader, base_header, "base RINEX observation file", obs_path);
+    if (error.empty()) {
+        error = libgnss_apps::readRinexNavigation(nav_reader, nav_data, nav_path);
     }
-    if (!nav_reader.open(nav_path) || !nav_reader.readNavigationData(nav_data)) {
-        return false;
+    if (!error.empty()) {
+        throw std::runtime_error(error);
     }
 
     libgnss::ObservationData epoch;
@@ -583,7 +592,10 @@ bool loadBaseRinex(const std::string& obs_path,
         base_position = base_header.approximate_position;
         have_base_position = true;
     }
-    return !base_epochs.empty();
+    if (base_epochs.empty()) {
+        throw std::runtime_error("no observation epochs in base RINEX file: " + obs_path);
+    }
+    return true;
 }
 
 bool loadNavigationRinex(const std::string& path, libgnss::NavigationData& nav_data);
@@ -711,13 +723,10 @@ bool loadBaseRtcm(const std::string& source,
 
 bool loadNavigationRinex(const std::string& path, libgnss::NavigationData& nav_data) {
     libgnss::io::RINEXReader reader;
-    if (!reader.open(path)) {
-        return false;
-    }
     libgnss::NavigationData loaded;
-    if (!reader.readNavigationData(loaded)) {
-        reader.close();
-        return false;
+    const std::string error = libgnss_apps::readRinexNavigation(reader, loaded, path);
+    if (!error.empty()) {
+        throw std::runtime_error(error);
     }
     reader.close();
     mergeNavigationData(nav_data, loaded);
