@@ -531,6 +531,7 @@ function postOptions() {
     hasIdd: corrections === 'has-idd' ? v.hasIdd : '',
     hasPages: corrections === 'has-sis' ? v.hasPages : '',
     hasPagesFormat: corrections === 'has-sis' ? HAS_PAGE_FORMATS[workspace.get(v.hasPages)?.kind] || 'cssrlib' : '',
+    b2bLog: corrections === 'b2b' ? v.b2bLog : '',
     antex: group === 'ppp' ? v.antex : '',
     imu: group === 'imu' ? v.imu : '',
     leverArm: group === 'imu' ? [v.leverX, v.leverY, v.leverZ] : null,

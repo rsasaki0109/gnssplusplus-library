@@ -656,6 +656,36 @@ test('Galileo HAS commands, page log sniffing and options', () => {
   assert.deepEqual(back.files, { has_pages: 'r.ubx' });
 });
 
+test('BeiDou PPP-B2b commands, message log sniffing and options', () => {
+  // cssrlib logs B2b messages like HAS pages; the PRN (a BDS GEO) tells them apart.
+  const b2b = `2353\t579600\t 59\t34\t 64\t11ddf849028029201204001100058055${'0'.repeat(96)}\n`;
+  assert.equal(sniffKind('046r_bdsb2b.txt', new TextEncoder().encode(b2b)), 'b2b');
+  const has = '2353\t579600\t 19\t6\t 62\tfffebcef0ffb098ee4079ec8f795ed3eb0783f84b3955b21fb431479ed3cb396e405431314794312b07ae404f3f8b3979ec9fb400b7bb72ee9fccae948000000\n';
+  assert.equal(sniffKind('046r_gale6.txt', new TextEncoder().encode(has)), 'has');
+
+  const common = { rover: '046r_rnx.obs', nav: '046r_rnx.nav', kml: false };
+  const run = buildPostCommand({
+    ...common, mode: 'ppp-static', corrections: 'b2b', b2bLog: '046r_bdsb2b.txt', antex: 'igs20.atx', elevationMask: '10',
+  });
+  assert.equal(run.commandLine,
+    'gnss ppp --obs 046r_rnx.obs --nav 046r_rnx.nav --b2b 046r_bdsb2b.txt --antex igs20.atx --out 046r_rnx_b2b.pos '
+    + '--static --elevation-mask 10 --summary-json 046r_rnx_b2b_summary.json');
+  assert.deepEqual(run.inputs, ['046r_rnx.obs', '046r_rnx.nav', '046r_bdsb2b.txt', 'igs20.atx']);
+  assert.throws(() => buildPostCommand({ ...common, mode: 'ppp-static', corrections: 'b2b' }), /needs a B2b message log/);
+  assert.throws(() => buildPostCommand({ ...common, nav: '', mode: 'ppp-static', corrections: 'b2b', b2bLog: 'x.txt' }),
+    /BeiDou PPP-B2b needs a navigation file/);
+  assert.equal(defaultPosName('046r_rnx.obs', 'ppp-kinematic', 'b2b'), '046r_rnx_b2b.pos');
+
+  const toml = exportOptionsToml({ mode: 'ppp-static', corrections: 'b2b', b2bLog: 'x.txt', enableAr: true, extra: '' });
+  assert.deepEqual(parseFlatToml(toml).sections.gnss_ppp, [['kinematic', false], ['b2b_prn', '0']]);
+  const back = importOptionsToml(`${toml}b2b = "logs/046r_bdsb2b.txt"\n`);
+  assert.equal(back.fields.pppCorr, 'b2b');
+  assert.equal(back.extra, '');
+  assert.deepEqual(back.files, { b2b: '046r_bdsb2b.txt' });
+  // Another GEO PRN is passed through as an option.
+  assert.equal(importOptionsToml('[gnss_ppp]\nb2b_prn = 60\n').extra, '--b2b-prn 60');
+});
+
 test('PPP convergence vs a fixed reference point', () => {
   assert.deepEqual(parsePoint('4186704.2262 834903.7677 4723664.9337'), [4186704.2262, 834903.7677, 4723664.9337]);
   assert.deepEqual(parsePoint('4186704.2262, 834903.7677, 4723664.9337'), [4186704.2262, 834903.7677, 4723664.9337]);

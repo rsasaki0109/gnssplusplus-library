@@ -16,7 +16,7 @@ const DISPATCH = { gnss_solve: 'solve', gnss_ppp: 'ppp', gnss_fuse: 'fuse' };
 const NEGATIVE_FLAG = { enable_ar: 'no-ar', enable_wide_lane_ar: 'no-wide-lane-ar' };
 // Keys naming input/output files: skipped on export, matched to Files on import.
 const FILE_KEYS = ['rover', 'base', 'nav', 'obs', 'sp3', 'clk', 'imu', 'out', 'rtk_pos_out', 'data_dir', 'kml', 'antex',
-  'ssr_rtcm', 'has_pages'];
+  'ssr_rtcm', 'has_pages', 'b2b'];
 // The MADOCA PPP-AR convergence settings the GUI adds (commands.js), as TOML.
 const MADOCA_CONVERGENCE = Object.fromEntries(
   Array.from({ length: MADOCA_AR.convergence.length / 2 }, (_, i) => [
@@ -107,6 +107,9 @@ export function exportOptionsToml(opts, commandHint = '') {
       entries.push(['ssr_rtcm_profile', 'has-idd']);
     } else if (corrections === 'has-sis') {
       entries.push(['has_pages_format', opts.hasPagesFormat || 'cssrlib']);
+    } else if (corrections === 'b2b') {
+      // 0: the first BDS GEO of the log (the GUI's choice); keeps the mode.
+      entries.push(['b2b_prn', 0]);
     } else if (corrections === 'madoca') {
       if (opts.enableAr || l6d.length) entries.push(['ar_method', 'per-freq']);
       if (opts.enableAr) {
@@ -265,6 +268,8 @@ export function importOptionsToml(text) {
       fields.pppCorr = 'has-idd';
     } else if (isPpp && key === 'has_pages_format' && ['cssrlib', 'ubx', 'sbf'].includes(value)) {
       fields.pppCorr = 'has-sis'; // the format follows the page log chosen in Files
+    } else if (isPpp && key === 'b2b_prn' && String(value) === '0') {
+      fields.pppCorr = 'b2b';
     } else if (madocaAr && key === 'ar_method') {
       fields.pppCorr = 'madoca';
     } else if (madocaAr && key in MADOCA_CONVERGENCE && String(value) === MADOCA_CONVERGENCE[key]) {

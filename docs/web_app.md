@@ -31,7 +31,8 @@ be repeated natively, for example on a larger dataset or in a script.
    the result in Plot with the errors against the reference.
 2. Or add your own files with **Add files** or drag and drop: RINEX OBS/NAV,
    SP3, CLK, ANTEX, QZSS L6 logs (CLAS, MADOCA L6E / L6D), Galileo HAS
-   E6-B page logs (cssrlib text; Septentrio SBF), RTCM3 (including RTCM SSR),
+   E6-B page logs (cssrlib text; Septentrio SBF), BeiDou PPP-B2b message logs
+   (cssrlib text), RTCM3 (including RTCM SSR),
    u-blox UBX, `.pos` (libgnss++ or RTKLIB) and reference CSV files are
    recognised from their content. Files are lost on reload unless
    **Keep files after reload** is ticked: then inputs and outputs are kept in
@@ -118,7 +119,7 @@ Memory grows with the span: about 0.25 GB plus 0.17 MB per epoch (2.3 GB
 natively for the full Tokyo run1), within the 4 GB of a browser run.
 `gnss fgo` has no `--config`, so FGO settings are not saved.
 
-### PPP corrections: Galileo HAS, QZSS MADOCA-PPP and CLAS
+### PPP corrections: Galileo HAS, BeiDou PPP-B2b, QZSS MADOCA-PPP and CLAS
 
 In the PPP modes, *PPP corrections* picks where the corrections come from:
 
@@ -134,6 +135,12 @@ In the PPP modes, *PPP corrections* picks where the corrections come from:
   taken from the log's content. HAS carries no phase biases, so both HAS modes
   are float PPP (no ambiguity resolution), and East Asia / the Pacific
   (90°E–180°E) is outside the service area.
+- *BeiDou PPP-B2b*: the B2b messages a receiver logged from the BDS GEO
+  satellites, as cssrlib text, with a RINEX 4 NAV holding the BeiDou B-CNAV1
+  (CNV1) records of the same time, such as the receiver's own:
+  `gnss ppp --b2b <log>`. Float PPP with GPS and BDS-3 over China and the
+  Asia-Pacific; add an ANTEX file for the BDS antenna offsets (see
+  [BeiDou PPP-B2b support](bds_ppp_b2b.md)).
 - *QZSS MADOCA-PPP*: raw L6E logs (orbit, clock and bias; tick every channel
   and hour of the run, e.g. PRN 204 and 206) and, optionally, L6D logs
   (ionosphere over Japan and Australia), with the broadcast NAV of the same
@@ -160,6 +167,7 @@ and compares them with native `gnss ppp`:
 | CLASLIB 4320e844: 2019-08-27 (`0627239Q.obs`, `2019239Q.l6`) | static, 300 epochs | 298 FLOAT / 2 FIX, horizontal RMS 1.6 m over the last 100 epochs from the station coordinate; byte-identical to native. 9.5 s as WebAssembly in Node, 6–8 s natively |
 | cssrlib-data ec1dfa2c: OBE4 2023-08-17, HAS IDD (`idd2023229c.rtc`) | static, 1800 epochs (30 min) | 0.09 m horizontal from the OBE4 coordinate (0.01 m after the full hour, `gnss reproduce has-idd-ppp`); final position within 0.01 mm of native. 4 s natively |
 | cssrlib-data ec1dfa2c: Kamakura 2025-02-15, E6-B pages (`046r_gale6.txt`) and the receiver's NAV | static, 1800 epochs (30 min) | 0.09 m horizontal from the Kamakura coordinate, indicative only (outside the HAS service area); final position within 0.01 mm of native. 4 s natively |
+| cssrlib-data ec1dfa2c: Kamakura 2025-02-15, PPP-B2b (`046r_bdsb2b.txt`, C59) and the receiver's RINEX 4 NAV, igs20.atx, 10° mask | static, 1800 epochs (30 min) | 0.29 m horizontal from the Kamakura coordinate (0.15 m after the full hour); final position within 0.01 mm of native. 4 s natively |
 
 The cssrlib-data files have no stated license, so CI checks them out for the
 test and nothing is redistributed. MIZU's RINEX header position is 4.4 m

@@ -12,6 +12,7 @@ service area (BDS-SIS-ICD-PPP-B2b, Version 1.0, 2020).
 | Decoder parity with cssrlib | **Exact**: every mask, orbit, clock and code-bias entry of C59, C60 and C62 on the two public Kamakura hours (about 1500 orbit, 35000 clock and 6500 code-bias entries per satellite and hour) equals cssrlib's `cssr_bds` decoder |
 | Float PPP with B2b corrections | **Supported** (`gnss_ppp --b2b <log>`): GPS (LNAV) and BDS-3 (B-CNAV1) |
 | Static float PPP on a known coordinate | **Validated** on the Kamakura hours below (0.03-0.15 m horizontal after one hour) |
+| Browser GUI | **Supported**: *PPP corrections: BeiDou PPP-B2b* with the log recognised from its content; run on the public sample in Node and Chromium by the Docs workflow ([Browser GUI](web_app.md)) |
 | PPP-AR | **Not available**: PPP-B2b carries no phase biases |
 
 ## Using PPP-B2b corrections
