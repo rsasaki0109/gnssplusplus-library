@@ -32,6 +32,7 @@
 
 #include "cli_toml_config.hpp"
 #include "rtk_base_epoch_align.hpp"
+#include <libgnss++/algorithms/rtk_base_alignment.hpp>
 
 namespace {
 
@@ -96,6 +97,10 @@ struct SolveConfig {
     bool write_kml = true;
     bool enable_base_interpolation = true;
     bool base_interpolation_curvature = false;
+    // Hold the latest past base epoch (modeled to the rover time) for up to
+    // this many seconds when no exact or interpolated base epoch exists.
+    double base_hold_seconds = 0.0;
+    bool causal = false;
     bool verbose = false;
     bool base_position_override = false;
     Eigen::Vector3d base_position_ecef = Eigen::Vector3d::Zero();
@@ -489,7 +494,10 @@ public:
     std::uint64_t lookups() const { return lookups_; }
     std::uint64_t healthyLookups() const { return healthy_lookups_; }
 
-    bool load(const std::string& path) {
+    // require_causal_metadata: a CSV without the latency / provenance columns
+    // (legacy exports, smoother output) is refused instead of being read as
+    // zero-latency and causal.
+    bool load(const std::string& path, bool require_causal_metadata = false) {
         std::ifstream input(path);
         if (!input) return false;
         std::string line;
@@ -499,6 +507,11 @@ public:
         for (std::size_t i = 0; i < header.size(); ++i) columns[header[i]] = i;
         for (const char* required : {"tow", "status", "x_ecef_m", "y_ecef_m", "z_ecef_m"}) {
             if (columns.find(required) == columns.end()) return false;
+        }
+        if (require_causal_metadata &&
+            (columns.find("solution_latency_s") == columns.end() ||
+             columns.find("causal_provenance_verified") == columns.end())) {
+            return false;
         }
 
         auto field = [&](const std::vector<std::string>& row,
@@ -1845,6 +1858,12 @@ void printAdvancedUsage(const char* program_name) {
         << "  --student-t-rtk-front-end  Enable Student-t(nu=4) DD covariance inflation (default: off)\n"
         << "  --no-kinematic-post-filter Disable the kinematic output post-filter\n"
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
+        << "  --base-hold-seconds <s>    Without an exact (or interpolated) base epoch, hold the\n"
+        << "                             latest past one, modeled to the rover time, up to s\n"
+        << "                             seconds old (default: 0, off)\n"
+        << "  --causal                   Real-time equivalent: no base interpolation (only exact\n"
+        << "                             or --base-hold-seconds), no guards that look at later\n"
+        << "                             epochs, ephemerides only once broadcast\n"
         << "  --base-interp-curvature    Evaluate the modeled base range at the rover epoch when\n"
         << "                             interpolating the base (keeps the range curvature;\n"
         << "                             default: off)\n"
@@ -2235,6 +2254,14 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--no-integrity-base-gate") {
             config.enable_integrity_base_gate = false;
+            continue;
+        }
+        if (arg == "--causal") {
+            config.causal = true;
+            continue;
+        }
+        if (arg == "--base-hold-seconds" && i + 1 < argc) {
+            config.base_hold_seconds = std::stod(argv[++i]);
             continue;
         }
         if (arg == "--integrity-shadow-csv" && i + 1 < argc) {
@@ -3193,6 +3220,26 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         config.output_format != libgnss::io::SolutionWriter::Format::POS) {
         argumentError("--pos-fix-diagnostics requires --format pos", argv[0]);
     }
+    if (!std::isfinite(config.base_hold_seconds) || config.base_hold_seconds < 0.0) {
+        argumentError("--base-hold-seconds must be >= 0", argv[0]);
+    }
+    if (config.causal) {
+        // Options that use later epochs or external per-epoch positions.
+        if (config.enable_fixed_bridge_burst_guard) {
+            argumentError("--causal cannot use --fixed-bridge-burst-guard", argv[0]);
+        }
+        if (config.enable_safe_availability_fallback) {
+            argumentError("--causal cannot use --safe-availability-fallback", argv[0]);
+        }
+        if (!config.rover_seed_pos_path.empty()) {
+            argumentError("--causal cannot use --rover-seed-pos", argv[0]);
+        }
+        // Default guards that check an epoch against the next FIX, and the
+        // base interpolation towards the next base epoch.
+        config.enable_base_interpolation = false;
+        config.enable_nonfix_drift_guard = false;
+        config.enable_float_bridge_tail_guard = false;
+    }
 
     return config;
 }
@@ -3682,9 +3729,13 @@ int main(int argc, char* argv[]) {
             shadow_config.health.require_fixed_status =
                 config.integrity_shadow_require_fixed_status;
             integrity_shadow = std::make_unique<IntegrityShadowTimeline>(shadow_config);
-            if (!integrity_shadow->load(config.integrity_shadow_csv_path)) {
+            if (!integrity_shadow->load(config.integrity_shadow_csv_path, config.causal)) {
                 std::cerr << "Error: failed to load integrity shadow CSV: "
-                          << config.integrity_shadow_csv_path << std::endl;
+                          << config.integrity_shadow_csv_path
+                          << (config.causal ? " (--causal needs its solution_latency_s and "
+                                              "causal_provenance_verified columns)"
+                                            : "")
+                          << std::endl;
                 return 1;
             }
         }
@@ -3806,6 +3857,8 @@ int main(int argc, char* argv[]) {
             std::cerr << "Error: failed to read navigation data" << std::endl;
             return 1;
         }
+        // Causal: only ephemerides already broadcast at the epoch.
+        nav_data.setCausal(config.causal);
 
         Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
         if (config.base_position_override) {
@@ -3872,6 +3925,7 @@ int main(int argc, char* argv[]) {
         int fixed_solution_count = 0;
         int exact_base_epochs = 0;
         int interpolated_base_epochs = 0;
+        int held_base_epochs = 0;
         int skipped_rover_epochs = 0;
         int nonfix_drift_guard_inspected_segments = 0;
         int nonfix_drift_guard_rejected_segments = 0;
@@ -3967,6 +4021,18 @@ int main(int argc, char* argv[]) {
                 if (config.pos_uncertainty) {
                     // Interpolated between two real base epochs: report the age of
                     // the older bracketing sample (rover time - lower base time).
+                    differential_age_s[differentialAgeKey(rover_obs.time)] =
+                        timeDiffSeconds(rover_obs.time, lower_base_obs.time);
+                }
+            } else if (config.base_hold_seconds > 0.0 && have_lower_base &&
+                       libgnss::rtk_base_alignment::holdBaseEpoch(
+                           lower_base_obs, rover_obs.time, base_position, nav_data,
+                           config.base_hold_seconds, aligned_base_obs)) {
+                // The latest past base epoch, modeled to the rover time (as
+                // gnss online --base-extrapolation does): no later base data.
+                held_base_epochs++;
+                have_aligned_base = true;
+                if (config.pos_uncertainty) {
                     differential_age_s[differentialAgeKey(rover_obs.time)] =
                         timeDiffSeconds(rover_obs.time, lower_base_obs.time);
                 }
@@ -4763,6 +4829,8 @@ int main(int argc, char* argv[]) {
         }
         std::cout << "  exact base epochs: " << exact_base_epochs << std::endl;
         std::cout << "  interpolated base epochs: " << interpolated_base_epochs << std::endl;
+        std::cout << "  held base epochs: " << held_base_epochs << std::endl;
+        std::cout << "  causal: " << (config.causal ? "yes" : "no") << std::endl;
         std::cout << "  skipped rover epochs: " << skipped_rover_epochs << std::endl;
         if (config.cmc_aware_reference_selection) {
             const auto cmc_ref_diag = rtk_processor.getCmcReferenceDiagnostics();
