@@ -471,6 +471,60 @@ TEST(Rinex4NavigationTest, MatchesRinex3SatelliteStatesForSharedMessageTypes) {
     std::filesystem::remove(path4);
 }
 
+TEST(Rinex4NavigationTest, KeepsTransmissionTimesForCausalSelection) {
+    // The transmission time of message (first field of the last orbit line)
+    // becomes Ephemeris::tof, in GPST; 0.9999E9 (merged BRDC files) leaves it
+    // unset. The same in RINEX 3 and RINEX 4.
+    std::string unknown_tof = gpsLnavBody("G08");
+    const std::string known = field(554418.0);
+    unknown_tof.replace(unknown_tof.rfind(known), known.size(), field(9.999e8));
+    const std::string gps = gpsLnavBody("G07");
+    const std::string qzss = gpsLnavBody("J02");
+    const std::string inav = galileoBody("E11", 517.0, -4.656612873077e-09);
+    const std::string bds = beidouD1Body("C25");
+    const auto path3 = writeTempFile("libgnss_rinex3_nav_tof.rnx",
+                                     rinex3Header() + gps + unknown_tof + qzss + inav + bds);
+    const auto path4 = writeTempFile(
+        "libgnss_rinex4_nav_tof.rnx",
+        rinex4Header() + "> EPH G07 LNAV\n" + gps + "> EPH G08 LNAV\n" + unknown_tof +
+            "> EPH J02 LNAV\n" + qzss + "> EPH E11 INAV\n" + inav + "> EPH C25 D1\n" + bds);
+    for (const auto& path : {path3, path4}) {
+        ReadResult result = readNavigation(path);
+        ASSERT_TRUE(result.ok) << result.diagnostics;
+        const auto tof = [&](GNSSSystem system, int prn) {
+            const auto* records = ephemerides(result.nav, system, prn);
+            EXPECT_NE(records, nullptr);
+            return records == nullptr || records->empty() ? GNSSTime() : records->front().tof;
+        };
+        EXPECT_EQ(tof(GNSSSystem::GPS, 7).week, 2355);
+        EXPECT_DOUBLE_EQ(tof(GNSSSystem::GPS, 7).tow, 554418.0);
+        EXPECT_EQ(tof(GNSSSystem::GPS, 8).week, 0);  // unknown
+        EXPECT_DOUBLE_EQ(tof(GNSSSystem::QZSS, 2).tow, 554418.0);
+        EXPECT_DOUBLE_EQ(tof(GNSSSystem::Galileo, 11).tow, 561000.0);
+        // BDT 561580 s of BDT week 999 = GPS week 2355, 561594 s.
+        EXPECT_EQ(tof(GNSSSystem::BeiDou, 25).week, 2355);
+        EXPECT_DOUBLE_EQ(tof(GNSSSystem::BeiDou, 25).tow, 561594.0);
+
+        // Causal selection: a record is a candidate from its transmission
+        // time, or, unknown, from toe - 2 h (GPS).
+        NavigationData& nav = result.nav;
+        const SatelliteId e11(GNSSSystem::Galileo, 11);
+        const SatelliteId g08(GNSSSystem::GPS, 8);
+        EXPECT_NE(nav.getEphemeris(e11, GNSSTime(2355, 560999.0)), nullptr);
+        EXPECT_NE(nav.getEphemeris(g08, GNSSTime(2355, 554399.0)), nullptr);
+        nav.setCausal(true);
+        EXPECT_EQ(nav.getEphemeris(e11, GNSSTime(2355, 560999.0)), nullptr);
+        EXPECT_NE(nav.getEphemeris(e11, GNSSTime(2355, 561000.0)), nullptr);
+        EXPECT_EQ(nav.getEphemeris(g08, GNSSTime(2355, 554399.0)), nullptr);
+        EXPECT_NE(nav.getEphemeris(g08, GNSSTime(2355, 554400.0)), nullptr);
+        Vector3d pos, vel;
+        double clk = 0.0, drift = 0.0;
+        EXPECT_FALSE(nav.calculateSatelliteState(e11, GNSSTime(2355, 560999.0), pos, vel, clk,
+                                                 drift));
+        std::filesystem::remove(path);
+    }
+}
+
 TEST(Rinex4NavigationTest, RejectsGlonassRecordsWhoseStateVectorIsNotOnAnOrbit) {
     // A record whose third orbit line (Z, Vz, Az) belongs to another frame
     // than the X/Y lines: the state vector is far off the GLONASS orbit

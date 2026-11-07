@@ -27,6 +27,20 @@ corrections, it may interpolate, smooth or check against later epochs.
 
   This applies to the corrections, the ambiguity-resolution helpers and the
   CLAS OSR path alike (`SSRProducts::setCausal`).
+- **Broadcast ephemerides.** Only records already broadcast at the epoch
+  are candidates (`NavigationData::setCausal`). A record is available from
+  its transmission time, which the RINEX reader now keeps for GPS, Galileo,
+  QZSS and BeiDou records, as for GLONASS and the RTCM / UBX decoders.
+
+  Merged BRDC files, and the RTCM 1019 / 1046 records of an SSR file, carry
+  no transmission time. For those, a record is available from:
+  - GPS: two hours before its toe;
+  - QZSS: one hour before its toe;
+  - Galileo and the other systems: its toe.
+
+  These offsets are when each system starts broadcasting a record on the
+  receiver NAV files of the Kamakura hours (Galileo actually starts some
+  minutes after its toe).
 - **Post-processed products are refused.** `--sp3`, `--clk` and `--ionex`
   hold final products, interpolated around the epoch.
   `--ssr-rtcm-profile legacy` interpolates its samples between updates while
@@ -45,16 +59,21 @@ below 0.20 m):
 
 | Run | Default | `--causal` |
 |---|---|---|
-| HAS IDD, OBE4 2023-08-17 | 0.123 / 0.116 m, 5.8 min | identical |
-| JPL GDGPS RTCM SSR, Kamakura 2025-08-21 and 2024-02-12 | | identical |
-| MADOCA (L6E + L6D), MIZU 2025-04-01 sample | | identical |
+| HAS IDD, OBE4 2023-08-17 | 0.123 / 0.116 m, 5.8 min | 0.115 / 0.123 m, 5.6 min |
+| JPL GDGPS RTCM SSR, Kamakura 2025-08-21 | 0.251 / 0.057 m, 42.1 min | 0.264 / 0.050 m, 42.0 min |
+| JPL GDGPS RTCM SSR, Kamakura 2024-02-12 | 0.332 / 0.029 m, 38.6 min | 0.332 / 0.028 m, 38.2 min |
 | HAS SIS, Kamakura 2025-02-15 | 0.027 / 0.118 m, 41.9 min | 0.074 / 0.072 m, 15.2 min |
-| HAS SIS, Kamakura 2025-08-21 | 0.305 / 0.118 m, 43.9 min | 0.124 / 0.090 m, 20.2 min |
+| HAS SIS, Kamakura 2025-08-21 | 0.305 / 0.118 m, 43.9 min | 0.121 / 0.091 m, 33.9 min |
 | PPP-B2b, Kamakura 2025-02-15 | 0.111 / 0.014 m, 15.8 min | 0.111 / 0.065 m, 15.8 min |
-| CLAS L6, CLASLIB sample (300 epochs) | H RMS 1.56 m, last 100 epochs | 3.06 m |
+| MADOCA (L6E + L6D), MIZU sample, kinematic PPP-AR (120 epochs) | 91 FIX of 118 | 91 FIX of 118 |
+| CLAS L6, CLASLIB sample (300 epochs) | H RMS 1.56 m, last 100 epochs | 3.05 m |
 
-- **HAS IDD, JPL and MADOCA: identical.** Their streams already hold
-  corrections for every satellite before it is observed.
+- **SSR alone (before the ephemeris rule).** HAS IDD and JPL were identical
+  in causal mode: their streams hold corrections for every satellite before
+  it is observed. So was the MADOCA sample.
+- **Ephemeris rule: small changes.** The IODE-matched corrections already pin
+  their broadcast record; what moves is the SPP seed and the satellites
+  without a correction.
 - **HAS SIS and B2b: changed.** These recordings start together with the
   observations, so in causal mode a satellite has no correction, and is not
   used, until its first update.
@@ -71,12 +90,6 @@ below 0.20 m):
 These parts still see data after the epoch, also with `--causal`; they are
 the next steps of this work:
 
-- **Broadcast ephemerides.**
-  - The whole NAV file is loaded, and the record whose toe is nearest the
-    epoch is used, possibly one not yet broadcast.
-  - The RINEX transmission time of GPS, Galileo, QZSS and BeiDou records is
-    not kept.
-  - The RTCM SSR file's ephemerides are merged up front.
 - **SSR reception time.**
   - Corrections are tagged with their reference epoch, not the time a
     receiver has them (a few seconds later; CLAS about 15 s).

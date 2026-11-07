@@ -738,6 +738,8 @@ int main(int argc, char* argv[]) {
             std::cerr << "Error: failed to read navigation data: " << options.nav_path << "\n";
             return 1;
         }
+        // Causal: only ephemerides already broadcast at the epoch.
+        nav_data.setCausal(options.spp_config.causal);
 
         libgnss::ProcessorConfig config;
         config.mode = libgnss::PositioningMode::SPP;

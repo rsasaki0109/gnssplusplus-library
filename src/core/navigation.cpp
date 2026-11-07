@@ -331,6 +331,9 @@ const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat, const GNSS
                                           GalileoEphemerisSource::INavOnly)) {
             continue;
         }
+        if (causal_ && ephemerisAvailableFrom(eph) > time) {
+            continue;
+        }
         if (eph.isValid(time)) {
             double age = eph.getAge(time);
             if (age < min_age) {
@@ -370,6 +373,9 @@ const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat,
             continue;
         }
         if (!ephemerisMatchesSsrIode(sat, eph, desired_iode)) {
+            continue;
+        }
+        if (causal_ && ephemerisAvailableFrom(eph) > time) {
             continue;
         }
         if (!eph.isValid(time)) {
@@ -547,6 +553,29 @@ void NavigationData::setBeiDouEphemerisSource(BeiDouEphemerisSource source) {
     ++revision_;
 }
 
+void NavigationData::setCausal(bool causal) {
+    if (causal == causal_) {
+        return;
+    }
+    causal_ = causal;
+    satellite_state_cache_.clear();
+    ++revision_;
+}
+
+GNSSTime ephemerisAvailableFrom(const Ephemeris& eph) {
+    if (eph.tof.week != 0 || eph.tof.tow != 0.0) {
+        return eph.tof;
+    }
+    switch (eph.satellite.system) {
+        case GNSSSystem::GPS:
+            return eph.toe - 7200.0;
+        case GNSSSystem::QZSS:
+            return eph.toe - 3600.0;
+        default:
+            return eph.toe;
+    }
+}
+
 void NavigationData::setGalileoEphemerisSource(GalileoEphemerisSource source) {
     if (source == galileo_ephemeris_source_) {
         return;
@@ -626,7 +655,8 @@ const Ephemeris* NavigationData::getCnavEphemeris(const SatelliteId& sat,
     double min_age = 1e9;
     for (const auto& eph : it->second) {
         if (eph.navigation_message_type != type || !eph.isValid(time) ||
-            (desired_iode >= 0 && static_cast<int>(eph.iode) != desired_iode)) {
+            (desired_iode >= 0 && static_cast<int>(eph.iode) != desired_iode) ||
+            (causal_ && ephemerisAvailableFrom(eph) > time)) {
             continue;
         }
         const double age = eph.getAge(time);
