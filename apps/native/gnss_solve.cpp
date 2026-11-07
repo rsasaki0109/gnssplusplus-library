@@ -1300,6 +1300,8 @@ void printUsage(const char* program_name) {
         << "Common options:\n"
         << "  --config <path>         Load flat TOML defaults; CLI options override them\n"
         << "  --preset <name>         survey|low-cost|moving-base|odaiba|urban\n"
+        << "  --realtime              Use no data from after each epoch, as a real-time\n"
+        << "                          receiver (see --help-advanced: --base-hold-seconds)\n"
         << "  --mode <name>           auto|kinematic|static|moving-base\n"
         << "  --iono <name>           auto|off|iflc|est\n"
         << "  --ratio <value>         Ambiguity ratio threshold\n"
@@ -1861,7 +1863,7 @@ void printAdvancedUsage(const char* program_name) {
         << "  --base-hold-seconds <s>    Without an exact (or interpolated) base epoch, hold the\n"
         << "                             latest past one, modeled to the rover time, up to s\n"
         << "                             seconds old (default: 0, off)\n"
-        << "  --causal                   Real-time equivalent: no base interpolation (only exact\n"
+        << "  --realtime                 Real-time equivalent: no base interpolation (only exact\n"
         << "                             or --base-hold-seconds), no guards that look at later\n"
         << "                             epochs, ephemerides only once broadcast\n"
         << "  --base-interp-curvature    Evaluate the modeled base range at the rover epoch when\n"
@@ -2256,7 +2258,7 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.enable_integrity_base_gate = false;
             continue;
         }
-        if (arg == "--causal") {
+        if (arg == "--realtime") {
             config.causal = true;
             continue;
         }
@@ -3226,13 +3228,13 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.causal) {
         // Options that use later epochs or external per-epoch positions.
         if (config.enable_fixed_bridge_burst_guard) {
-            argumentError("--causal cannot use --fixed-bridge-burst-guard", argv[0]);
+            argumentError("--realtime cannot use --fixed-bridge-burst-guard", argv[0]);
         }
         if (config.enable_safe_availability_fallback) {
-            argumentError("--causal cannot use --safe-availability-fallback", argv[0]);
+            argumentError("--realtime cannot use --safe-availability-fallback", argv[0]);
         }
         if (!config.rover_seed_pos_path.empty()) {
-            argumentError("--causal cannot use --rover-seed-pos", argv[0]);
+            argumentError("--realtime cannot use --rover-seed-pos", argv[0]);
         }
         // Default guards that check an epoch against the next FIX, and the
         // base interpolation towards the next base epoch.
@@ -3732,7 +3734,7 @@ int main(int argc, char* argv[]) {
             if (!integrity_shadow->load(config.integrity_shadow_csv_path, config.causal)) {
                 std::cerr << "Error: failed to load integrity shadow CSV: "
                           << config.integrity_shadow_csv_path
-                          << (config.causal ? " (--causal needs its solution_latency_s and "
+                          << (config.causal ? " (--realtime needs its solution_latency_s and "
                                               "causal_provenance_verified columns)"
                                             : "")
                           << std::endl;
@@ -4830,7 +4832,7 @@ int main(int argc, char* argv[]) {
         std::cout << "  exact base epochs: " << exact_base_epochs << std::endl;
         std::cout << "  interpolated base epochs: " << interpolated_base_epochs << std::endl;
         std::cout << "  held base epochs: " << held_base_epochs << std::endl;
-        std::cout << "  causal: " << (config.causal ? "yes" : "no") << std::endl;
+        std::cout << "  realtime: " << (config.causal ? "yes" : "no") << std::endl;
         std::cout << "  skipped rover epochs: " << skipped_rover_epochs << std::endl;
         if (config.cmc_aware_reference_selection) {
             const auto cmc_ref_diag = rtk_processor.getCmcReferenceDiagnostics();

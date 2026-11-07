@@ -616,9 +616,9 @@ class RuntimeReceiverCases:
             )
             self.assertEqual(replay.returncode, 0, msg=replay.stderr)
             self.assertIn("written_solutions=", replay.stdout)
-    def test_solve_causal_mode_uses_no_later_base_epoch(self) -> None:
+    def test_solve_realtime_mode_uses_no_later_base_epoch(self) -> None:
         # The stress fixture has 201 rover epochs and 41 base epochs: the
-        # default solve interpolates the base towards the next epoch, --causal
+        # default solve interpolates the base towards the next epoch, --realtime
         # does not, and --base-hold-seconds holds the latest past one instead.
         fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
         with tempfile.TemporaryDirectory(prefix="gnss_solve_causal_") as temp_dir:
@@ -649,24 +649,24 @@ class RuntimeReceiverCases:
                 return values
 
             default = summary()
-            self.assertEqual(default["causal"], "no")
+            self.assertEqual(default["realtime"], "no")
             self.assertEqual(default["interpolated base epochs"], "160")
-            causal = summary("--causal")
-            self.assertEqual(causal["causal"], "yes")
+            causal = summary("--realtime")
+            self.assertEqual(causal["realtime"], "yes")
             self.assertEqual(causal["interpolated base epochs"], "0")
             self.assertEqual(causal["held base epochs"], "0")
             self.assertEqual(causal["skipped rover epochs"], "160")
-            held = summary("--causal", "--base-hold-seconds", "2")
+            held = summary("--realtime", "--base-hold-seconds", "2")
             self.assertEqual(held["held base epochs"], "160")
             self.assertEqual(held["skipped rover epochs"], "0")
 
             for extra, message in (
-                (("--causal", "--fixed-bridge-burst-guard"),
-                 "--causal cannot use --fixed-bridge-burst-guard"),
-                (("--causal", "--safe-availability-fallback"),
-                 "--causal cannot use --safe-availability-fallback"),
-                (("--causal", "--rover-seed-pos", str(temp_root / "seed.pos")),
-                 "--causal cannot use --rover-seed-pos"),
+                (("--realtime", "--fixed-bridge-burst-guard"),
+                 "--realtime cannot use --fixed-bridge-burst-guard"),
+                (("--realtime", "--safe-availability-fallback"),
+                 "--realtime cannot use --safe-availability-fallback"),
+                (("--realtime", "--rover-seed-pos", str(temp_root / "seed.pos")),
+                 "--realtime cannot use --rover-seed-pos"),
                 (("--base-hold-seconds", "-1"), "--base-hold-seconds must be >= 0"),
             ):
                 with self.subTest(extra=extra):
@@ -674,12 +674,12 @@ class RuntimeReceiverCases:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn(message, result.stderr + result.stdout)
 
-    def test_causal_solve_and_replay_ignore_later_data_and_agree(self) -> None:
+    def test_realtime_solve_and_replay_ignore_later_data_and_agree(self) -> None:
         # Causal runs give the same solution for an epoch whatever comes after
         # it: cutting the files (solve) or the base stream (replay) after it
         # changes nothing up to the cut. The default solve interpolates the
         # base towards the next epoch, so its last epochs before a cut change.
-        # gnss replay --causal (base RTCM stream) and gnss solve --causal (the
+        # gnss replay --realtime (base RTCM stream) and gnss solve --realtime (the
         # same data converted to RINEX) agree.
         fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
 
@@ -728,7 +728,7 @@ class RuntimeReceiverCases:
             def up_to_cut(solution: dict[float, list[str]]) -> dict[float, list[str]]:
                 return {t: row for t, row in solution.items() if t % 86400 <= cut}
 
-            for extra in (("--causal",), ("--causal", "--base-hold-seconds", "2")):
+            for extra in (("--realtime",), ("--realtime", "--base-hold-seconds", "2")):
                 with self.subTest(extra=extra):
                     full = solve("full", rover_obs, base_obs, *extra)
                     truncated = solve("cut", temp_root / "rover_cut.obs", temp_root / "base_cut.obs", *extra)
@@ -741,10 +741,10 @@ class RuntimeReceiverCases:
             def replay(name: str, *extra: str) -> dict[float, list[str]]:
                 out = temp_root / f"{name}.pos"
                 result = self.run_gnss("replay", "--rover-rinex", str(rover_obs),
-                                       "--base-rtcm", str(fixture / "base.rtcm"), "--causal",
+                                       "--base-rtcm", str(fixture / "base.rtcm"), "--realtime",
                                        "--out", str(out), *extra)
                 self.assertEqual(result.returncode, 0, msg=result.stderr)
-                self.assertIn("causal=yes", result.stdout)
+                self.assertIn("realtime=yes", result.stdout)
                 return rows(out)
 
             replay_full = replay("replay_full")
@@ -752,7 +752,7 @@ class RuntimeReceiverCases:
             self.assertGreater(len(replay_cut), 0)
             self.assertEqual({t: replay_full[t] for t in replay_cut}, replay_cut)
 
-            solve_causal = solve("solve_causal", rover_obs, base_obs, "--causal")
+            solve_causal = solve("solve_causal", rover_obs, base_obs, "--realtime")
             self.assertEqual(sorted(replay_full), sorted(solve_causal))
             for t, row in replay_full.items():
                 other = solve_causal[t]

@@ -305,7 +305,7 @@ void printUsage(const char* program_name) {
         << "  --use-dynamics-model    Position/velocity/acceleration dynamics (RTKLIB\n"
         << "                          ppp-kine dynamics=on; CLAS: MRTKLIB accel model)\n"
         << "  --emit-epoch-time       Write GPS week/TOW and geodetic columns in .pos output\n"
-        << "  --causal                Real-time equivalent processing: use no SSR correction\n"
+        << "  --realtime              Real-time equivalent processing: use no SSR correction\n"
         << "                          tagged after the epoch (no interpolation towards the\n"
         << "                          next update); refuses --sp3/--clk/--ionex and\n"
         << "                          --ssr-rtcm-profile legacy\n"
@@ -529,7 +529,7 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_dynamics_model = true;
         } else if (arg == "--emit-epoch-time") {
             options.emit_epoch_time = true;
-        } else if (arg == "--causal") {
+        } else if (arg == "--realtime") {
             options.causal = true;
         } else if (arg == "--low-dynamics") {
             options.low_dynamics_mode = true;
@@ -623,16 +623,16 @@ Options parseArguments(int argc, char* argv[]) {
         // fact and interpolated around the epoch; the legacy RTCM SSR
         // conversion interpolates between updates when it loads them.
         if (!options.sp3_path.empty() || !options.clk_path.empty()) {
-            argumentError("--causal cannot use --sp3/--clk (post-processed products)", argv[0]);
+            argumentError("--realtime cannot use --sp3/--clk (post-processed products)", argv[0]);
         }
         if (!options.ionex_path.empty()) {
-            argumentError("--causal cannot use --ionex (post-processed product)", argv[0]);
+            argumentError("--realtime cannot use --ionex (post-processed product)", argv[0]);
         }
         if (options.ssr_rtcm_profile == "legacy") {
-            argumentError("--causal cannot use --ssr-rtcm-profile legacy", argv[0]);
+            argumentError("--realtime cannot use --ssr-rtcm-profile legacy", argv[0]);
         }
         if (options.madocalib_bridge) {
-            argumentError("--causal cannot use --madocalib-bridge", argv[0]);
+            argumentError("--realtime cannot use --madocalib-bridge", argv[0]);
         }
     }
     if (!options.madoca_l6_paths.empty() && options.nav_path.empty()) {
@@ -1857,7 +1857,7 @@ int main(int argc, char* argv[]) {
                     << ",\n"
                     << "  \"out\": \"" << jsonEscape(options.out_path) << "\",\n"
                     << "  \"mode\": \"" << (options.kinematic_mode ? "kinematic" : "static") << "\",\n"
-                    << "  \"causal\": " << (options.causal ? "true" : "false") << ",\n"
+                    << "  \"realtime\": " << (options.causal ? "true" : "false") << ",\n"
                     << "  \"low_dynamics\": " << (options.low_dynamics_mode ? "true" : "false") << ",\n"
                     << "  \"static_anchor_blend\": " << (options.apply_static_anchor_blend ? "true" : "false") << ",\n"
                     << "  \"clas_epoch_policy\": \"" << jsonEscape(options.clas_epoch_policy) << "\",\n"
