@@ -41,7 +41,8 @@ MadocaL6dShadowStatus PPPProcessor::inspectMadocaL6dShadow(
     const GNSSTime& time,
     double max_age_s) const {
     MadocaL6dShadowStatus status;
-    const auto query_time = algorithms::madoca_core::madocaGtimeFromGpsTime(time);
+    const auto query_time =
+        algorithms::madoca_core::madocaGtimeFromGpsTime(madocaL6dQueryTime(time));
     if (query_time.time == 0 || madoca_iono_products_.empty()) {
         return status;
     }

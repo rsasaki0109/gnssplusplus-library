@@ -672,7 +672,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 !position_gate_passes;
 
         const auto query_time =
-            algorithms::madoca_core::madocaGtimeFromGpsTime(time);
+            algorithms::madoca_core::madocaGtimeFromGpsTime(madocaL6dQueryTime(time));
         const auto* snapshot =
             madoca_iono_products_.latestAtOrBefore(query_time, 300.0);
         if (position_gate_passes && snapshot != nullptr) {

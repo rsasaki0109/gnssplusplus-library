@@ -179,6 +179,13 @@ public:
     void setMadocaIonoProductsForShadow(const io::MadocaIonoProducts& products) {
         madoca_iono_products_ = products;
     }
+    // MADOCA L6D snapshots in hand at time: with --realtime --ssr-latency, those
+    // decoded at least the latency before it.
+    GNSSTime madocaL6dQueryTime(const GNSSTime& time) const {
+        return ppp_config_.causal && ppp_config_.ssr_latency_s > 0.0
+                   ? time - ppp_config_.ssr_latency_s
+                   : time;
+    }
     MadocaL6dShadowStatus inspectMadocaL6dShadow(
         const std::vector<SatelliteId>& satellites,
         const GNSSTime& time,

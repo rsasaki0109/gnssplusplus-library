@@ -320,9 +320,9 @@ void printUsage(const char* program_name) {
         << "  --combined-fix-tolerance <m>\n"
         << "                          With --combined, two FIX solutions further apart\n"
         << "                          are averaged as FLOAT (default: 0.05)\n"
-        << "  --ssr-latency <s>       With --realtime and --ssr-rtcm: use each SSR update\n"
-        << "                          from <s> seconds after its reference epoch, when a\n"
-        << "                          receiver has it (default 0)\n"
+        << "  --ssr-latency <s>       With --realtime and --ssr-rtcm or --madoca-l6: use\n"
+        << "                          each SSR update from <s> seconds after its reference\n"
+        << "                          epoch, when a receiver has it (default 0)\n"
         << "  --low-dynamics          Keep kinematic PPP anchored for quasi-static motion\n"
         << "  --no-low-dynamics       Disable quasi-static anchoring (default)\n"
         << "  --apply-static-anchor-blend\n"
@@ -680,8 +680,8 @@ Options parseArguments(int argc, char* argv[]) {
         if (!options.causal) {
             argumentError("--ssr-latency requires --realtime", argv[0]);
         }
-        if (options.ssr_rtcm_path.empty()) {
-            argumentError("--ssr-latency requires --ssr-rtcm", argv[0]);
+        if (options.ssr_rtcm_path.empty() && options.madoca_l6_paths.empty()) {
+            argumentError("--ssr-latency requires --ssr-rtcm or --madoca-l6", argv[0]);
         }
         if (!(options.ssr_latency_s >= 0.0)) {
             argumentError("--ssr-latency must be >= 0", argv[0]);

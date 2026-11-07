@@ -562,7 +562,8 @@ class PPPProcessingCases:
             for args, message in (
                 (["--ssr-rtcm", str(ssr), "--ssr-latency", "5"],
                  "--ssr-latency requires --realtime"),
-                (["--realtime", "--ssr-latency", "5"], "--ssr-latency requires --ssr-rtcm"),
+                (["--realtime", "--ssr-latency", "5"],
+                 "--ssr-latency requires --ssr-rtcm or --madoca-l6"),
                 (["--realtime", "--ssr-rtcm", str(ssr), "--ssr-latency", "-1"],
                  "--ssr-latency must be >= 0"),
             ):

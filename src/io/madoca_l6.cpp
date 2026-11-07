@@ -942,7 +942,8 @@ int madocaL6eSnapshotToProducts(const MadocaL6eDecoder& decoder,
 
 int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
                                    int gps_week,
-                                   libgnss::SSRProducts& products) {
+                                   libgnss::SSRProducts& products,
+                                   double availability_delay_s) {
     products.setOrbitCorrectionsAreRac(true);
     double ref_ep[6];
     referenceEpochForWeek(gps_week, ref_ep);
@@ -981,6 +982,9 @@ int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
                 last_clock[sat] = ct;
                 libgnss::SSROrbitClockCorrection corr;
                 if (buildMadocaSsrCorrection(sat, c, decoder.envOverrides(), corr)) {
+                    if (availability_delay_s > 0.0) {
+                        corr.time = corr.time + availability_delay_s;
+                    }
                     corrections.push_back(corr);
                     ++added;
                 }
