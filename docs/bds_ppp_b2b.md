@@ -66,14 +66,17 @@ B-CNAV1, and the coordinate -3962108.6836, 3381309.5672, 3668678.6720.
 
 | Hour | Horizontal / up after 1 h | Horizontal < 0.2 m from | cssrlib `test_pppbds` (B1C / B2a) | cssrlib with B1I / B3I |
 |---|---|---|---|---|
-| 2025-02-15 17h (`046r`) | 0.15 m / -0.10 m | 40 min | 0.10 m | 0.14 m |
-| 2025-08-21 07h (`233h`) | 0.03 m / -0.09 m | 41 min | 0.03 m | 0.05 m |
+| 2025-02-15 17h (`046r`) | 0.14 m / -0.29 m | 41 min | 0.10 m | 0.14 m |
+| 2025-08-21 07h (`233h`) | 0.10 m / -0.10 m | 41 min | 0.03 m | 0.05 m |
 
 `gnss_ppp --b2b <log> --b2b-prn 59 --antex igs20.atx --elevation-mask 10
 --static`, 3599 epochs, about 7 s per hour. cssrlib (26734271) runs its
-`samples/test_pppbds.py` on the same files (C59). The one-hour results are
-within the spread of cssrlib's; cssrlib's uncombined filter converges faster
-(horizontal below 0.2 m after about 15-20 minutes).
+`samples/test_pppbds.py` on the same files (C59). cssrlib's uncombined
+filter converges faster (horizontal below 0.2 m after about 15-20 minutes)
+and moves less when B2b withdraws a satellite: on the 2025-08-21 hour B2b
+sends G15's, C34's and G18's clocks as invalid from 41, 53 and 56 min, and
+both programs stop using them (before expired corrections stopped being
+applied, libgnss++ kept their last values and ended at 0.03 m).
 
 Correction checks on the 2025-02-15 hour:
 

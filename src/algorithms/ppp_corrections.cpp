@@ -892,7 +892,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     observation.satellite, time, iode_orbit, iode_clock,
                     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
                     preferred_network_id, &ssr_orbit_iode, nullptr, &ssr_status,
-                    !require_coherent_ssr_);
+                    !require_coherent_ssr_ && !ssr_held_samples_);
             }
             // Require a valid SSR orbit correction (orbit_iode>=0) when SSR
             // products are loaded. MADOCA/CLAS SSR augments broadcast orbits; a
@@ -1034,7 +1034,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     nullptr,
                     nullptr,
                     &ssr_status,
-                    !require_coherent_ssr_);
+                    !require_coherent_ssr_ && !ssr_held_samples_);
             if (ssr_ok && capture_shadow_metadata) {
                 if (ssr_status.orbit_reference_time.week != 0) {
                     observation.ssr_orbit_age_s =

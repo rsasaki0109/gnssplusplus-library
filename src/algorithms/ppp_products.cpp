@@ -192,6 +192,7 @@ size_t sampleHeldSsrUpdates(std::map<SatelliteId, std::vector<HeldSsrUpdate>>& u
                 end.iode = -1;
                 end.orbit_valid = false;
                 end.clock_valid = false;
+                end.hold_end = true;
                 products.addCorrection(end);
             }
             if (hold_seconds <= 0.0) {
@@ -600,6 +601,7 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
     ssr_products_.clear();
     require_coherent_ssr_ = false;
     ssr_products_loaded_ = false;
+    ssr_held_samples_ = true;
     if (rtcm_file.empty() || sample_step_seconds <= 0.0) {
         return false;
     }
@@ -670,8 +672,8 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
     // Pass 2: hold each update until the next one for the satellite (bounded
     // by kHasIddMaxHoldSeconds), sampling on the step grid so PPP epochs hit
     // an exact sample and never interpolate across an IODE change.
-    const size_t sampled_corrections =
-        sampleHeldSsrUpdates(updates, nav, sample_step_seconds, ssr_products_);
+    const size_t sampled_corrections = sampleHeldSsrUpdates(
+        updates, nav, sample_step_seconds, ssr_products_, SsrRacFrame::Rtcm, true);
     ssr_products_loaded_ = sampled_corrections > 0U;
     return ssr_products_loaded_;
 }
@@ -685,6 +687,7 @@ bool PPPProcessor::loadGalileoHasSisProducts(const std::vector<io::HasSsrUpdate>
     // HAS covers GPS and Galileo only: other constellations (and satellites
     // whose HAS validity expired) must not fall back to the broadcast orbit.
     require_ssr_orbit_correction_ = true;
+    ssr_held_samples_ = true;
     // HAS carries both L2 CL and L2 P code biases; apply the one of the
     // tracked GPS L2 code.
     ssr_code_bias_tracking_identity_ = true;
@@ -716,8 +719,8 @@ bool PPPProcessor::loadGalileoHasSisProducts(const std::vector<io::HasSsrUpdate>
             satellite_updates.push_back(std::move(update));
         }
     }
-    const size_t sampled_corrections =
-        sampleHeldSsrUpdates(updates, nav, sample_step_seconds, ssr_products_);
+    const size_t sampled_corrections = sampleHeldSsrUpdates(
+        updates, nav, sample_step_seconds, ssr_products_, SsrRacFrame::Rtcm, true);
     ssr_products_loaded_ = sampled_corrections > 0U;
     return ssr_products_loaded_;
 }
@@ -762,6 +765,7 @@ bool PPPProcessor::loadBdsB2bProducts(const std::vector<io::BdsB2bUpdate>& b2b_u
     require_ssr_orbit_correction_ = true;
     ssr_code_bias_tracking_identity_ = false;
     bds_b2b_corrections_ = true;
+    ssr_held_samples_ = true;
     if (sample_step_seconds <= 0.0) {
         return false;
     }
