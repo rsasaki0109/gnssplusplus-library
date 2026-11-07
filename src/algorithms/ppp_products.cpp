@@ -482,6 +482,12 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
         ssr_products_loaded_ = false;
         return false;
     }
+    // The legacy conversion interpolates each grid sample between the
+    // updates around it, so its samples already hold later data.
+    if (ppp_config_.causal) {
+        ssr_products_loaded_ = false;
+        return false;
+    }
 
     io::RTCMReader reader;
     if (!reader.open(rtcm_file)) {

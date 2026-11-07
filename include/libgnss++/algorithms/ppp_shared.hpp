@@ -221,6 +221,12 @@ struct PPPConfig {
     bool reset_clock_to_spp_each_epoch = true;
     bool reset_kinematic_position_to_spp_each_epoch = true;
     bool emit_solution_epoch_time = false;
+    // Causal (real-time equivalent) processing: SSR corrections are never
+    // taken from samples after the epoch (no interpolation towards the next
+    // update, nothing before a satellite's first update, no later CLAS
+    // atmosphere rows), and the legacy RTCM SSR conversion, which
+    // interpolates between updates when it loads them, is refused.
+    bool causal = false;
 
     // Kalman filter parameters
     double process_noise_position = 0.0;

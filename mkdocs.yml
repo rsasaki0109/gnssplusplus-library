@@ -63,6 +63,7 @@ nav:
       - QZSS L6, CLAS, and MADOCA: use_cases/qzss_l6.md
   - Reference:
       - Interfaces: interfaces.md
+      - Real-time and post-processing modes: processing_modes.md
       - Validation and sign-off: validation.md
       - Benchmarks: benchmarks.md
       - Reproduce README results: reproduce.md

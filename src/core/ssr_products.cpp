@@ -894,8 +894,14 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
     if (before == nullptr && after == nullptr) {
         return false;
     }
+    // Causal lookups: nothing tagged after `time` (an exact match was handled
+    // above), so no correction before a satellite's first sample.
+    if (causal_ && before == nullptr) {
+        return false;
+    }
 
-    if (!allow_future_samples && before != nullptr && after != nullptr && before != after) {
+    if ((!allow_future_samples || causal_) && before != nullptr && after != nullptr &&
+        before != after) {
         after = nullptr;
     }
 
