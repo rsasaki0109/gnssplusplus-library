@@ -227,7 +227,7 @@ test('options TOML export matches the CLI --config schema and round-trips', () =
   const back = importOptionsToml(toml);
   assert.equal(back.mode, 'static');
   assert.deepEqual(back.fields, {
-    kml: false, verbose: true, enableAr: false, realtime: false, basePos: 'ecef', preset: 'survey', iono: 'iflc', ratio: '2.5',
+    kml: false, verbose: true, enableAr: false, realtime: false, combined: false, basePos: 'ecef', preset: 'survey', iono: 'iflc', ratio: '2.5',
     elevationMask: '15', baseX: '-3961905.0275', baseY: '3348993.7526', baseZ: '3698211.7831',
   });
   assert.equal(back.extra, '--arfilter --min-ar-sats 6 --no-glonass --rtk-snr-reference-dbhz 42');
@@ -264,6 +264,24 @@ test('Real-time equivalent checkbox: --realtime and its TOML key', () => {
     assert.equal(back.extra, '');
   }
   assert.equal(importOptionsToml(exportOptionsToml({ mode: 'kinematic', kml: true, extra: '' })).fields.realtime, false);
+});
+
+test('Forward + backward checkbox: --combined (RTK) and its TOML key', () => {
+  const rtk = buildPostCommand({ mode: 'kinematic', rover: 'r.obs', base: 'b.obs', nav: 'b.nav', combined: true });
+  assert.ok(rtk.args.includes('--combined'), rtk.commandLine);
+  assert.ok(!buildPostCommand({ mode: 'kinematic', rover: 'r.obs', base: 'b.obs', nav: 'b.nav' }).args.includes('--combined'));
+  assert.throws(() => buildPostCommand({ mode: 'single', rover: 'r.obs', nav: 'b.nav', combined: true }),
+    /no forward \+ backward mode/);
+  assert.throws(() => buildPostCommand({
+    mode: 'kinematic', rover: 'r.obs', base: 'b.obs', nav: 'b.nav', combined: true, realtime: true,
+  }), /cannot be real-time equivalent/);
+
+  const toml = exportOptionsToml({ mode: 'kinematic', combined: true, kml: true, extra: '' });
+  assert.match(toml, /^combined = true$/m);
+  const back = importOptionsToml(toml);
+  assert.equal(back.fields.combined, true);
+  assert.equal(back.extra, '');
+  assert.equal(importOptionsToml(exportOptionsToml({ mode: 'kinematic', kml: true, extra: '' })).fields.combined, false);
 });
 
 test('options import reads the repository example configs', () => {

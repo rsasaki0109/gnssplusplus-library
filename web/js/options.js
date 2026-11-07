@@ -92,6 +92,7 @@ export function exportOptionsToml(opts, commandHint = '') {
     if (!opts.kml) entries.push(['kml', false]);
     if (opts.verbose) entries.push(['verbose', true]);
     if (opts.realtime) entries.push(['realtime', true]);
+    if (opts.combined) entries.push(['combined', true]);
   } else {
     // Correction inputs (L6 logs, like NAV / SP3 / CLK) are not written; the
     // options that select their processing are.
@@ -229,6 +230,7 @@ export function importOptionsToml(text) {
   fields.verbose = false;
   fields.enableAr = false;
   fields.realtime = false;
+  fields.combined = false;
   fields.basePos = 'header';
   if (isPpp) fields.pppCorr = 'products';
   // MADOCA PPP-AR convergence keys equal to the GUI's are implied by the mode.
@@ -265,6 +267,8 @@ export function importOptionsToml(text) {
       fields.verbose = true;
     } else if (!isFuse && key === 'realtime' && typeof value === 'boolean') {
       fields.realtime = value;
+    } else if (!isPpp && !isFuse && key === 'combined' && typeof value === 'boolean') {
+      fields.combined = value;
     } else if (isPpp && key === 'enable_ar' && typeof value === 'boolean') {
       fields.enableAr = value;
     } else if (isPpp && key === 'clas_osr' && value === true) {
