@@ -184,6 +184,7 @@ set(GNSS_RTK_RUNTIME_SOURCES
     src/algorithms/rtk_covariance_consistency.cpp
     src/algorithms/rtk_tdcp_diagnostics.cpp
     src/algorithms/rtk_validation.cpp
+    src/algorithms/forward_backward.cpp
     src/algorithms/integrity_consensus.cpp
     src/algorithms/rtk.cpp
     src/algorithms/rtk_state.cpp

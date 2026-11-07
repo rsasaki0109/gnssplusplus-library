@@ -674,6 +674,50 @@ class RuntimeReceiverCases:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn(message, result.stderr + result.stdout)
 
+    def test_solve_combined_runs_a_backward_pass(self) -> None:
+        # --combined (post-processing) runs the filter again backward over the
+        # same epochs and combines both passes at each epoch.
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        with tempfile.TemporaryDirectory(prefix="gnss_solve_combined_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_obs = temp_root / "rover.obs"
+            base_obs = temp_root / "base.obs"
+            base_nav = temp_root / "base.nav"
+            for source, outputs in (
+                ("rover.rtcm", ("--obs-out", str(rover_obs))),
+                ("base.rtcm", ("--obs-out", str(base_obs), "--nav-out", str(base_nav))),
+            ):
+                converted = self.run_gnss(
+                    "convert", "--format", "rtcm", "--input", str(fixture / source), *outputs,
+                    "--gps-week", "2324", "--quiet",
+                )
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            out = temp_root / "combined.pos"
+            inputs = ("--rover", str(rover_obs), "--base", str(base_obs), "--nav", str(base_nav),
+                      "--no-kml", "--out", str(out))
+            result = self.run_gnss("solve", *inputs, "--combined")
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            line = next(text for text in result.stdout.splitlines()
+                        if "combined (forward + backward):" in text)
+            stats = dict(item.split("=") for item in line.split(":", 1)[1].split())
+            # Both passes solve all 201 rover epochs.
+            self.assertEqual(stats["both"], "201")
+            self.assertEqual(stats["forward_only"], "0")
+            self.assertEqual(stats["backward_only"], "0")
+            epochs = [row for row in out.read_text().splitlines() if row and not row.startswith("%")]
+            self.assertEqual(len(epochs), 201)
+
+            for extra, message in (
+                (("--combined", "--realtime"), "--combined cannot be used with --realtime"),
+                (("--combined", "--fix-recovery"), "--combined cannot use --fix-recovery"),
+                (("--combined", "--combined-fix-tolerance", "-1"),
+                 "--combined-fix-tolerance must be >= 0"),
+            ):
+                with self.subTest(extra=extra):
+                    refused = self.run_gnss("solve", *inputs, *extra)
+                    self.assertNotEqual(refused.returncode, 0)
+                    self.assertIn(message, refused.stderr + refused.stdout)
+
     def test_realtime_solve_and_replay_ignore_later_data_and_agree(self) -> None:
         # Causal runs give the same solution for an epoch whatever comes after
         # it: cutting the files (solve) or the base stream (replay) after it

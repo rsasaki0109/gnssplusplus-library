@@ -285,8 +285,10 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
     // The base span only goes with a rover span taken from the history.
     double doppler_base_dt_s = std::numeric_limits<double>::quiet_NaN();
     if (has_doppler_history_time_) {
+        // Negative when the epochs are processed backward (gnss solve
+        // --combined): the prediction then runs backward as well.
         const double history_dt = epoch_time - doppler_history_time_;
-        if (std::isfinite(history_dt) && history_dt > 0.0) {
+        if (std::isfinite(history_dt) && history_dt != 0.0) {
             doppler_dt_s = history_dt;
             if (has_doppler_history_base_time_) {
                 doppler_base_dt_s = base_epoch_time - doppler_history_base_time_;
@@ -295,8 +297,8 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
     }
     if (rtk_config_.enable_doppler_slip_detection &&
         std::isfinite(doppler_dt_s) &&
-        doppler_dt_s > 0.0 &&
-        doppler_dt_s <= 5.0) {
+        std::abs(doppler_dt_s) > 0.0 &&
+        std::abs(doppler_dt_s) <= 5.0) {
         const double doppler_slip_threshold =
             apply_dynamic_slip_floor
                 ? std::max(rtk_config_.doppler_slip_threshold, 0.20)
@@ -304,17 +306,20 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
         // The base epoch need not advance with the rover epoch (see
         // rtk_slip_detection::detectDopplerSlipWithBaseSpan). With equal or
         // unknown spans this is exactly the rover-span test.
+        // Backward (negative span): the same test from the current epoch to
+        // the previous one, over the positive span.
+        const bool backward = doppler_dt_s < 0.0;
         const auto detect_doppler_slip = [&](double previous_sd_phase_m, double sd_phase_m,
                                              double rover_doppler_hz, double base_doppler_hz,
                                              double wavelength_m) {
             return rtk_slip_detection::detectDopplerSlipWithBaseSpan(
-                previous_sd_phase_m,
-                sd_phase_m,
+                backward ? sd_phase_m : previous_sd_phase_m,
+                backward ? previous_sd_phase_m : sd_phase_m,
                 rover_doppler_hz,
                 base_doppler_hz,
                 wavelength_m,
-                doppler_dt_s,
-                doppler_base_dt_s,
+                backward ? -doppler_dt_s : doppler_dt_s,
+                backward ? -doppler_base_dt_s : doppler_base_dt_s,
                 doppler_slip_threshold);
         };
         for (const auto& [sat, sd] : sat_data) {
@@ -368,7 +373,8 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
         }
     }
     if (rtk_config_.enable_doppler_slip_detection) {
-        if (std::isfinite(doppler_dt_s) && doppler_dt_s > 0.0 && doppler_dt_s <= 5.0) {
+        if (std::isfinite(doppler_dt_s) && std::abs(doppler_dt_s) > 0.0 &&
+            std::abs(doppler_dt_s) <= 5.0) {
             doppler_history_time_ = epoch_time;
             has_doppler_history_time_ = true;
             doppler_history_base_time_ = base_epoch_time;
