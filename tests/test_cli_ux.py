@@ -321,6 +321,30 @@ class CliUxTest(unittest.TestCase):
                 for snippet in snippets:
                     self.assertIn(snippet, combined)
 
+    def test_missing_input_files_are_reported_without_tracebacks(self) -> None:
+        missing = "missing-input-for-cli-ux-test.dat"
+        self.assertFalse((ROOT_DIR / missing).exists())
+        cannot_open = f"Error: cannot open input {missing}: No such file or directory"
+        no_such_file = f"Error: No such file or directory: {missing}"
+        cases = [
+            *[((command, "--input", missing), cannot_open)
+              for command in ("binex-info", "nmea-info", "novatel-info", "qzss-l6-info",
+                              "sbf-info", "sbp-info", "skytraq-info", "trimble-info")],
+            (("pos2kml", missing), no_such_file),
+            (("visibility-plot", missing), no_such_file),
+            (("trackplot", missing), no_such_file),
+            (("smartloc-signoff", "--obs", missing, "--nav", missing), no_such_file),
+            # The sign-off reports the failed step in one line.
+            (("ppp-products-signoff", "--obs", missing, "--nav", missing),
+             "Error: exit status 1 from: "),
+        ]
+        for args, message in cases:
+            with self.subTest(args=args):
+                result = self.run_gnss(*args)
+                self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+                self.assert_no_traceback(result)
+                self.assertIn(message, result.stderr)
+
     def test_unknown_command_suggests_registered_dispatcher_names(self) -> None:
         cases = [
             ("clas_ppp", "clas-ppp"),

@@ -123,4 +123,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except OSError as exc:  # a missing or unreadable file: no traceback
+        where = f": {exc.filename}" if exc.filename else ""
+        raise SystemExit(f"Error: {exc.strerror or exc}{where}") from None

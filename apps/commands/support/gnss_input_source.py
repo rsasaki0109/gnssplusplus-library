@@ -70,13 +70,20 @@ class InputSource:
         self.fd: int | None = None
 
     def open(self) -> bool:
-        if is_serial_path(self.path):
-            device, baud = parse_serial_path(self.path, self.default_baud)
-            fd = os.open(device, os.O_RDONLY | os.O_NOCTTY)
-            configure_serial(fd, baud, self.allowed_bauds)
-            self.fd = fd
-            return True
-        self.handle = open(self.path, "rb")
+        """Open the input; a file or device that cannot be opened ends the
+        command with "Error: cannot open input <path>: <reason>" (exit 1)."""
+        try:
+            if is_serial_path(self.path):
+                device, baud = parse_serial_path(self.path, self.default_baud)
+                fd = os.open(device, os.O_RDONLY | os.O_NOCTTY)
+                configure_serial(fd, baud, self.allowed_bauds)
+                self.fd = fd
+                return True
+            self.handle = open(self.path, "rb")
+        except OSError as exc:
+            raise SystemExit(
+                f"Error: cannot open input {self.path}: {exc.strerror or exc}"
+            ) from None
         return True
 
     def close(self) -> None:

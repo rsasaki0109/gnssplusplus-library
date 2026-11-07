@@ -124,7 +124,10 @@ def gps_week_tow_to_gpst_tokens(week: int, tow_s: float) -> tuple[str, str]:
 
 def run_checked(command: list[str]) -> None:
     print("+", " ".join(command))
-    subprocess.run(command, cwd=ROOT_DIR, check=True)
+    result = subprocess.run(command, cwd=ROOT_DIR, check=False)
+    if result.returncode != 0:
+        # The command printed its own error above; no traceback here.
+        raise SystemExit(f"Error: exit status {result.returncode} from: {' '.join(command)}")
 
 
 def read_lib_pos_records(path: Path) -> list[dict[str, float | int]]:
