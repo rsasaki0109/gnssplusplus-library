@@ -57,8 +57,8 @@ be repeated natively, for example on a larger dataset or in a script.
    the convergence time (from the first epoch to the time after which every
    epoch stays below the threshold, as `gnss reproduce has-idd-ppp` scores
    it) and the error at 10, 30 and 60 minutes, for solution 1 and 2 side by
-   side. On the OBE4 HAS IDD sample it reads H < 0.2 m after 0.8 min and
-   |U| < 0.4 m after 5.8 min, as the lane's table.
+   side. On the OBE4 HAS IDD sample it reads H < 0.2 m after 5.8 min and
+   |U| < 0.4 m after 0.0 min, as the lane's table.
 4. **Observations** shows the data before you solve: a skyplot, one tracking
    row per satellite coloured by SNR (or system) with loss-of-lock (LLI)
    slip ticks, SNR against elevation, the satellite count and a per-satellite
@@ -165,8 +165,8 @@ and compares them with native `gnss ppp`:
 | --- | --- | --- |
 | MADOCALIB 0089f7dc: IGS MIZU, 2025-04-01 00–01 h, L6E 204/206, L6D 200/201, ANTEX | kinematic PPP-AR, 120 epochs | 118 solved, 91 FIX (MADOCALIB: 97); without L6D 108 FIX / 10 FLOAT, as MADOCALIB. Same status as native at every epoch, positions within 0.01 mm. 5.8 s in Chromium, 2.5 s natively |
 | CLASLIB 4320e844: 2019-08-27 (`0627239Q.obs`, `2019239Q.l6`) | static, 300 epochs | 298 FLOAT / 2 FIX, horizontal RMS 1.6 m over the last 100 epochs from the station coordinate; byte-identical to native. 9.5 s as WebAssembly in Node, 6–8 s natively |
-| cssrlib-data ec1dfa2c: OBE4 2023-08-17, HAS IDD (`idd2023229c.rtc`) | static, 1800 epochs (30 min) | 0.09 m horizontal from the OBE4 coordinate (0.01 m after the full hour, `gnss reproduce has-idd-ppp`); final position within 0.01 mm of native. 4 s natively |
-| cssrlib-data ec1dfa2c: Kamakura 2025-02-15, E6-B pages (`046r_gale6.txt`) and the receiver's NAV | static, 1800 epochs (30 min) | 0.09 m horizontal from the Kamakura coordinate, indicative only (outside the HAS service area); final position within 0.01 mm of native. 4 s natively |
+| cssrlib-data ec1dfa2c: OBE4 2023-08-17, HAS IDD (`idd2023229c.rtc`) | static, 1800 epochs (30 min) | 0.12 m horizontal from the OBE4 coordinate (also after the full hour, `gnss reproduce has-idd-ppp`); final position within 0.01 mm of native. 4 s natively |
+| cssrlib-data ec1dfa2c: Kamakura 2025-02-15, E6-B pages (`046r_gale6.txt`) and the receiver's NAV | static, 1800 epochs (30 min) | 0.07 m horizontal from the Kamakura coordinate, indicative only (outside the HAS service area); final position within 0.01 mm of native. 4 s natively |
 | cssrlib-data ec1dfa2c: Kamakura 2025-02-15, PPP-B2b (`046r_bdsb2b.txt`, C59) and the receiver's RINEX 4 NAV, igs20.atx, 10° mask | static, 1800 epochs (30 min) | 0.11 m horizontal from the Kamakura coordinate (0.01 m after the full hour); final position within 0.01 mm of native. 4 s natively |
 
 cssrlib-data is MIT-licensed, but its LICENSE leaves the sample data to their

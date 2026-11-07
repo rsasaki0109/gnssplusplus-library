@@ -476,6 +476,8 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
                                        double sample_step_seconds) {
     ssr_products_.clear();
     require_coherent_ssr_ = false;
+    // Legacy biases stay keyed by their wire signal ID.
+    ssr_code_bias_tracking_identity_ = false;
     if (rtcm_file.empty() || sample_step_seconds <= 0.0) {
         ssr_products_loaded_ = false;
         return false;
@@ -602,6 +604,11 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
     require_coherent_ssr_ = false;
     ssr_products_loaded_ = false;
     ssr_held_samples_ = true;
+    // The biases are keyed by signal (rtcmCodeBiasesToInternal): give a GPS
+    // L2 P(Y) / Z-tracked code (C2W, C2P, ...) the L2 P bias and an L2C code
+    // the L2C one, as the HAS SIS path does. HAS sends both L2 CL and L2 P;
+    // C2W took the L2 CL one, 0.5-0.9 m off ionosphere-free on the OBE4 hour.
+    ssr_code_bias_tracking_identity_ = true;
     if (rtcm_file.empty() || sample_step_seconds <= 0.0) {
         return false;
     }

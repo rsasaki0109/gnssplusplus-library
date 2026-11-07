@@ -28,8 +28,8 @@ runner adds no scoring logic of its own.
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
 | Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | ready | ~25 min | **Pass.** README refreshed 2026-09-29 to the reproduced H 0.576 / U 0.740 / A 0.303 / LAX-T 0.716 m (previously 0.577 / 0.738 / 0.302 / 0.712); see [gsdc-dev-routes result](#gsdc-dev-routes-local-result-2026-09-29) |
 | Smartphone GSDC official submission | `gsdc-official` | ready | Linux GCC: full run ~3 h with `--jobs 4` on 4 cores (the third pass doubles the long drives) | **Pass on one build.** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 57742915 (`12d39d57...`), and the Kaggle score is readback-only. Every drive is pinned to one Linux GCC 15 build; MSVC outputs differ by up to 0.08 m and do not pass. On 2026-10-25 the full lane (25 stage-0 runs, 25 height maps, 40 final drives) ran on that build; the 9 final drives and 8 stage-0 runs already pinned to GCC came out byte-identical, and the assembled file was submitted as 57619467. 57626255 / 57629197 then solved ebf-x Mi8 from the taroz IdxStart epoch, 57664241 / 57678818 added the upstream third pass, 57717122 tuned 18 drives on Kaggle probes, 57733487 picked 22 drives by a rule fixed on train and snapped toward a train-truth road map, and 57742915 moves that road map into the factor graph; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
-| (docs, not a README row) Galileo HAS float PPP via IDD | `has-idd-ppp` | ready | ~1 min | **Pass.** Static and kinematic OBE4 hour; see [has-idd-ppp](#has-idd-ppp-galileo-has-float-ppp-2026-09-29) and [Galileo HAS support](galileo_has.md) |
-| (docs, not a README row) Galileo HAS float PPP via SIS (E6-B pages) | `has-sis-ppp` | ready | ~1 min | **Pass.** Decoder (432 MT1 messages per hour, no CRC failure) and static Kamakura 2025-02-15 hour; indicative only (outside the HAS service area); see [has-sis-ppp](#has-sis-ppp-galileo-has-sis-float-ppp-2026-09-30) and [Galileo HAS support](galileo_has.md) |
+| (docs, not a README row) Galileo HAS float PPP via IDD | `has-idd-ppp` | ready | ~1 min | **Pass.** Static and kinematic OBE4 hour; see [has-idd-ppp](#has-idd-ppp-galileo-has-float-ppp-2026-11-07) and [Galileo HAS support](galileo_has.md) |
+| (docs, not a README row) Galileo HAS float PPP via SIS (E6-B pages) | `has-sis-ppp` | ready | ~1 min | **Pass.** Decoder (432 MT1 messages per hour, no CRC failure) and static Kamakura 2025-02-15 hour; indicative only (outside the HAS service area); see [has-sis-ppp](#has-sis-ppp-galileo-has-sis-float-ppp-2026-11-07) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) BeiDou PPP-B2b float PPP | `bds-b2b-ppp` | ready | ~30 s | **Pass.** Decoder (3600 C59 messages per hour, no CRC failure or IOD mismatch) and static Kamakura 2025-02-15 / 2025-08-21 hours: horizontal below 0.2 m from 16 / 18 min, within 0.08 m horizontal / 0.32 m vertical after one hour; see [bds-b2b-ppp](#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07) and [BeiDou PPP-B2b support](bds_ppp_b2b.md) |
 | (docs, not a README row) Precise-product PPP with IGS final SP3/CLK | `igs-final-ppp` | ready | ~2 min | **Pass.** Static Kamakura 2025-02-15 / 2025-08-21 hours and OBE4 2023-08-17 hour within 0.32 m horizontal / 0.27 m vertical after one hour, level with RTKLIB demo5 on the same inputs; see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01) |
 
@@ -1108,7 +1108,7 @@ subset (per-drive byte identity plus `--allow-partial` assembly); the full
 40-drive run is available through the same command but is not part of the
 routine check.
 
-## has-idd-ppp: Galileo HAS float PPP (2026-09-29)
+## has-idd-ppp: Galileo HAS float PPP (2026-11-07)
 
 `has-idd-ppp` is a docs lane, not a README row. It runs `gnss_ppp` with
 `--ssr-rtcm-profile has-idd` on the public Galileo HAS Internet Data
@@ -1127,23 +1127,28 @@ cssrlib-data is MIT-licensed, but its LICENSE leaves the sample data to their
 sources' terms, so the three input files are not redistributed; download them
 into the `--has-data-root` directory.
 
-Local result (MSVC Release, 44 s): every metric passes. The static run is at
-0.014 m horizontal / +0.050 m vertical after one hour and converges below
-0.20 m horizontal after 0.8 min and below 0.40 m vertical after 5.8 min
-(0.095 / -0.135 m, 4.2 / 21.0 min before the static filter committed one
-measurement update per epoch, see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01));
-the gates are H <= 0.20 m and |U| <= 0.40 m at 60 min, and convergence within
-10 min (H) and 30 min (U). The kinematic run is at 0.059 / +0.015 m after
-30 min and 0.115 / +0.059 m after one hour, gated at H <= 0.30 m and
-|U| <= 0.60 m at 30 and 60 min (before the one-measurement-update-per-epoch
-fix of the kinematic PPP filter it stayed at about 1.9 m / -5.6 m; before the
-kinematic post-fit residual screening it read 0.136 / +0.058 m and
-0.018 / -0.390 m, with an hour RMS of 0.156 / 0.206 m instead of
-0.086 / 0.099 m). The legacy
-conversion is reported, not gated. See [Galileo HAS support](galileo_has.md)
+Local result (Linux gcc Release, 2026-11-07, 17 s): every metric passes. The
+static run is at 0.116 m horizontal / +0.002 m vertical after one hour and
+converges below 0.20 m horizontal after 5.8 min and below 0.40 m vertical
+from the first epoch; the gates are H <= 0.20 m and |U| <= 0.40 m at 60 min,
+and convergence within 10 min (H) and 30 min (U). The kinematic run is at
+0.205 / -0.177 m after 30 min and 0.305 / -0.236 m after one hour, gated at
+H <= 0.40 m and |U| <= 0.60 m at 30 and 60 min. Until Galileo got a receiver
+clock of its own with SSR corrections and C2W the L2 P code bias
+(2026-11-07) the static run ended at 0.014 / +0.050 m (0.8 / 5.8 min) and
+the kinematic one at 0.057 / +0.018 m and 0.114 / +0.077 m, gated at
+H <= 0.30 m; those two errors had offset each other on this hour (see
+[Galileo receiver clock](galileo_has.md#validation-has-sis-kamakura-2025)).
+Earlier, before the static filter committed one measurement update per epoch
+(see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01)), the
+static run ended at 0.095 / -0.135 m (4.2 / 21.0 min); before the
+one-measurement-update-per-epoch fix of the kinematic PPP filter the
+kinematic run stayed at about 1.9 m / -5.6 m, and before the kinematic
+post-fit residual screening it read 0.136 / +0.058 m and 0.018 / -0.390 m.
+The legacy conversion is reported, not gated. See [Galileo HAS support](galileo_has.md)
 for the full table and the cssrlib comparison.
 
-## has-sis-ppp: Galileo HAS SIS float PPP (2026-09-30)
+## has-sis-ppp: Galileo HAS SIS float PPP (2026-11-07)
 
 `has-sis-ppp` is a docs lane, not a README row. It decodes the HAS E6-B pages
 of two public Kamakura hours of [hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data)
@@ -1156,15 +1161,17 @@ the cssrlib reference coordinate.
 python3 apps/gnss.py reproduce has-sis-ppp --has-sis-data-root /datasets/cssrlib-data/data --check
 ```
 
-Local result (MSVC Release, 2026-10-01): every metric passes. Each hour
+Local result (Linux gcc Release, 2026-11-07): every metric passes. Each hour
 yields 432 MT1 messages without a CRC failure. The 2025-02-15 static run is at
-0.031 / +0.126 m after 30 min and 0.172 / -0.121 m after one hour (gates:
-H <= 0.20 m, |U| <= 0.40 m at 30 and 60 min; 0.184 m after one hour before
-expired HAS corrections stopped being applied, 2026-11-07; before the static
-one-update-per-epoch fix 0.026 / +0.184 m and 0.010 / +0.041 m; the kinematic
-run ends at 0.173 / -0.252 m). The 2025-08-21 hour is reported
-only: libgnss++ ends 0.1-0.4 m low there depending on the correction source
-(0.7-0.8 m before the static fix, about 1 m before the solid-earth-tide fix). Kamakura
+0.027 / +0.057 m after 30 min and 0.118 / -0.093 m after one hour (gates:
+H <= 0.20 m, |U| <= 0.40 m at 30 and 60 min; 0.172 / -0.121 m before Galileo
+got its own receiver clock and 0.184 m before expired HAS corrections stopped
+being applied, both 2026-11-07; before the static one-update-per-epoch fix
+0.026 / +0.184 m and 0.010 / +0.041 m; the kinematic run ends at
+0.125 / -0.135 m). The 2025-08-21 hour is reported only: the static run ends
+at 0.118 / -0.332 m (0.438 / -0.301 m with the shared receiver clock),
+0.7-0.8 m low before the static fix and about 1 m low before the
+solid-earth-tide fix. Kamakura
 is outside the HAS service area, so the numbers are indicative. See
 [Galileo HAS support](galileo_has.md) for the decoder parity with cssrlib and
 the full comparison.

@@ -333,7 +333,21 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     }
     filter_state_.trop_index = fixed_state_count - 1;
     int isb_start = fixed_state_count;
-    if (env_overrides_.estimate_isb_gal && visible_systems.count(GNSSSystem::Galileo)) {
+    // SSR orbit / clock corrections keep each constellation on its broadcast
+    // time scale (GPST, GST), and the receiver's Galileo codes have a delay
+    // of their own: with the GPS receiver clock the Galileo prefit code
+    // residuals sit about 2 m below the GPS ones on the HAS IDD (OBE4) and
+    // the Kamakura (HAS SIS, JPL GDGPS) hours, which pulled the position by
+    // decimetres and stopped a Galileo-only solution from converging.
+    // Estimate a Galileo receiver clock, as RTKLIB does (one clock per
+    // system) and as cssrlib's between-satellite differences per system
+    // imply. Coherent MADOCA, the CLAS OSR filter and PPP-B2b (no Galileo
+    // corrections) keep their own clock handling.
+    const bool ssr_galileo_clock =
+        ssr_products_loaded_ && !require_coherent_ssr_ &&
+        !ppp_config_.use_clas_osr_filter && !bds_b2b_corrections_;
+    if ((env_overrides_.estimate_isb_gal || ssr_galileo_clock) &&
+        visible_systems.count(GNSSSystem::Galileo)) {
         filter_state_.gal_clock_index = isb_start++;
     }
     const bool clas_qzs_isb =

@@ -1014,6 +1014,30 @@ std::vector<uint8_t> buildGps1062HighRateClockFrame(uint8_t prn, int32_t high_ra
     return buildRtcmFrame(payload);
 }
 
+std::vector<uint8_t> buildGps1059CodeBiasFrame(
+    uint8_t prn,
+    const std::vector<std::pair<uint8_t, int32_t>>& biases_centimeters,
+    uint32_t tow = 345600) {
+    const int total_bits = 67 + 6 + 5 + 19 * static_cast<int>(biases_centimeters.size());
+    std::vector<uint8_t> payload((total_bits + 7) / 8U, 0);
+    int bit = 0;
+    setUnsignedBits(payload, bit, 12, 1059); bit += 12;
+    setUnsignedBits(payload, bit, 20, tow); bit += 20;
+    setUnsignedBits(payload, bit, 4, 2); bit += 4;
+    setUnsignedBits(payload, bit, 1, 0); bit += 1;
+    setUnsignedBits(payload, bit, 4, 7); bit += 4;
+    setUnsignedBits(payload, bit, 16, 21); bit += 16;
+    setUnsignedBits(payload, bit, 4, 3); bit += 4;
+    setUnsignedBits(payload, bit, 6, 1); bit += 6;
+    setUnsignedBits(payload, bit, 6, prn); bit += 6;
+    setUnsignedBits(payload, bit, 5, static_cast<uint32_t>(biases_centimeters.size())); bit += 5;
+    for (const auto& [signal_id, bias_centimeters] : biases_centimeters) {
+        setUnsignedBits(payload, bit, 5, signal_id); bit += 5;
+        setSignedBits(payload, bit, 14, bias_centimeters); bit += 14;
+    }
+    return buildRtcmFrame(payload);
+}
+
 std::vector<uint8_t> buildGps1059CodeBiasFrame(uint8_t prn,
                                                uint8_t signal_id,
                                                int32_t bias_centimeters,
@@ -3557,6 +3581,22 @@ struct PPPProcessorTestAccess {
         return p.madocaPostfitScoreRejectsEpoch(true, 8, score);
     }
 
+    // initializeFilter() from a seed position; returns the Galileo receiver
+    // clock state index (-1: Galileo shares the GPS clock).
+    static int galileoClockIndexAfterInit(PPPProcessor& p,
+                                          const ObservationData& obs,
+                                          const NavigationData& nav,
+                                          const Vector3d& seed_position) {
+        PositionSolution seed;
+        seed.status = SolutionStatus::SPP;
+        seed.num_satellites = 8;
+        seed.position_ecef = seed_position;
+        if (!p.initializeFilter(obs, nav, &seed)) {
+            return -2;
+        }
+        return p.filter_state_.gal_clock_index;
+    }
+
     // Runs applyPreciseCorrections() for observations seen from `receiver`
     // (a minimal filter state holding only that position).
     static void applyCorrections(PPPProcessor& p,
@@ -4079,4 +4119,100 @@ TEST(PPPTest, RtcmSsrUraWeightsTheCodeOnly) {
     run(true, pr_with, cp_with);
     EXPECT_NEAR(pr_with - pr_without, 0.22175 * 0.22175, 1e-9);
     EXPECT_NEAR(cp_with, cp_without, 1e-15);
+}
+
+TEST(PPPTest, RtcmSsrCodeBiasFollowsTheTrackedGpsL2Code) {
+    // HAS IDD sends a GPS L2 CL (RTCM signal 8) and an L2 P (10) code bias:
+    // the standard conversion gives C2W the L2 P bias and C2L the L2C one;
+    // the legacy conversion keeps its wire-ID keys.
+    NavigationData nav_data;
+    const Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(eph);
+    const GNSSTime time(eph.toe.week, 345600.0);
+    Vector3d sat_position, sat_velocity;
+    double sat_clock = 0.0, sat_drift = 0.0;
+    ASSERT_TRUE(nav_data.calculateSatelliteState(eph.satellite, time, sat_position, sat_velocity,
+                                                 sat_clock, sat_drift));
+    const Vector3d receiver = sat_position.normalized() * 6371000.0;
+
+    const auto rtcm_path = tempFilePath("libgnss_ppp_l2_tracking_bias.rtcm3");
+    std::vector<uint8_t> frames = buildGps1059CodeBiasFrame(1, {{8, 40}, {10, 10}});
+    const auto orbit_clock = buildGps1060CombinedFrame(1);
+    frames.insert(frames.end(), orbit_clock.begin(), orbit_clock.end());
+    writeBinaryFile(rtcm_path, frames);
+
+    const double f1 = constants::GPS_L1_FREQ;
+    const double f2 = constants::GPS_L2_FREQ;
+    const double alpha = f1 * f1 / (f1 * f1 - f2 * f2);
+    const double beta = -f2 * f2 / (f1 * f1 - f2 * f2);
+    const auto code_bias = [&](PPPProcessor& processor, const char* l2_code) {
+        std::vector<PPPProcessorTestAccess::Obs> observations(1);
+        auto& obs = observations.front();
+        obs.satellite = eph.satellite;
+        obs.valid = true;
+        obs.primary_signal = SignalType::GPS_L1CA;
+        obs.secondary_signal = SignalType::GPS_L2C;
+        obs.primary_observation_type = "C1C";
+        obs.secondary_observation_type = l2_code;
+        obs.primary_frequency_hz = f1;
+        obs.secondary_frequency_hz = f2;
+        obs.primary_code_bias_coeff = alpha;
+        obs.secondary_code_bias_coeff = beta;
+        obs.pseudorange_if = (sat_position - receiver).norm();
+        obs.carrier_phase_if = obs.pseudorange_if;
+        obs.variance_pr = 1.0;
+        obs.variance_cp = 1.0e-4;
+        PPPProcessorTestAccess::applyCorrections(processor, observations, nav_data, time, receiver);
+        EXPECT_TRUE(obs.valid);
+        return obs.pseudorange_code_bias_m;
+    };
+
+    PPPProcessor standard;
+    ASSERT_TRUE(standard.loadRTCMSSRProducts(
+        rtcm_path.string(), nav_data, 1.0, PPPProcessor::RTCMSSRProfile::Standard));
+    // RTCM biases are added to the pseudorange: -0.10 m (L2 P), -0.40 m (L2C).
+    EXPECT_NEAR(code_bias(standard, "C2W"), beta * -0.10, 1e-9);
+    EXPECT_NEAR(code_bias(standard, "C2L"), beta * -0.40, 1e-9);
+
+    PPPProcessor legacy;
+    ASSERT_TRUE(legacy.loadRTCMSSRProducts(rtcm_path.string(), nav_data, 1.0));
+    // Wire ID 8 is the legacy L2 key, whatever the tracked code.
+    EXPECT_NEAR(code_bias(legacy, "C2W"), beta * 0.40, 1e-9);
+    std::filesystem::remove(rtcm_path);
+}
+
+TEST(PPPTest, SsrCorrectionsGiveGalileoItsOwnReceiverClock) {
+    // With SSR corrections Galileo gets a receiver clock of its own; without
+    // them (broadcast only) it shares the GPS clock unless
+    // GNSS_PPP_ESTIMATE_ISB asks for one.
+    NavigationData nav_data;
+    const Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(eph);
+    ObservationData obs(GNSSTime(eph.toe.week, 345600.0));
+    for (const SatelliteId satellite : {SatelliteId(GNSSSystem::GPS, 1),
+                                        SatelliteId(GNSSSystem::Galileo, 11)}) {
+        Observation code(satellite, satellite.system == GNSSSystem::GPS
+                                        ? SignalType::GPS_L1CA
+                                        : SignalType::GAL_E1);
+        code.valid = true;
+        code.has_pseudorange = true;
+        code.pseudorange = 2.2e7;
+        obs.addObservation(code);
+    }
+    const Vector3d seed(-3962108.7, 3381309.6, 3668678.7);
+
+    PPPProcessor broadcast_only;
+    EXPECT_EQ(PPPProcessorTestAccess::galileoClockIndexAfterInit(
+                  broadcast_only, obs, nav_data, seed),
+              -1);
+
+    const auto rtcm_path = tempFilePath("libgnss_ppp_galileo_clock.rtcm3");
+    writeBinaryFile(rtcm_path, buildGps1060CombinedFrame(1));
+    for (const auto profile : {PPPProcessor::RTCMSSRProfile::Standard,
+                               PPPProcessor::RTCMSSRProfile::Legacy}) {
+        PPPProcessor ssr;
+        ASSERT_TRUE(ssr.loadRTCMSSRProducts(rtcm_path.string(), nav_data, 1.0, profile));
+        EXPECT_GE(PPPProcessorTestAccess::galileoClockIndexAfterInit(ssr, obs, nav_data, seed), 0);
+    }
+    std::filesystem::remove(rtcm_path);
 }
