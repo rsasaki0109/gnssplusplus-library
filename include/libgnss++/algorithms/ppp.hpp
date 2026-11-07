@@ -127,6 +127,9 @@ public:
     
     // ProcessorBase interface
     bool initialize(const ProcessorConfig& config) override;
+    /// Why the last initialize() failed: the product file that could not be
+    /// loaded (empty after a successful initialize()).
+    const std::string& initializeError() const { return initialize_error_; }
     PositionSolution processEpoch(const ObservationData& obs, const NavigationData& nav) override;
     ProcessorStats getStats() const override;
     void reset() override;
@@ -573,6 +576,7 @@ private:
 
     // Statistics
     mutable CopyableMutex stats_mutex_;
+    std::string initialize_error_;
     size_t total_epochs_processed_ = 0;
     size_t converged_solutions_ = 0;
     double total_convergence_time_ = 0.0;

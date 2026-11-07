@@ -1545,7 +1545,9 @@ int main(int argc, char* argv[]) {
         };
         std::optional<B2bSummary> b2b_summary;
         if (!processor.initialize(processor_config)) {
-            std::cerr << "Error: failed to initialize PPP processor\n";
+            const std::string& reason = processor.initializeError();
+            std::cerr << "Error: " << (reason.empty() ? "failed to initialize PPP processor" : reason)
+                      << "\n";
             return 1;
         }
         if (options.progress_interval_s > 0.0) {
