@@ -52,6 +52,7 @@ argv = [
   "--obs", "{has_root}/OBE42023229c.obs",
   "--nav", "{has_root}/OBE42023229c.nav",
   "--ssr-rtcm", "{has_root}/idd2023229c.rtc",
+  "--ssr-rtcm-profile", "legacy",
   "--static",
   "--out", "{work_dir}/legacy_static.pos",
   "--quiet",

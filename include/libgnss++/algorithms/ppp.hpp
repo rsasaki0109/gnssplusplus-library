@@ -219,6 +219,7 @@ public:
     /**
      * @brief Load RTCM SSR orbit/clock corrections and convert them to sampled PPP corrections.
      */
+    /// Legacy conversion (RTCMSSRProfile::Legacy); see below.
     bool loadRTCMSSRProducts(const std::string& rtcm_file,
                              const NavigationData& nav,
                              double sample_step_seconds = 1.0);
@@ -226,9 +227,8 @@ public:
     /**
      * @brief RTCM SSR ingestion conventions.
      *
-     * Legacy keeps the historical conversion used by existing callers.
-     * GalileoHasIdd applies the RTCM 10403.3 conventions needed for Galileo
-     * HAS corrections delivered over the HAS Internet Data Distribution:
+     * Standard (alias GalileoHasIdd, first written for the Galileo HAS
+     * Internet Data Distribution) applies the RTCM 10403.3 conventions:
      * - every sample carries the SSR IODE so PPP evaluates the broadcast
      *   ephemeris the correction refers to;
      * - each orbit/clock update is held (with its rates / clock polynomial)
@@ -238,9 +238,17 @@ public:
      *   converted to the internal subtract-from-pseudorange sign (RTCM biases
      *   are added to the observation).
      * The caller is expected to restrict Galileo to I/NAV ephemerides
-     * (NavigationData::setGalileoEphemerisSource).
+     * (NavigationData::setGalileoEphemerisSource). `gnss ppp --ssr-rtcm`
+     * uses it by default.
+     *
+     * Legacy is the earlier conversion, kept for comparison: it evaluates the
+     * broadcast ephemeris nearest in time instead of the correction's IODE,
+     * interpolates between samples, and keys code biases by their RTCM wire
+     * signal ID without the sign conversion, so on streams with code biases
+     * (JPL GDGPS) the ionosphere-free code of a satellite can be off by
+     * metres.
      */
-    enum class RTCMSSRProfile { Legacy, GalileoHasIdd };
+    enum class RTCMSSRProfile { Legacy, Standard, GalileoHasIdd = Standard };
     static constexpr double kHasIddMaxHoldSeconds = 90.0;
     /// Longest a PPP-B2b orbit / clock pair is held without a newer one: the
     /// orbit validity of BDS-SIS-ICD-PPP-B2b 1.0 (96 s; clocks arrive every

@@ -164,14 +164,17 @@ in the IDD table below:
 | 2025-08-21 07h, libgnss++ SIS, kinematic | 0.404 / +0.314 m | 0.368 / +0.504 m | 0.376 / +0.313 m | 0.267 / -0.416 m | never | never |
 | 2025-08-21 07h, cssrlib SIS, static (10 deg, L1 C/A + L2 CL) | 0.303 / -0.663 m | 0.112 / -0.501 m | 0.079 / -0.186 m | 0.079 / +0.212 m | 18.1 min | 22.2 min |
 | 2025-08-21 07h, cssrlib SIS, static (15 deg, L1 C/A + L2 W) | 0.381 / -1.214 m | 0.117 / -0.629 m | 0.139 / -0.607 m | 0.084 / +0.563 m | 18.4 min | never |
-| 2025-08-21 07h, libgnss++ JPL GDGPS RTCM SSR, GPS + Galileo | 1.050 / +0.886 m | 0.719 / -0.007 m | 0.640 / +0.092 m | 0.524 / -0.113 m | never | 17.8 min |
+| 2025-08-21 07h, libgnss++ JPL GDGPS RTCM SSR, GPS + Galileo | 0.856 / +1.053 m | 0.482 / +0.658 m | 0.517 / +0.678 m | 0.462 / +0.157 m | never | 44.9 min |
 | 2025-08-21 07h, libgnss++ broadcast only, GPS + Galileo | 0.874 / +0.774 m | 0.710 / +0.069 m | 0.699 / +0.067 m | 0.651 / -0.246 m | never | 17.8 min |
 | For reference: OBE4 (Germany) HAS IDD, static (table below) | 0.056 / -0.147 m | 0.067 / -0.170 m | 0.092 / +0.049 m | 0.014 / +0.050 m | 0.8 min | 5.8 min |
 
 The lane gates the 2025-02-15 static run (H <= 0.20 m and |U| <= 0.40 m at
 30 and 60 min) and the decoder (all 432 MT1 messages of each hour, no CRC
 failure), and reports the other rows. The JPL and broadcast-only rows use the
-observation file limited to GPS and Galileo.
+observation file limited to GPS and Galileo. The JPL row is the default
+(IODE-matched) RTCM SSR conversion since 2026-11-07 (see
+[RTCM SSR conversion](interfaces.md#rtcm-ssr-conversion-ssr-rtcm-profile)); it was
+1.050 / 0.719 / 0.640 / 0.524 m horizontal with the earlier legacy one.
 
 **Expired corrections (2026-11-07).** A held SIS update ends with its ICD
 validity, and HAS ends one explicitly by sending a satellite's clock as
