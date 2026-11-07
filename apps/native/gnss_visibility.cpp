@@ -22,6 +22,7 @@
 #include <libgnss++/io/rinex.hpp>
 
 #include "json_output_helpers.hpp"
+#include "cli_output_paths.hpp"
 
 namespace {
 
@@ -352,6 +353,13 @@ void printSummary(const Options& options,
 int main(int argc, char* argv[]) {
     try {
         const Options options = parseArguments(argc, argv);
+        const std::string output_error = libgnss_apps::prepareOutputFiles(
+                {options.csv_path,
+                 options.summary_json_path});
+        if (!output_error.empty()) {
+            std::cerr << "Error: " << output_error << "\n";
+            return 1;
+        }
 
         libgnss::io::RINEXReader obs_reader;
         if (!obs_reader.open(options.obs_path)) {

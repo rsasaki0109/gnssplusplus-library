@@ -28,6 +28,7 @@
 #endif
 
 #include "ubx_input_source.hpp"
+#include "cli_output_paths.hpp"
 
 namespace {
 
@@ -2002,6 +2003,15 @@ int runUBXConversion(const ConvertConfig& config) {
 int main(int argc, char** argv) {
     try {
         const ConvertConfig config = parseArguments(argc, argv);
+        const std::string output_error = libgnss_apps::prepareOutputFiles(
+                {config.obs_out_path,
+                 config.nav_out_path,
+                 config.sfrbx_out_path,
+                 config.nav_rinex_out_path});
+        if (!output_error.empty()) {
+            std::cerr << "Error: " << output_error << "\n";
+            return 1;
+        }
         if (config.format == InputFormat::RTCM) {
             return runRTCMConversion(config);
         }

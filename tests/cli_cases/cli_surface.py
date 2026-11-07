@@ -332,6 +332,49 @@ class CLISurfaceCases:
         self.assertIn("Septentrio mosaic-X5", profiles["ppc-dataset"]["receiver_artifacts"])
         self.assertEqual(profiles["smartloc"]["status"], "receiver-fix-signoff")
         self.assertIn("not the Trimble RTK engine", profiles["urban-nav-tokyo"]["caveat"])
+    def test_output_directories_are_prepared_before_processing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_output_dirs_") as temp_dir:
+            temp_root = Path(temp_dir)
+            fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+            # A missing directory is created (convert and spp here).
+            rover = temp_root / "converted" / "rover.obs"
+            nav = temp_root / "converted" / "base.nav"
+            converted = self.run_gnss("convert", "--input", str(fixture / "rover.rtcm"),
+                                      "--obs-out", str(rover), "--format", "rtcm",
+                                      "--gps-week", "2324", "--quiet")
+            self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            converted = self.run_gnss("convert", "--input", str(fixture / "base.rtcm"),
+                                      "--nav-out", str(nav), "--format", "rtcm",
+                                      "--gps-week", "2324", "--quiet")
+            self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            out = temp_root / "results" / "spp" / "rover.pos"
+            summary = temp_root / "results" / "json" / "rover.json"
+            result = self.run_gnss("spp", "--obs", str(rover), "--nav", str(nav),
+                                   "--out", str(out), "--summary-json", str(summary), "--quiet")
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(out.is_file())
+            self.assertTrue(summary.is_file())
+
+            # An output that cannot be written fails before processing.
+            not_a_directory = temp_root / "plain_file"
+            not_a_directory.write_text("x\n", encoding="ascii")
+            cases = [
+                (str(not_a_directory / "rover.pos"),
+                 f"Error: cannot create the output directory {not_a_directory} for "
+                 f"{not_a_directory / 'rover.pos'}"),
+                (str(temp_root), f"Error: output path is a directory: {temp_root}"),
+            ]
+            for target, message in cases:
+                for args in (("spp", "--obs", str(rover), "--nav", str(nav), "--out", target),
+                             ("ppp", "--obs", str(rover), "--nav", str(nav), "--out", target),
+                             ("solve", "--rover", str(rover), "--base", str(rover),
+                              "--nav", str(nav), "--out", target)):
+                    with self.subTest(tool=args[0], target=target):
+                        result = self.run_gnss(*args)
+                        self.assertEqual(result.returncode, 1, msg=result.stderr)
+                        self.assertIn(message, result.stderr)
+                        self.assertNotIn("Processed epochs", result.stdout)
+
     def test_smartloc_adapter_cli_exports_reference_and_receiver_csv(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_smartloc_adapter_cli_") as temp_dir:
             temp_root = Path(temp_dir)

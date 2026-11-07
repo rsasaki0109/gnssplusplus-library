@@ -27,6 +27,7 @@
 #include "cli_files.hpp"
 #include "navigation_merge.hpp"
 #include "rtcm_frame_common.hpp"
+#include "cli_output_paths.hpp"
 
 namespace {
 
@@ -960,6 +961,11 @@ size_t runReplay(const ReplayConfig& config) {
 int main(int argc, char** argv) {
     try {
         const ReplayConfig config = parseArguments(argc, argv);
+        const std::string output_error = libgnss_apps::prepareOutputFiles({config.output_pos_path});
+        if (!output_error.empty()) {
+            std::cerr << "Error: " << output_error << "\n";
+            return 1;
+        }
         const size_t written_solutions = runReplay(config);
         return written_solutions == 0 ? 1 : 0;
     } catch (const std::exception& e) {
