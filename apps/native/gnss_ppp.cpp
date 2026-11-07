@@ -92,6 +92,8 @@ struct Options {
     bool madocalib_trace_ar = false;
     bool kinematic_mode = false;
     bool causal = false;
+    double ssr_latency_s = 0.0;
+    bool ssr_latency_set = false;
     bool low_dynamics_mode = false;
     bool use_dynamics_model = false;
     bool emit_epoch_time = false;
@@ -309,6 +311,9 @@ void printUsage(const char* program_name) {
         << "                          tagged after the epoch (no interpolation towards the\n"
         << "                          next update); refuses --sp3/--clk/--ionex and\n"
         << "                          --ssr-rtcm-profile legacy\n"
+        << "  --ssr-latency <s>       With --realtime and --ssr-rtcm: use each SSR update\n"
+        << "                          from <s> seconds after its reference epoch, when a\n"
+        << "                          receiver has it (default 0)\n"
         << "  --low-dynamics          Keep kinematic PPP anchored for quasi-static motion\n"
         << "  --no-low-dynamics       Disable quasi-static anchoring (default)\n"
         << "  --apply-static-anchor-blend\n"
@@ -531,6 +536,9 @@ Options parseArguments(int argc, char* argv[]) {
             options.emit_epoch_time = true;
         } else if (arg == "--realtime") {
             options.causal = true;
+        } else if (arg == "--ssr-latency" && i + 1 < argc) {
+            options.ssr_latency_s = std::stod(argv[++i]);
+            options.ssr_latency_set = true;
         } else if (arg == "--low-dynamics") {
             options.low_dynamics_mode = true;
         } else if (arg == "--no-low-dynamics") {
@@ -633,6 +641,17 @@ Options parseArguments(int argc, char* argv[]) {
         }
         if (options.madocalib_bridge) {
             argumentError("--realtime cannot use --madocalib-bridge", argv[0]);
+        }
+    }
+    if (options.ssr_latency_set) {
+        if (!options.causal) {
+            argumentError("--ssr-latency requires --realtime", argv[0]);
+        }
+        if (options.ssr_rtcm_path.empty()) {
+            argumentError("--ssr-latency requires --ssr-rtcm", argv[0]);
+        }
+        if (!(options.ssr_latency_s >= 0.0)) {
+            argumentError("--ssr-latency must be >= 0", argv[0]);
         }
     }
     if (!options.madoca_l6_paths.empty() && options.nav_path.empty()) {
@@ -1260,6 +1279,7 @@ int main(int argc, char* argv[]) {
         ppp_config.kinematic_mode = options.kinematic_mode;
         ppp_config.low_dynamics_mode = options.low_dynamics_mode;
         ppp_config.causal = options.causal;
+        ppp_config.ssr_latency_s = options.ssr_latency_s;
         if (options.use_dynamics_model) {
             ppp_config.use_dynamics_model = true;
             ppp_config.reset_kinematic_position_to_spp_each_epoch = false;
@@ -1858,6 +1878,7 @@ int main(int argc, char* argv[]) {
                     << "  \"out\": \"" << jsonEscape(options.out_path) << "\",\n"
                     << "  \"mode\": \"" << (options.kinematic_mode ? "kinematic" : "static") << "\",\n"
                     << "  \"realtime\": " << (options.causal ? "true" : "false") << ",\n"
+                    << "  \"ssr_latency_s\": " << options.ssr_latency_s << ",\n"
                     << "  \"low_dynamics\": " << (options.low_dynamics_mode ? "true" : "false") << ",\n"
                     << "  \"static_anchor_blend\": " << (options.apply_static_anchor_blend ? "true" : "false") << ",\n"
                     << "  \"clas_epoch_policy\": \"" << jsonEscape(options.clas_epoch_policy) << "\",\n"

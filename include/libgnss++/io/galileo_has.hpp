@@ -228,6 +228,10 @@ struct HasSsrUpdate {
     int iod_set_id = -1;
     GNSSTime orbit_time;
     GNSSTime clock_time;
+    /// Reception time (GPST) of the last message this update needs (orbit
+    /// set, clock): a receiver has the update from then on, a few seconds
+    /// after `time`.
+    GNSSTime received;
     double radial_m = 0.0;                  ///< ICD sign: added to the broadcast position
     double in_track_m = 0.0;
     double cross_track_m = 0.0;
@@ -309,11 +313,13 @@ private:
     };
     struct OrbitSet {
         GNSSTime time;
+        GNSSTime received;
         double validity_s = 0.0;
         std::map<SatelliteId, HasOrbitEntry> entries;
     };
     struct ClockState {
         GNSSTime time;
+        GNSSTime received;
         double validity_s = 0.0;
         HasClockEntry entry;
         int mask_id = -1;

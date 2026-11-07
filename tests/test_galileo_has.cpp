@@ -457,6 +457,7 @@ TEST(GalileoHasTest, DecoderPairsClocksWithOrbitsAndHoldsUpdates) {
     EXPECT_EQ(update.satellite, SatelliteId(GNSSSystem::Galileo, 5));
     EXPECT_EQ(update.iode, 77);
     EXPECT_EQ(update.time, GNSSTime(2380, hour * 3600.0 + 125.0));
+    EXPECT_EQ(update.received, rx1);  // the clock, the later of its two messages
     EXPECT_EQ(update.valid_until, GNSSTime(2380, hour * 3600.0 + 135.0));  // clock VI 10 s
     EXPECT_NEAR(update.radial_m, 0.10, 1e-9);
     EXPECT_NEAR(update.in_track_m, -0.20, 1e-9);

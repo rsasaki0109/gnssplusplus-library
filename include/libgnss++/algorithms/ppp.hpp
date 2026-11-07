@@ -405,6 +405,10 @@ private:
     /// Drop satellites without an SSR orbit sample (Galileo HAS SIS: the
     /// corrections cover GPS and Galileo only and expire with their validity).
     bool require_ssr_orbit_correction_ = false;
+    /// --realtime with RTCM SSR: no epoch is solved before the first update is
+    /// in hand (week 0: no such limit). Satellites the stream never corrects
+    /// stay on their broadcast orbit, as in post-processing.
+    GNSSTime ssr_first_available_;
     /// Select GPS L2 SSR code biases by the tracked RINEX code (C2W -> L2 P,
     /// C2L -> L2C) instead of the coarse signal (Galileo HAS SIS).
     bool ssr_code_bias_tracking_identity_ = false;

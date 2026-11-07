@@ -141,6 +141,9 @@ struct BdsB2bUpdate {
     GNSSTime time;                ///< reference time of the newer of the orbit / clock
     GNSSTime orbit_time;
     GNSSTime clock_time;
+    /// Reception time (GPST) of the message that completed this update: a
+    /// receiver has it from then on, a few seconds after `time`.
+    GNSSTime received;
     int iodssr = 0;
     int iodp = 0;
     int iodn = 0;                 ///< 10-bit IODN of the orbit correction
@@ -235,7 +238,7 @@ private:
     };
 
     void reset();
-    void emit(const SatelliteId& satellite, const GNSSTime& time);
+    void emit(const SatelliteId& satellite, const GNSSTime& time, const GNSSTime& received);
     bool masked(const SatelliteId& satellite) const;
 
     Options options_;

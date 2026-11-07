@@ -151,6 +151,10 @@ struct HeldSsrUpdate {
     io::RTCMSSRCorrection correction;
     std::map<uint8_t, double> code_bias_m;
     double max_hold_seconds = PPPProcessor::kHasIddMaxHoldSeconds;
+    // Seconds after correction.time from which a receiver has the update
+    // (--realtime: its reception, or --ssr-latency); until then the previous
+    // update stays in use. 0: from correction.time (post-processing).
+    double availability_delay_s = 0.0;
 };
 
 // Orbit correction frame of the held updates: RTCM (along = velocity) or
@@ -170,9 +174,16 @@ size_t sampleHeldSsrUpdates(std::map<SatelliteId, std::vector<HeldSsrUpdate>>& u
     // interpolate across an IODE change.
     size_t sampled_corrections = 0;
     for (auto&[satellite, satellite_updates] : updates) {
+        // In the order a receiver has them (the reference epoch, plus the
+        // reception delay with --realtime): each update holds until the next
+        // one is in hand. B2b reception delays vary (6-29 s on the Kamakura
+        // hours), so an update can arrive after one with a later epoch.
+        const auto available = [](const HeldSsrUpdate& update) {
+            return update.correction.time + update.availability_delay_s;
+        };
         std::stable_sort(satellite_updates.begin(), satellite_updates.end(),
-                         [](const HeldSsrUpdate& lhs, const HeldSsrUpdate& rhs) {
-                             return lhs.correction.time < rhs.correction.time;
+                         [&](const HeldSsrUpdate& lhs, const HeldSsrUpdate& rhs) {
+                             return available(lhs) < available(rhs);
                          });
         for (size_t index = 0; index < satellite_updates.size(); ++index) {
             const auto& update = satellite_updates[index];
@@ -180,8 +191,8 @@ size_t sampleHeldSsrUpdates(std::map<SatelliteId, std::vector<HeldSsrUpdate>>& u
             double hold_seconds = update.max_hold_seconds;
             bool hold_ends_early = true;
             if (index + 1 < satellite_updates.size()) {
-                const double to_next =
-                    satellite_updates[index + 1].correction.time - correction.time;
+                // The next update takes over once a receiver has it.
+                const double to_next = available(satellite_updates[index + 1]) - correction.time;
                 hold_ends_early = to_next > hold_seconds + 1e-6;
                 hold_seconds = std::min(hold_seconds, to_next);
             }
@@ -200,7 +211,10 @@ size_t sampleHeldSsrUpdates(std::map<SatelliteId, std::vector<HeldSsrUpdate>>& u
             }
             const int sample_count = std::max(
                 1, static_cast<int>(std::ceil(hold_seconds / sample_step_seconds - 1e-9)));
-            for (int sample_index = 0; sample_index < sample_count; ++sample_index) {
+            // First sample on the grid at or after the update is available.
+            const int first_sample = std::max(
+                0, static_cast<int>(std::ceil(update.availability_delay_s / sample_step_seconds - 1e-9)));
+            for (int sample_index = first_sample; sample_index < sample_count; ++sample_index) {
                 const double dt = sample_step_seconds * static_cast<double>(sample_index);
                 const GNSSTime sample_time = correction.time + dt;
                 Vector3d position = Vector3d::Zero();
@@ -615,6 +629,7 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
     // the L2C one, as the HAS SIS path does. HAS sends both L2 CL and L2 P;
     // C2W took the L2 CL one, 0.5-0.9 m off ionosphere-free on the OBE4 hour.
     ssr_code_bias_tracking_identity_ = true;
+    ssr_first_available_ = GNSSTime();
     if (rtcm_file.empty() || sample_step_seconds <= 0.0) {
         return false;
     }
@@ -670,6 +685,10 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
             const auto bias_it = held_code_bias.find(merged.satellite);
             HeldSsrUpdate update;
             update.correction = merged;
+            if (ppp_config_.causal) {
+                // --realtime: the stream does not record its reception.
+                update.availability_delay_s = std::max(0.0, ppp_config_.ssr_latency_s);
+            }
             if (bias_it != held_code_bias.end()) {
                 update.code_bias_m = bias_it->second;
             }
@@ -688,6 +707,21 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
     const size_t sampled_corrections = sampleHeldSsrUpdates(
         updates, nav, sample_step_seconds, ssr_products_, SsrRacFrame::Rtcm, true);
     ssr_products_loaded_ = sampled_corrections > 0U;
+    if (ppp_config_.causal) {
+        // A real-time receiver starts SSR PPP once it has a correction:
+        // solving the first epochs on broadcast orbits and then switching
+        // every satellite to its correction would jump the filter.
+        for (const auto& [satellite, satellite_updates] : updates) {
+            (void)satellite;
+            for (const auto& update : satellite_updates) {
+                const GNSSTime available =
+                    update.correction.time + update.availability_delay_s;
+                if (ssr_first_available_.week == 0 || available < ssr_first_available_) {
+                    ssr_first_available_ = available;
+                }
+            }
+        }
+    }
     return ssr_products_loaded_;
 }
 
@@ -719,6 +753,10 @@ bool PPPProcessor::loadGalileoHasSisProducts(const std::vector<io::HasSsrUpdate>
         }
         HeldSsrUpdate update;
         update.correction = io::hasUpdateToRtcmSsrCorrection(has_update);
+        if (ppp_config_.causal && has_update.received.week > 0) {
+            // --realtime: from the reception of its last page on.
+            update.availability_delay_s = std::max(0.0, has_update.received - has_update.time);
+        }
         update.code_bias_m = rtcmCodeBiasesToInternal(has_update.satellite.system,
                                                       update.correction.code_bias_m);
         update.correction.has_code_bias = false;
@@ -788,15 +826,19 @@ bool PPPProcessor::loadBdsB2bProducts(const std::vector<io::BdsB2bUpdate>& b2b_u
         if (system != GNSSSystem::GPS && system != GNSSSystem::BeiDou) {
             continue;
         }
+        // --realtime: an update (or its withdrawal) applies from the
+        // reception of the message that completed it.
+        const bool use_reception = ppp_config_.causal && b2b.received.week > 0;
         if (!b2b.usable) {
             // No valid orbit / clock pair from here on: stop holding the
             // previous one (cssrlib drops the satellite the same way).
             auto it = updates.find(b2b.satellite);
             if (it != updates.end() && !it->second.empty()) {
                 HeldSsrUpdate& previous = it->second.back();
+                const GNSSTime withdrawn = use_reception ? b2b.received : b2b.time;
                 previous.max_hold_seconds = std::min(
                     previous.max_hold_seconds,
-                    std::max(0.0, b2b.time - previous.correction.time));
+                    std::max(0.0, withdrawn - previous.correction.time));
             }
             continue;
         }
@@ -834,6 +876,9 @@ bool PPPProcessor::loadBdsB2bProducts(const std::vector<io::BdsB2bUpdate>& b2b_u
             update.code_bias_m[key] = value.second;
         }
         update.max_hold_seconds = kBdsB2bMaxHoldSeconds;
+        if (use_reception) {
+            update.availability_delay_s = std::max(0.0, b2b.received - b2b.time);
+        }
         auto& satellite_updates = updates[b2b.satellite];
         if (!satellite_updates.empty() &&
             std::abs(satellite_updates.back().correction.time - correction.time) < 1e-6) {

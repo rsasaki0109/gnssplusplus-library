@@ -898,6 +898,9 @@ Internet Data Distribution):
 
 `gnss ppp --realtime` takes no correction sample tagged after the epoch on any
 SSR path (see [Real-time and post-processing modes](processing_modes.md)).
+RTCM SSR files hold no reception time: with `--realtime`, `--ssr-latency <s>`
+applies each update *s* seconds after its reference epoch, as a receiver
+would get it.
 
 `--ssr-rtcm-profile legacy` keeps the conversion used before 2026-11-07, for
 comparison only. It evaluates the broadcast ephemeris nearest in time instead

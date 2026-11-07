@@ -227,6 +227,10 @@ struct PPPConfig {
     // atmosphere rows), and the legacy RTCM SSR conversion, which
     // interpolates between updates when it loads them, is refused.
     bool causal = false;
+    // Causal only: seconds from an RTCM SSR update's reference epoch to the
+    // time a receiver has it, for streams that do not record their reception
+    // (--ssr-latency). The previous update stays in use until then.
+    double ssr_latency_s = 0.0;
 
     // Kalman filter parameters
     double process_noise_position = 0.0;
