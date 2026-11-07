@@ -549,6 +549,7 @@ function postOptions() {
     verbose: v.verbose,
     ionoFree: v.ionoFree,
     enableAr: v.enableAr,
+    realtime: v.realtime,
     extra: v.extra,
     workspaceNames: workspace.names(),
   };

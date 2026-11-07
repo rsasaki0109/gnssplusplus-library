@@ -76,6 +76,20 @@ RTK preset, ionosphere option, ratio threshold, base position, KML) and an
 file name in Files (an ANTEX or BLQ file, a TOML config) is mounted as an
 input automatically.
 
+**Real-time equivalent** (SPP, RTK and PPP modes) adds `--realtime`: each
+epoch is solved only with data available at that epoch, as a real-time
+receiver would. That means:
+
+- no base interpolation towards the next base epoch;
+- no later SSR corrections;
+- ephemerides only once broadcast;
+- no SP3 / CLK products.
+
+Use it for real-time performance and leave it off for the best
+post-processed result ([Real-time and post-processing
+modes](processing_modes.md)). It is saved in options files as
+`realtime = true`.
+
 **Kinematic RTK + IMU** runs `gnss fuse` with an IMU CSV (PPC format, or
 rtklibexplorer with *IMU format*), the IMU-to-antenna lever arm in body FLU
 and, by default, the tight-coupling preset (`--navi776-tc`). It writes the

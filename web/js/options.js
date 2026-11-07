@@ -91,12 +91,14 @@ export function exportOptionsToml(opts, commandHint = '') {
     if (opts.baseEcef) entries.push(['base_ecef', opts.baseEcef.map(String)]);
     if (!opts.kml) entries.push(['kml', false]);
     if (opts.verbose) entries.push(['verbose', true]);
+    if (opts.realtime) entries.push(['realtime', true]);
   } else {
     // Correction inputs (L6 logs, like NAV / SP3 / CLK) are not written; the
     // options that select their processing are.
     const corrections = opts.corrections || 'products';
     const l6d = opts.l6d || [];
     entries.push(['kinematic', mode.pppMotion === '--kinematic']);
+    if (opts.realtime) entries.push(['realtime', true]);
     for (const [field, key] of Object.entries(PPP_KEYS)) {
       if (field === 'ratio') continue;
       if (hasValue(opts[field])) entries.push([key, opts[field]]);
@@ -226,6 +228,7 @@ export function importOptionsToml(text) {
   fields.kml = true;
   fields.verbose = false;
   fields.enableAr = false;
+  fields.realtime = false;
   fields.basePos = 'header';
   if (isPpp) fields.pppCorr = 'products';
   // MADOCA PPP-AR convergence keys equal to the GUI's are implied by the mode.
@@ -260,6 +263,8 @@ export function importOptionsToml(text) {
       fields.kml = value;
     } else if (!isPpp && key === 'verbose' && value === true) {
       fields.verbose = true;
+    } else if (!isFuse && key === 'realtime' && typeof value === 'boolean') {
+      fields.realtime = value;
     } else if (isPpp && key === 'enable_ar' && typeof value === 'boolean') {
       fields.enableAr = value;
     } else if (isPpp && key === 'clas_osr' && value === true) {

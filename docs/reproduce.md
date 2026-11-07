@@ -16,6 +16,11 @@ files, the exact argv of every step, external tool pins, and the expected
 metrics. The steps call existing repository commands and scripts; the lane
 runner adds no scoring logic of its own.
 
+Unless a lane says otherwise, its numbers are post-processing results: the
+solvers may use data from after each epoch (base interpolation, later SSR
+samples, final products). Real-time equivalent numbers come from runs with
+`--realtime`; see [Real-time and post-processing modes](processing_modes.md).
+
 ## Lane status
 
 | README row | Lane | Status | Runtime (local) | Local result (2026-09-28) |
