@@ -1,3 +1,4 @@
+#include "cli_output_paths.hpp"
 #include <algorithm>
 #include <chrono>
 #include <ctime>
@@ -1065,6 +1066,16 @@ int main(int argc, char* argv[]) {
         argv = expanded_argv.data();
 
         const Options options = parseArguments(argc, argv);
+        const std::string output_error = libgnss_apps::prepareOutputFiles(
+                {options.out_path,
+                 options.summary_json_path,
+                 options.kml_path,
+                 options.geojson_path,
+                 options.madoca_materialization_dump_path});
+        if (!output_error.empty()) {
+            std::cerr << "Error: " << output_error << "\n";
+            return 1;
+        }
 
 #if GNSSPP_MADOCALIB_ORACLE_CLI
         if (options.madocalib_bridge) {

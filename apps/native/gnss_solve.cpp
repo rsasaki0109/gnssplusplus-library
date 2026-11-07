@@ -1,3 +1,4 @@
+#include "cli_output_paths.hpp"
 #include <Eigen/Dense>
 #include <algorithm>
 #include <chrono>
@@ -3476,6 +3477,20 @@ std::map<double, Eigen::Vector3d> loadSeedPositions(const std::string& path) {
 int main(int argc, char* argv[]) {
     try {
         const SolveConfig config = parseArguments(argc, argv);
+        const std::string output_error = libgnss_apps::prepareOutputFiles(
+                {config.output_pos_path,
+                 config.output_kml_path,
+                 config.debug_epoch_log_path,
+                 config.diagnostics_csv_path,
+                 config.fix_recovery_log_path,
+                 config.integrity_log_path,
+                 config.integrity_shadow_csv_path,
+                 config.rtk_covariance_log_path,
+                 config.timing_csv_path});
+        if (!output_error.empty()) {
+            std::cerr << "Error: " << output_error << "\n";
+            return 1;
+        }
 
         const std::map<double, Eigen::Vector3d> rover_seed_positions =
             config.rover_seed_pos_path.empty()

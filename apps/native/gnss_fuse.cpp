@@ -1,3 +1,4 @@
+#include "cli_output_paths.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -1971,6 +1972,15 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
 int main(int argc, char* argv[]) {
     try {
         const FuseOptions options = parseArguments(argc, argv);
+        const std::string output_error = libgnss_apps::prepareOutputFiles(
+                {options.out_path,
+                 options.kml_path,
+                 options.attitude_csv_path,
+                 options.rtk_pos_out});
+        if (!output_error.empty()) {
+            std::cerr << "Error: " << output_error << "\n";
+            return 1;
+        }
 
         // Load IMU samples up front (this is the whole file: for the
         // PPC-Dataset's tokyo/run1, ~239k samples / ~2.4 MB in memory).

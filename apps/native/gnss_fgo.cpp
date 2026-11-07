@@ -1,3 +1,4 @@
+#include "cli_output_paths.hpp"
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/doppler_contract.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
@@ -3591,6 +3592,18 @@ bool attachImuToProblem(const std::string& path,
 int main(int argc, char* argv[]) {
     try {
         const Options options = parseArguments(argc, argv);
+        const std::string output_error = libgnss_apps::prepareOutputFiles(
+                {options.out_path,
+                 options.summary_json_path,
+                 options.cost_trace_csv_path,
+                 options.epoch_debug_csv_path,
+                 options.factor_debug_csv_path,
+                 options.lambda_debug_csv_path,
+                 options.sd_factor_debug_csv_path});
+        if (!output_error.empty()) {
+            std::cerr << "Error: " << output_error << "\n";
+            return 1;
+        }
 
         libgnss::io::RINEXReader obs_reader;
         if (!obs_reader.open(options.obs_path)) {
