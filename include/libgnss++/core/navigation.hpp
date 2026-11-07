@@ -364,6 +364,18 @@ public:
     GalileoEphemerisSource galileoEphemerisSource() const { return galileo_ephemeris_source_; }
 
     /**
+     * @brief Which BeiDou broadcast ephemerides getEphemeris() may select.
+     *
+     * D1D2 (default) uses the D1 / D2 records of ephemeris_data, with the
+     * SSR IODE read as a toe index (RTKLIB / MADOCALIB). BCnav1 uses the
+     * B-CNAV1 (RINEX 4 CNV1) records of cnav_ephemeris_data and matches the
+     * SSR IODE against their IODE: BDS PPP-B2b corrections refer to them.
+     */
+    enum class BeiDouEphemerisSource { D1D2, BCnav1 };
+    void setBeiDouEphemerisSource(BeiDouEphemerisSource source);
+    BeiDouEphemerisSource beiDouEphemerisSource() const { return beidou_ephemeris_source_; }
+
+    /**
      * @brief Add ephemeris data
      *
      * Each satellite's records are kept sorted by toe, with ties broken by a
@@ -559,6 +571,7 @@ private:
     std::uint64_t revision_ = 0;
     size_t satellite_state_cache_limit_ = 0;
     GalileoEphemerisSource galileo_ephemeris_source_ = GalileoEphemerisSource::Any;
+    BeiDouEphemerisSource beidou_ephemeris_source_ = BeiDouEphemerisSource::D1D2;
 };
 
 /**

@@ -24,6 +24,7 @@ namespace libgnss {
 
 namespace io {
 struct HasSsrUpdate;
+struct BdsB2bUpdate;
 }  // namespace io
 
 /// Per-SVN ANTEX entry used by PPPProcessor to translate satellite
@@ -241,6 +242,10 @@ public:
      */
     enum class RTCMSSRProfile { Legacy, GalileoHasIdd };
     static constexpr double kHasIddMaxHoldSeconds = 90.0;
+    /// Longest a PPP-B2b orbit / clock pair is held without a newer one: the
+    /// orbit validity of BDS-SIS-ICD-PPP-B2b 1.0 (96 s; clocks arrive every
+    /// 6 s, orbits every 48 s).
+    static constexpr double kBdsB2bMaxHoldSeconds = 96.0;
 
     bool loadRTCMSSRProducts(const std::string& rtcm_file,
                              const NavigationData& nav,
@@ -256,6 +261,21 @@ public:
     bool loadGalileoHasSisProducts(const std::vector<io::HasSsrUpdate>& updates,
                                    const NavigationData& nav,
                                    double sample_step_seconds = 1.0);
+
+    /**
+     * @brief Load BDS PPP-B2b corrections (io::BdsB2bDecoder updates).
+     *
+     * Each update is held until the next one of the satellite, at most
+     * kBdsB2bMaxHoldSeconds, and sampled on the step grid like the HAS
+     * updates. The orbit is turned to ECEF in the B2b frame with the
+     * broadcast record of the update's IODE: B-CNAV1 for BDS (the caller sets
+     * NavigationData::BeiDouEphemerisSource::BCnav1), LNAV for GPS. Clock and
+     * code-bias signs follow the ICD (subtracted). Satellites without a
+     * correction are not used (B2b covers GPS and BDS-3).
+     */
+    bool loadBdsB2bProducts(const std::vector<io::BdsB2bUpdate>& updates,
+                            const NavigationData& nav,
+                            double sample_step_seconds = 1.0);
 
     /**
      * @brief Interpolate a loaded SSR correction for inspection/debugging.
@@ -379,6 +399,11 @@ private:
     /// Select GPS L2 SSR code biases by the tracked RINEX code (C2W -> L2 P,
     /// C2L -> L2C) instead of the coarse signal (Galileo HAS SIS).
     bool ssr_code_bias_tracking_identity_ = false;
+    // BDS PPP-B2b corrections (loadBdsB2bProducts): their BDS clocks refer to
+    // B3I and their code biases to B1I / B3I, so BDS-3 uses the B1I / B3I pair
+    // (not the band-7 B2b signal the RINEX reader may select) and its own
+    // receiver clock.
+    bool bds_b2b_corrections_ = false;
     bool ionex_products_loaded_ = false;
     bool dcb_products_loaded_ = false;
     struct OceanLoadingCoefficients {

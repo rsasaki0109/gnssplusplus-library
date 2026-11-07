@@ -67,6 +67,7 @@ nav:
       - Benchmarks: benchmarks.md
       - Reproduce README results: reproduce.md
       - Galileo HAS support: galileo_has.md
+      - BeiDou PPP-B2b support: bds_ppp_b2b.md
       - Broadcast kinematic PPP (urban): broadcast_kinematic_ppp.md
       - RTK tuning gates: rtk_tuning_gates.md
       - PPC reproduction: ppc_reproduction.md

@@ -6,6 +6,7 @@
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/iers/earth_rotation.hpp>
 #include <libgnss++/iers/sub_daily_eop.hpp>
+#include <libgnss++/io/bds_ppp_b2b.hpp>
 #include <libgnss++/io/galileo_has.hpp>
 #include <libgnss++/io/madoca_l6.hpp>
 #include <libgnss++/io/qzss_l6.hpp>
@@ -152,10 +153,19 @@ struct HeldSsrUpdate {
     double max_hold_seconds = PPPProcessor::kHasIddMaxHoldSeconds;
 };
 
+// Orbit correction frame of the held updates: RTCM (along = velocity) or
+// BDS PPP-B2b (radial = position).
+enum class SsrRacFrame { Rtcm, BdsB2b };
+
+// mark_hold_end: where a hold ends before the next update (or with none),
+// add an invalid sample there, since SSRProducts otherwise keeps returning
+// the last sample of the satellite.
 size_t sampleHeldSsrUpdates(std::map<SatelliteId, std::vector<HeldSsrUpdate>>& updates,
                             const NavigationData& nav,
                             double sample_step_seconds,
-                            SSRProducts& products) {
+                            SSRProducts& products,
+                            SsrRacFrame frame = SsrRacFrame::Rtcm,
+                            bool mark_hold_end = false) {
     // Sample on the step grid so PPP epochs hit an exact sample and never
     // interpolate across an IODE change.
     size_t sampled_corrections = 0;
@@ -168,9 +178,24 @@ size_t sampleHeldSsrUpdates(std::map<SatelliteId, std::vector<HeldSsrUpdate>>& u
             const auto& update = satellite_updates[index];
             const io::RTCMSSRCorrection& correction = update.correction;
             double hold_seconds = update.max_hold_seconds;
+            bool hold_ends_early = true;
             if (index + 1 < satellite_updates.size()) {
-                hold_seconds = std::min(
-                    hold_seconds, satellite_updates[index + 1].correction.time - correction.time);
+                const double to_next =
+                    satellite_updates[index + 1].correction.time - correction.time;
+                hold_ends_early = to_next > hold_seconds + 1e-6;
+                hold_seconds = std::min(hold_seconds, to_next);
+            }
+            if (mark_hold_end && hold_ends_early) {
+                SSROrbitClockCorrection end;
+                end.satellite = satellite;
+                end.time = correction.time + hold_seconds;
+                end.iode = -1;
+                end.orbit_valid = false;
+                end.clock_valid = false;
+                products.addCorrection(end);
+            }
+            if (hold_seconds <= 0.0) {
+                continue;
             }
             const int sample_count = std::max(
                 1, static_cast<int>(std::ceil(hold_seconds / sample_step_seconds - 1e-9)));
@@ -200,10 +225,12 @@ size_t sampleHeldSsrUpdates(std::map<SatelliteId, std::vector<HeldSsrUpdate>>& u
                 sampled.iode = correction.iode;
                 sampled.ssr_orbit_iod = correction.issue_of_data;
                 sampled.ssr_clock_iod = correction.issue_of_data;
-                sampled.orbit_correction_ecef = ssrRacToEcef(
-                    position,
-                    velocity,
-                    correction.orbit_delta_rac_m + correction.orbit_rate_rac_mps * dt);
+                const Vector3d rac =
+                    correction.orbit_delta_rac_m + correction.orbit_rate_rac_mps * dt;
+                sampled.orbit_correction_ecef =
+                    frame == SsrRacFrame::BdsB2b
+                        ? ppp_utils::b2bRacToEcef(position, velocity, rac)
+                        : ssrRacToEcef(position, velocity, rac);
                 sampled.clock_correction_m =
                     correction.clock_delta_poly.x() +
                     correction.clock_delta_poly.y() * dt +
@@ -691,6 +718,115 @@ bool PPPProcessor::loadGalileoHasSisProducts(const std::vector<io::HasSsrUpdate>
     }
     const size_t sampled_corrections =
         sampleHeldSsrUpdates(updates, nav, sample_step_seconds, ssr_products_);
+    ssr_products_loaded_ = sampled_corrections > 0U;
+    return ssr_products_loaded_;
+}
+
+namespace {
+
+// B2b code-bias signal index (ICD Table 6-6) -> SignalType and preference
+// rank (lower kept when several tracking modes share a SignalType). Signals
+// without an internal bias key (BDS B1C, B2a, B2b; GPS L1C) are left out.
+std::pair<SignalType, int> b2bCodeBiasSignal(GNSSSystem system, int index) {
+    if (system == GNSSSystem::BeiDou) {
+        switch (index) {
+            case 0: return {SignalType::BDS_B1I, 0};
+            case 12: return {SignalType::BDS_B3I, 0};
+            default: break;
+        }
+    } else if (system == GNSSSystem::GPS) {
+        switch (index) {
+            case 0: return {SignalType::GPS_L1CA, 0};
+            case 1: return {SignalType::GPS_L1P, 0};
+            case 7: return {SignalType::GPS_L2C, 0};   // L2C (L)
+            case 8: return {SignalType::GPS_L2C, 1};   // L2C (M+L)
+            case 12: return {SignalType::GPS_L5, 0};   // L5 Q
+            case 13: return {SignalType::GPS_L5, 1};   // L5 I+Q
+            case 11: return {SignalType::GPS_L5, 2};   // L5 I
+            default: break;
+        }
+    }
+    return {SignalType::SIGNAL_TYPE_COUNT, 0};
+}
+
+}  // namespace
+
+bool PPPProcessor::loadBdsB2bProducts(const std::vector<io::BdsB2bUpdate>& b2b_updates,
+                                      const NavigationData& nav,
+                                      double sample_step_seconds) {
+    ssr_products_.clear();
+    require_coherent_ssr_ = false;
+    ssr_products_loaded_ = false;
+    // B2b corrects GPS and BDS-3 only; the others must not fall back to the
+    // broadcast orbit.
+    require_ssr_orbit_correction_ = true;
+    ssr_code_bias_tracking_identity_ = false;
+    bds_b2b_corrections_ = true;
+    if (sample_step_seconds <= 0.0) {
+        return false;
+    }
+    std::map<SatelliteId, std::vector<HeldSsrUpdate>> updates;
+    for (const auto& b2b : b2b_updates) {
+        const GNSSSystem system = b2b.satellite.system;
+        if (system != GNSSSystem::GPS && system != GNSSSystem::BeiDou) {
+            continue;
+        }
+        if (!b2b.usable) {
+            // No valid orbit / clock pair from here on: stop holding the
+            // previous one (cssrlib drops the satellite the same way).
+            auto it = updates.find(b2b.satellite);
+            if (it != updates.end() && !it->second.empty()) {
+                HeldSsrUpdate& previous = it->second.back();
+                previous.max_hold_seconds = std::min(
+                    previous.max_hold_seconds,
+                    std::max(0.0, b2b.time - previous.correction.time));
+            }
+            continue;
+        }
+        HeldSsrUpdate update;
+        io::RTCMSSRCorrection& correction = update.correction;
+        correction.satellite = b2b.satellite;
+        correction.time = b2b.time;
+        correction.issue_of_data = static_cast<uint8_t>(b2b.iod_corr);
+        correction.iode = b2b.iode;
+        correction.has_orbit = true;
+        correction.has_clock = true;
+        // Both subtracted, as in RTCM SSR: RTCM adds the clock term, B2b
+        // subtracts C0.
+        correction.orbit_delta_rac_m = Vector3d(b2b.radial_m, b2b.along_m, b2b.cross_m);
+        correction.clock_delta_poly = Vector3d(-b2b.c0_m, 0.0, 0.0);
+        if (b2b.ura_m) {
+            correction.has_ura = true;
+            correction.ura_sigma_m = *b2b.ura_m;
+        }
+        // Internal bias keys hold the term PPP subtracts from the code, the
+        // B2b sign.
+        std::map<uint8_t, std::pair<int, double>> ranked;
+        for (const auto& [index, bias_m] : b2b.code_bias_m) {
+            const auto [signal, rank] = b2bCodeBiasSignal(system, index);
+            if (signal == SignalType::SIGNAL_TYPE_COUNT) {
+                continue;
+            }
+            const uint8_t key = rtcmSsrSignalId(system, signal);
+            const auto it = ranked.find(key);
+            if (key != 0U && (it == ranked.end() || rank < it->second.first)) {
+                ranked[key] = {rank, bias_m};
+            }
+        }
+        for (const auto& [key, value] : ranked) {
+            update.code_bias_m[key] = value.second;
+        }
+        update.max_hold_seconds = kBdsB2bMaxHoldSeconds;
+        auto& satellite_updates = updates[b2b.satellite];
+        if (!satellite_updates.empty() &&
+            std::abs(satellite_updates.back().correction.time - correction.time) < 1e-6) {
+            satellite_updates.back() = std::move(update);
+        } else {
+            satellite_updates.push_back(std::move(update));
+        }
+    }
+    const size_t sampled_corrections = sampleHeldSsrUpdates(
+        updates, nav, sample_step_seconds, ssr_products_, SsrRacFrame::BdsB2b, true);
     ssr_products_loaded_ = sampled_corrections > 0U;
     return ssr_products_loaded_;
 }

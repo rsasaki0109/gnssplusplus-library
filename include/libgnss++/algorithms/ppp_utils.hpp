@@ -45,4 +45,25 @@ inline Vector3d ssrRacToEcef(
              cross * rac_correction.z());
 }
 
+/// Same for BDS PPP-B2b (BDS-SIS-ICD-PPP-B2b 1.0, 7.2): radial = pos / |pos|,
+/// cross = pos x vel / |pos x vel|, along = cross x radial. The correction is
+/// subtracted from the broadcast position; returns the ECEF term to add.
+inline Vector3d b2bRacToEcef(
+    const Vector3d& position_ecef,
+    const Vector3d& velocity_ecef,
+    const Vector3d& rac_correction) {
+    const double position_norm = position_ecef.norm();
+    const Vector3d cross_track = position_ecef.cross(velocity_ecef);
+    const double cross_norm = cross_track.norm();
+    if (position_norm <= 0.0 || cross_norm <= 0.0) {
+        return Vector3d::Zero();
+    }
+    const Vector3d radial = position_ecef / position_norm;
+    const Vector3d cross = cross_track / cross_norm;
+    const Vector3d along = cross.cross(radial);
+    return -(radial * rac_correction.x() +
+             along * rac_correction.y() +
+             cross * rac_correction.z());
+}
+
 }  // namespace libgnss::ppp_utils

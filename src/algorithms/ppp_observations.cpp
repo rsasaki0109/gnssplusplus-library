@@ -82,11 +82,16 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             dcb_products_loaded_);
         const bool broadcast_beidou_clock =
             broadcast_clock && sat.system == GNSSSystem::BeiDou;
+        // B1I / B3I for broadcast BDS clocks (with TGD) and for PPP-B2b (with
+        // its code biases); both clocks refer to B3I.
+        const bool beidou_b1i_b3i =
+            sat.system == GNSSSystem::BeiDou &&
+            (broadcast_clock || bds_b2b_corrections_);
         const Observation* primary =
             findObservationForSignals(
                 obs, sat,
-                broadcast_beidou_clock ? broadcastBeiDouPrimarySignals()
-                                       : primarySignals(sat.system));
+                beidou_b1i_b3i ? broadcastBeiDouPrimarySignals()
+                               : primarySignals(sat.system));
         if (require_coherent_ssr_) {
             primary =
                 algorithms::ppp_bias_identity::madocaFrequencySlotObservation(
@@ -166,7 +171,7 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             continue;
         }
         const Observation* secondary =
-            broadcast_beidou_clock
+            beidou_b1i_b3i
                 ? findBroadcastBeiDouSecondaryObservation(obs, sat, false)
                 : findObservationForSignals(
                       obs, sat,

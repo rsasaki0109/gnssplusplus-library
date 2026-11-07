@@ -15,6 +15,7 @@
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/solution.hpp>
 #include <libgnss++/external/madocalib_bridge.hpp>
+#include <libgnss++/io/bds_ppp_b2b.hpp>
 #include <libgnss++/io/galileo_has.hpp>
 #include <libgnss++/io/madoca_l6.hpp>
 #include <libgnss++/io/rinex.hpp>
@@ -38,6 +39,8 @@ struct Options {
     std::string ssr_rtcm_profile = "legacy";
     std::string has_pages_path;
     std::string has_pages_format;
+    std::string b2b_path;
+    int b2b_prn = 0;
     std::vector<std::string> madoca_l6_paths;
     std::vector<std::string> madoca_l6d_paths;
     std::vector<std::string> madoca_l6d_shadow_paths;
@@ -197,6 +200,11 @@ void printUsage(const char* program_name) {
         << "                          cssrlib page text); requires --nav, Galileo I/NAV only\n"
         << "  --has-pages-format <ubx|cssrlib|sbf>\n"
         << "                          HAS page log format (default: from the file extension)\n"
+        << "  --b2b <file>             BeiDou PPP-B2b corrections decoded from a cssrlib\n"
+        << "                          `wn tow prn type len hex` log; requires --nav with\n"
+        << "                          BeiDou B-CNAV1 (RINEX 4 CNV1) records; GPS and BDS-3\n"
+        << "  --b2b-prn <prn>          GEO satellite whose B2b stream to use\n"
+        << "                          (default: the first one in the log)\n"
         << "  --madoca-l6 <file>       Native MADOCA L6E SSR channel (repeatable,\n"
         << "                          e.g. PRN 204 and 206); requires --nav\n"
         << "  --madoca-l6d <file>      Native MADOCA L6D STEC input (repeatable);\n"
@@ -396,6 +404,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.has_pages_path = argv[++i];
         } else if (arg == "--has-pages-format" && i + 1 < argc) {
             options.has_pages_format = argv[++i];
+        } else if (arg == "--b2b" && i + 1 < argc) {
+            options.b2b_path = argv[++i];
+        } else if (arg == "--b2b-prn" && i + 1 < argc) {
+            options.b2b_prn = std::stoi(argv[++i]);
         } else if (arg == "--madoca-l6" && i + 1 < argc) {
             options.madoca_l6_paths.push_back(argv[++i]);
         } else if (arg == "--madoca-l6d" && i + 1 < argc) {
@@ -613,6 +625,23 @@ Options parseArguments(int argc, char* argv[]) {
         }
     } else if (!options.has_pages_format.empty()) {
         argumentError("--has-pages-format requires --has-pages", argv[0]);
+    }
+    if (!options.b2b_path.empty()) {
+        if (options.nav_path.empty()) {
+            argumentError("--b2b requires --nav (broadcast ephemeris with BeiDou B-CNAV1)",
+                          argv[0]);
+        }
+        if (!options.ssr_path.empty() || !options.ssr_rtcm_path.empty() ||
+            !options.madoca_l6_paths.empty() || !options.has_pages_path.empty()) {
+            argumentError(
+                "--b2b cannot be combined with --ssr, --ssr-rtcm, --madoca-l6 or --has-pages",
+                argv[0]);
+        }
+        if (options.b2b_prn < 0) {
+            argumentError("--b2b-prn must be a BeiDou PRN", argv[0]);
+        }
+    } else if (options.b2b_prn != 0) {
+        argumentError("--b2b-prn requires --b2b", argv[0]);
     }
     if (!options.madoca_l6d_paths.empty() &&
         !options.madoca_l6d_shadow_paths.empty()) {
@@ -1161,7 +1190,8 @@ int main(int argc, char* argv[]) {
         ppp_config.ssr_file_path = options.ssr_path;
         ppp_config.use_ssr_corrections =
             !options.ssr_path.empty() || !options.ssr_rtcm_path.empty() ||
-            !options.madoca_l6_paths.empty() || !options.has_pages_path.empty();
+            !options.madoca_l6_paths.empty() || !options.has_pages_path.empty() ||
+            !options.b2b_path.empty();
         ppp_config.ionex_file_path = options.ionex_path;
         ppp_config.dcb_file_path = options.dcb_path;
         ppp_config.antex_file_path = options.antex_path;
@@ -1487,6 +1517,61 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
         }
+        if (!options.b2b_path.empty()) {
+            // B2b orbit corrections refer to the BDS B-CNAV1 ephemeris (by
+            // IODE) and to the GPS LNAV ephemeris.
+            size_t bcnav1_records = 0;
+            for (const auto& [satellite, records] : nav_data.cnav_ephemeris_data) {
+                for (const auto& record : records) {
+                    if (record.navigation_message_type ==
+                        libgnss::NavigationMessageType::CNV1) {
+                        ++bcnav1_records;
+                    }
+                }
+            }
+            if (bcnav1_records == 0) {
+                std::cerr << "Error: --b2b needs BeiDou B-CNAV1 ephemerides (RINEX 4 CNV1 "
+                             "records) in --nav; "
+                          << options.nav_path << " has none\n";
+                return 1;
+            }
+            nav_data.setBeiDouEphemerisSource(
+                libgnss::NavigationData::BeiDouEphemerisSource::BCnav1);
+            std::vector<libgnss::io::BdsB2bMessage> b2b_messages;
+            libgnss::io::BdsB2bReadStats read_stats;
+            std::string error;
+            if (!libgnss::io::readBdsB2bMessages(options.b2b_path, b2b_messages,
+                                                 options.b2b_prn, &read_stats, &error)) {
+                std::cerr << "Error: failed to read PPP-B2b messages: " << error << "\n";
+                return 1;
+            }
+            libgnss::io::BdsB2bDecoder::Options decoder_options;
+            decoder_options.prn = options.b2b_prn;
+            decoder_options.keep_messages = false;
+            libgnss::io::BdsB2bDecoder decoder(decoder_options);
+            for (const auto& message : b2b_messages) {
+                decoder.addMessage(message);
+            }
+            const auto& b2b_stats = decoder.stats();
+            if (!options.quiet) {
+                std::cerr << "[gnss_ppp] b2b: C" << std::setw(2) << std::setfill('0')
+                          << decoder.prn() << std::setfill(' ') << ": "
+                          << b2b_stats.messages << " messages ("
+                          << b2b_stats.crc_failures << " CRC failures, "
+                          << b2b_stats.null_messages << " null), "
+                          << b2b_stats.masks << " masks, " << b2b_stats.orbit_messages
+                          << " orbit, " << b2b_stats.clock_messages << " clock, "
+                          << b2b_stats.code_bias_messages << " code-bias messages, "
+                          << decoder.updates().size() << " held updates; "
+                          << bcnav1_records << " B-CNAV1 ephemerides\n";
+            }
+            if (!processor.loadBdsB2bProducts(decoder.updates(), nav_data,
+                                              options.ssr_step_seconds)) {
+                std::cerr << "Error: no usable PPP-B2b corrections in " << options.b2b_path
+                          << "\n";
+                return 1;
+            }
+        }
         if (!options.madoca_l6_paths.empty() &&
             !processor.loadMadocaL6Products(options.madoca_l6_paths)) {
             std::cerr << "Error: failed to load MADOCA L6E corrections\n";
@@ -1754,7 +1839,8 @@ int main(int argc, char* argv[]) {
                     << "  \"ppp_solution_rate_pct\": " << ppp_solution_rate << ",\n"
                     << "  \"ssr_corrections_enabled\": "
                     << ((!options.ssr_path.empty() || !options.ssr_rtcm_path.empty() ||
-                         !options.madoca_l6_paths.empty() || !options.has_pages_path.empty())
+                         !options.madoca_l6_paths.empty() || !options.has_pages_path.empty() ||
+                         !options.b2b_path.empty())
                             ? "true" : "false") << ",\n"
                     << "  \"atmospheric_trop_corrections\": " << atmospheric_trop_corrections << ",\n"
                     << "  \"atmospheric_trop_meters\": " << atmospheric_trop_meters << ",\n"
@@ -1887,7 +1973,8 @@ int main(int argc, char* argv[]) {
             std::cout << "  ambiguity resolution: " << (options.enable_ar ? "on" : "off") << "\n";
             std::cout << "  SSR corrections: "
                       << ((options.ssr_path.empty() && options.ssr_rtcm_path.empty() &&
-                           options.madoca_l6_paths.empty() && options.has_pages_path.empty())
+                           options.madoca_l6_paths.empty() && options.has_pages_path.empty() &&
+                           options.b2b_path.empty())
                               ? "off" : "on")
                       << "\n";
             if (!options.madoca_materialization_dump_path.empty()) {
