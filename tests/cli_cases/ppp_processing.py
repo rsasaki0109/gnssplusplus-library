@@ -492,6 +492,41 @@ class PPPProcessingCases:
                     self.assertIn("failed to load MADOCA L6E corrections", by_flags.stderr)
                     self.assertEqual(by_config.returncode, by_flags.returncode)
                     self.assertEqual(by_config.stderr, by_flags.stderr)
+    def test_ppp_cli_rtcm_ssr_profile_arguments_and_default(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_rtcm_profile_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+            obs = str(temp_root / "rover.obs")
+            nav = str(temp_root / "base.nav")
+            for args in (["--input", str(fixture / "rover.rtcm"), "--obs-out", obs],
+                         ["--input", str(fixture / "base.rtcm"), "--nav-out", nav]):
+                converted = self.run_gnss("convert", *args, "--format", "rtcm",
+                                          "--gps-week", "2324", "--quiet")
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            ssr = temp_root / "ssr.rtcm3"
+            ssr.write_bytes(build_rtcm1060(3, 518400))
+            out = str(temp_root / "out.pos")
+            cases = [
+                (["--ssr-rtcm", str(ssr), "--ssr-rtcm-profile", "bogus"],
+                 "--ssr-rtcm-profile must be one of: standard, has-idd, legacy"),
+                (["--ssr-rtcm-profile", "legacy"], "--ssr-rtcm-profile requires --ssr-rtcm"),
+                (["--ssr-rtcm-profile", "has-idd"], "--ssr-rtcm-profile requires --ssr-rtcm"),
+            ]
+            for args, message in cases:
+                with self.subTest(args=args):
+                    result = self.run_gnss("ppp", "--obs", obs, "--nav", nav, "--out", out, *args)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(message, result.stderr + result.stdout)
+            # Without a profile --ssr-rtcm takes the IODE-matched (standard)
+            # conversion, which first merges the file's ephemerides.
+            default = self.run_gnss("ppp", "--obs", obs, "--nav", nav, "--ssr-rtcm", str(ssr),
+                                    "--max-epochs", "1", "--out", out)
+            self.assertIn("[gnss_ppp] standard: merged 0 broadcast ephemerides",
+                          default.stderr)
+            legacy = self.run_gnss("ppp", "--obs", obs, "--nav", nav, "--ssr-rtcm", str(ssr),
+                                   "--ssr-rtcm-profile", "legacy", "--max-epochs", "1", "--out", out)
+            self.assertNotIn("merged", legacy.stderr)
+
     def test_ppp_cli_b2b_arguments_and_bcnav1_requirement(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_b2b_cli_") as temp_dir:
             temp_root = Path(temp_dir)

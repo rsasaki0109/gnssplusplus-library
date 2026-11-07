@@ -876,6 +876,50 @@ nothing. If your navigation data carries ephemerides that are unhealthy because
 they are wrong (rather than flagged during a test campaign), RTK will still use
 them.
 
+### RTCM SSR conversion (`--ssr-rtcm-profile`)
+
+`gnss ppp --ssr-rtcm` converts RTCM SSR orbit / clock / code-bias messages with
+the RTCM 10403.3 conventions by default (`--ssr-rtcm-profile standard`;
+`has-idd` is the same, the profile was first written for the Galileo HAS
+Internet Data Distribution):
+
+- each correction is applied to the broadcast ephemeris of its IODE (Galileo
+  I/NAV), and ephemerides in an SSR file are merged in first;
+- each orbit / clock update is held, with its rates and clock polynomial,
+  until the next one of the satellite, at most 90 s;
+- code biases are mapped from the RTCM SSR signal IDs (e.g. GPS 2 = L1 W,
+  11 = L2 W) and their sign converted (RTCM biases are added to the
+  observation).
+
+`--ssr-rtcm-profile legacy` keeps the conversion used before 2026-11-07, for
+comparison only. It evaluates the broadcast ephemeris nearest in time instead
+of the correction's IODE, interpolates between samples (across an IODE change
+as well), and keys code biases by their wire signal ID without the sign
+conversion: wire ID 2 (L1 W) landed on L1 C/A and ID 11 (L2 W) on no signal.
+On the cssrlib-data JPL GDGPS streams (GPS + Galileo, static, horizontal):
+
+| Run | 10 min | 30 min | 60 min |
+|---|---|---|---|
+| Kamakura 2024-02-12 (orbit, clock, code and phase biases), legacy | 2.89 m | 2.12 m | 0.41 m |
+| Kamakura 2024-02-12, standard | 0.11 m | 0.22 m | 0.11 m |
+| Kamakura 2025-08-21 (orbit and clock only), legacy | 1.01 m | 0.98 m | 0.36 m |
+| Kamakura 2025-08-21, standard | 0.86 m | 0.52 m | 0.46 m |
+
+On 2024-02-12 the legacy ionosphere-free code residual of G02 sat at -6.3 m
+and that of E15 at +3.4 m (first 15 min, relative to the other satellites);
+with the standard conversion they are -0.25 / -0.19 m, and the corrected
+satellite positions and clocks equal cssrlib's within 0.1 mm. cssrlib
+(`test_ppprtcm.py`) still converges faster on both hours (0.05 / 0.06 m after
+one hour, below 0.2 m from 25 / 10 min). The difference is in the Galileo
+part of the solution (GPS-only reaches 0.10 m on 2025-08-21, Galileo-only
+stays at 0.4-0.6 m) and is not explained yet.
+
+Satellites without an SSR correction still fall back to their broadcast orbit
+and clock (cssrlib and RTKLIB drop them). Dropping them (the
+`GNSS_PPP_REQUIRE_SSR_ORBIT` override) made the OBE4 HAS IDD hour worse
+(0.014 -> 0.204 m after one hour, the satellites leave the solution during
+correction gaps), so it is not the default.
+
 ### SSR URA in the PPP weights
 
 When the SSR corrections carry a URA (RTCM 1061 / 1067 / 1244 / 1250 / 1262,

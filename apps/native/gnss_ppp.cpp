@@ -37,7 +37,7 @@ struct Options {
     std::string clk_path;
     std::string ssr_path;
     std::string ssr_rtcm_path;
-    std::string ssr_rtcm_profile = "legacy";
+    std::string ssr_rtcm_profile = "standard";
     std::string has_pages_path;
     std::string has_pages_format;
     std::string b2b_path;
@@ -191,11 +191,14 @@ void printUsage(const char* program_name) {
         << "  --ssr <corrections.csv>  Simple SSR orbit/clock corrections CSV\n"
         << "  --ssr-rtcm <file|ntrip://...|serial://...|tcp://...>\n"
         << "                          RTCM SSR source converted/read for PPP use\n"
-        << "  --ssr-rtcm-profile <legacy|has-idd>\n"
-        << "                          RTCM SSR conventions (default: legacy). has-idd = Galileo HAS\n"
-        << "                          Internet Data Distribution: IODE-matched broadcast orbits,\n"
-        << "                          Galileo I/NAV only, held RTCM-signal-ID code biases, and\n"
-        << "                          GPS/Galileo ephemerides merged from the SSR stream\n"
+        << "  --ssr-rtcm-profile <standard|has-idd|legacy>\n"
+        << "                          RTCM SSR conventions (default: standard): IODE-matched\n"
+        << "                          broadcast orbits, updates held until the next one (at most\n"
+        << "                          90 s), Galileo I/NAV only, code biases mapped from the RTCM\n"
+        << "                          SSR signal IDs with the RTCM sign, and ephemerides merged\n"
+        << "                          from an SSR file. has-idd (Galileo HAS IDD) is the same.\n"
+        << "                          legacy: the conversion used before 2026-11-07 (nearest\n"
+        << "                          ephemeris, interpolated samples, wire-ID bias keys)\n"
         << "  --has-pages <file>       Galileo HAS signal-in-space corrections decoded from\n"
         << "                          E6-B C/NAV pages (UBX RXM-SFRBX, SBF GALRawCNAV or\n"
         << "                          cssrlib page text); requires --nav, Galileo I/NAV only\n"
@@ -601,10 +604,11 @@ Options parseArguments(int argc, char* argv[]) {
     if (!options.ssr_rtcm_path.empty() && options.nav_path.empty()) {
         argumentError("--ssr-rtcm requires --nav", argv[0]);
     }
-    if (options.ssr_rtcm_profile != "legacy" && options.ssr_rtcm_profile != "has-idd") {
-        argumentError("--ssr-rtcm-profile must be one of: legacy, has-idd", argv[0]);
+    if (options.ssr_rtcm_profile != "standard" && options.ssr_rtcm_profile != "has-idd" &&
+        options.ssr_rtcm_profile != "legacy") {
+        argumentError("--ssr-rtcm-profile must be one of: standard, has-idd, legacy", argv[0]);
     }
-    if (options.ssr_rtcm_profile != "legacy" && options.ssr_rtcm_path.empty()) {
+    if (options.ssr_rtcm_profile != "standard" && options.ssr_rtcm_path.empty()) {
         argumentError("--ssr-rtcm-profile requires --ssr-rtcm", argv[0]);
     }
     if (!options.madoca_l6_paths.empty() && options.nav_path.empty()) {
@@ -1471,24 +1475,30 @@ int main(int argc, char* argv[]) {
                              .count()
                       << " s" << std::endl;
         }
-        const bool has_idd_profile = options.ssr_rtcm_profile == "has-idd";
-        if (has_idd_profile) {
-            // HAS corrections reference the I/NAV clock and the exact IODE;
-            // the stream carries the ephemerides it refers to.
-            const size_t merged_ephemerides =
-                libgnss::io::mergeRTCMEphemerides(options.ssr_rtcm_path, nav_data);
+        // standard / has-idd: RTCM SSR corrections refer to the broadcast
+        // ephemeris of their IODE and, for Galileo, to the I/NAV clock; an
+        // SSR file may carry the ephemerides it refers to (HAS IDD does).
+        const bool iode_profile =
+            !options.ssr_rtcm_path.empty() && options.ssr_rtcm_profile != "legacy";
+        if (iode_profile) {
+            std::error_code file_error;
+            if (std::filesystem::is_regular_file(options.ssr_rtcm_path, file_error)) {
+                const size_t merged_ephemerides =
+                    libgnss::io::mergeRTCMEphemerides(options.ssr_rtcm_path, nav_data);
+                if (!options.quiet) {
+                    std::cerr << "[gnss_ppp] " << options.ssr_rtcm_profile << ": merged "
+                              << merged_ephemerides
+                              << " broadcast ephemerides from the SSR stream\n";
+                }
+            }
             nav_data.setGalileoEphemerisSource(
                 libgnss::NavigationData::GalileoEphemerisSource::INavOnly);
-            if (!options.quiet) {
-                std::cerr << "[gnss_ppp] has-idd: merged " << merged_ephemerides
-                          << " broadcast ephemerides from the SSR stream\n";
-            }
         }
         if (!options.ssr_rtcm_path.empty() &&
             !processor.loadRTCMSSRProducts(
                 options.ssr_rtcm_path, nav_data, options.ssr_step_seconds,
-                has_idd_profile ? libgnss::PPPProcessor::RTCMSSRProfile::GalileoHasIdd
-                                : libgnss::PPPProcessor::RTCMSSRProfile::Legacy)) {
+                iode_profile ? libgnss::PPPProcessor::RTCMSSRProfile::Standard
+                             : libgnss::PPPProcessor::RTCMSSRProfile::Legacy)) {
             std::cerr << "Error: failed to load RTCM SSR corrections: "
                       << options.ssr_rtcm_path << "\n";
             return 1;

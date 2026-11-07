@@ -307,6 +307,10 @@ class HasIddPppLaneTest(unittest.TestCase):
         self.assertEqual(len(commands), 3)
         has_runs = [line for line in commands if "--ssr-rtcm-profile has-idd" in line]
         self.assertEqual(len(has_runs), 2)
+        # The comparison row asks for the legacy conversion explicitly (the
+        # default is the IODE-matched one).
+        legacy_runs = [line for line in commands if "--ssr-rtcm-profile legacy" in line]
+        self.assertEqual(len(legacy_runs), 1)
         self.assertTrue(any("--static" in line for line in has_runs))
         self.assertTrue(any("--kinematic" in line for line in has_runs))
         self.assertIn("--obs /data/cssrlib-data/data/doy2023-229/OBE42023229c.obs", out)
