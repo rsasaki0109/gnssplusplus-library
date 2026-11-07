@@ -124,7 +124,8 @@ jobs:
             data/0627239Q.obs
             data/sept_2019239.nav
             data/2019239Q.l6
-      # License not stated upstream: checked out for the test only, never published.
+      # MIT-licensed repository whose LICENSE leaves the sample data to their
+      # sources' terms: checked out for the test only, never published.
       - name: Fetch the cssrlib-data Galileo HAS and PPP-B2b samples (OBE4 IDD, Kamakura E6-B and B2b)
         uses: actions/checkout@v7
         with:

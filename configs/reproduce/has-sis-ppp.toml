@@ -9,8 +9,9 @@
 # plus the IGS merged broadcast navigation files of those days from
 # https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2025/<doy>/, uncompressed next to
 # them (BRDC00WRD_S_20250460000_01D_MN.rnx, BRDC00WRD_S_20252330000_01D_MN.rnx).
-# The cssrlib-data license is not stated, so nothing is redistributed: pass
-# the cssrlib-data data/ directory with --has-sis-data-root (or
+# cssrlib-data is MIT-licensed, but its LICENSE leaves the sample data to
+# their sources' terms, so nothing is redistributed: pass the cssrlib-data
+# data/ directory with --has-sis-data-root (or
 # GNSSPP_HAS_SIS_DATA_ROOT).
 #
 # Japan lies outside the HAS service area (HAS SDD 1.0 section 3.1 excludes
@@ -45,7 +46,7 @@ required = [
 [tools.cssrlib_data]
 repository = "https://github.com/hirokawa/cssrlib-data"
 path = "data/doy2025-046, data/doy2025-233"
-note = "License not stated upstream; download locally, do not commit."
+note = "MIT-licensed repository whose LICENSE leaves the sample data to their sources' terms; download locally, do not commit."
 
 [tools.igs_brdc]
 repository = "https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2025/"

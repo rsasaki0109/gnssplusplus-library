@@ -258,8 +258,9 @@ kinematic track scatters 0.46 m (H RMS) / 1.25 m (U RMS) after 5 min against
 Data: the public HAS IDD sample in
 [hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data)
 `data/doy2023-229/` (`OBE42023229c.obs`, `OBE42023229c.nav`,
-`idd2023229c.rtc`). Its license is not stated, so the files are not
-redistributed with libgnss++; download them and point
+`idd2023229c.rtc`). The repository is MIT-licensed, but its LICENSE leaves
+the sample data to their sources' terms, so the files are not redistributed
+with libgnss++; download them and point
 `--has-data-root` / `GNSSPP_HAS_DATA_ROOT` at that directory. The reference
 coordinate is the cssrlib sample value
 `(4186704.2262, 834903.7677, 4723664.9337)` m (OBE4, Septentrio AsteRx4 with
