@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -1450,6 +1451,14 @@ int main(int argc, char* argv[]) {
                       << std::endl;
         }
         libgnss::PPPProcessor processor(ppp_config);
+        // PPP-B2b decoder statistics, reported in --summary-json.
+        struct B2bSummary {
+            int prn = 0;
+            libgnss::io::BdsB2bDecoderStats stats;
+            size_t held_updates = 0;
+            size_t bcnav1_records = 0;
+        };
+        std::optional<B2bSummary> b2b_summary;
         if (!processor.initialize(processor_config)) {
             std::cerr << "Error: failed to initialize PPP processor\n";
             return 1;
@@ -1553,6 +1562,8 @@ int main(int argc, char* argv[]) {
                 decoder.addMessage(message);
             }
             const auto& b2b_stats = decoder.stats();
+            b2b_summary = B2bSummary{decoder.prn(), b2b_stats, decoder.updates().size(),
+                                     bcnav1_records};
             if (!options.quiet) {
                 std::cerr << "[gnss_ppp] b2b: C" << std::setw(2) << std::setfill('0')
                           << decoder.prn() << std::setfill(' ') << ": "
@@ -1842,6 +1853,28 @@ int main(int argc, char* argv[]) {
                          !options.madoca_l6_paths.empty() || !options.has_pages_path.empty() ||
                          !options.b2b_path.empty())
                             ? "true" : "false") << ",\n"
+                    << "  \"b2b\": ";
+            if (b2b_summary) {
+                const auto& b2b = *b2b_summary;
+                summary << "{\"prn\": " << b2b.prn
+                        << ", \"messages\": " << b2b.stats.messages
+                        << ", \"crc_failures\": " << b2b.stats.crc_failures
+                        << ", \"null_messages\": " << b2b.stats.null_messages
+                        << ", \"unsupported_messages\": " << b2b.stats.unsupported_messages
+                        << ", \"masks\": " << b2b.stats.masks
+                        << ", \"mask_changes\": " << b2b.stats.mask_changes
+                        << ", \"orbit_messages\": " << b2b.stats.orbit_messages
+                        << ", \"clock_messages\": " << b2b.stats.clock_messages
+                        << ", \"code_bias_messages\": " << b2b.stats.code_bias_messages
+                        << ", \"iodssr_mismatches\": " << b2b.stats.iodssr_mismatches
+                        << ", \"iodp_mismatches\": " << b2b.stats.iodp_mismatches
+                        << ", \"without_mask\": " << b2b.stats.without_mask
+                        << ", \"held_updates\": " << b2b.held_updates
+                        << ", \"bcnav1_ephemerides\": " << b2b.bcnav1_records << "}";
+            } else {
+                summary << "null";
+            }
+            summary << ",\n"
                     << "  \"atmospheric_trop_corrections\": " << atmospheric_trop_corrections << ",\n"
                     << "  \"atmospheric_trop_meters\": " << atmospheric_trop_meters << ",\n"
                     << "  \"atmospheric_iono_corrections\": " << atmospheric_iono_corrections << ",\n"

@@ -31,7 +31,7 @@ HAVE_SCIPY_STACK = all(importlib.util.find_spec(name) for name in ("numpy", "pan
 
 READY_LANES = {
     "clas-ppc", "spp-policy", "rtk-demo5", "odaiba", "fgo-tokyo", "gsdc-dev-routes", "ppc-goal",
-    "gsdc-official", "has-idd-ppp", "has-sis-ppp", "igs-final-ppp",
+    "gsdc-official", "has-idd-ppp", "has-sis-ppp", "igs-final-ppp", "bds-b2b-ppp",
 }
 PLANNED_LANES: set[str] = set()
 
@@ -388,6 +388,45 @@ class HasSisPppLaneTest(unittest.TestCase):
         for t in ("30min", "60min"):
             self.assertEqual(gated[f"has-sis 046r static H at {t} (m)"]["max"], 0.20)
             self.assertEqual(gated[f"has-sis 046r static |U| at {t} (m)"]["max"], 0.40)
+
+
+class BdsB2bPppLaneTest(unittest.TestCase):
+    def test_dry_run_renders_b2b_runs_from_the_cssrlib_data_root(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable, str(GNSS_CLI), "reproduce", "bds-b2b-ppp", "--dry-run",
+                "--work-dir", "output/reproduce/test-bds-b2b-dry-run",
+                "--has-sis-data-root", "/data/cssrlib-data/data",
+            ],
+            cwd=ROOT_DIR, check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = result.stdout
+        ppp_runs = [line for line in out.splitlines() if "--b2b /data/" in line]
+        self.assertEqual(len(ppp_runs), 4)
+        for line in ppp_runs:
+            self.assertIn("--b2b-prn 59", line)
+            self.assertIn("--antex /data/cssrlib-data/data/igs20_2353.atx", line)
+            self.assertIn("--elevation-mask 10", line)
+        # The receiver's RINEX 4 NAV (B-CNAV1), not the merged RINEX 3 BRDC.
+        self.assertIn("--nav /data/cssrlib-data/data/doy2025-046/046r_rnx.nav", out)
+        self.assertNotIn("BRDC00WRD", out)
+        self.assertTrue(any("--kinematic" in line and "233h_bdsb2b.txt" in line for line in ppp_runs))
+        self.assertIn("--reference-ecef -3962108.6836 3381309.5672 3668678.6720", out)
+        self.assertIn("warning: dataset `has_sis` incomplete", out)
+        self.assertFalse((ROOT_DIR / "output" / "reproduce" / "test-bds-b2b-dry-run").exists())
+
+    def test_manifest_gates_decoder_and_static_accuracy(self) -> None:
+        manifest = reproduce.load_manifest(ROOT_DIR / "configs" / "reproduce" / "bds-b2b-ppp.toml")
+        metrics = reproduce.expand_metric_specs(manifest["metrics"], "bds-b2b-ppp.metrics")
+        gated = {metric["name"]: metric for metric in metrics if metric.get("gate", True)}
+        for hour in ("046r", "233h"):
+            self.assertEqual(gated[f"{hour} B2b messages (C59)"]["min"], 3600)
+            self.assertEqual(gated[f"{hour} B2b messages (C59)"]["path"], "b2b.messages")
+            for field in ("crc_failures", "iodssr_mismatches", "iodp_mismatches"):
+                self.assertEqual(gated[f"{hour} B2b {field}"]["max"], 0)
+            self.assertEqual(gated[f"b2b {hour} static H at 60 min (m)"]["max"], 0.20)
+            self.assertEqual(gated[f"b2b {hour} static |U| at 60 min (m)"]["max"], 0.40)
 
 
 class IgsFinalPppLaneTest(unittest.TestCase):

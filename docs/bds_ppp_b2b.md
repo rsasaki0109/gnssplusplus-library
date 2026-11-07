@@ -11,7 +11,7 @@ service area (BDS-SIS-ICD-PPP-B2b, Version 1.0, 2020).
 | PPP-B2b message decoder (`io::BdsB2bDecoder`) | **Supported**: cssrlib `wn tow prn type len hex` logs, CRC-24Q, message types 1 (mask), 2 (orbit + URA), 3 (code bias), 4 (clock), the IODP / IODSSR / IOD Corr bookkeeping |
 | Decoder parity with cssrlib | **Exact**: every mask, orbit, clock and code-bias entry of C59, C60 and C62 on the two public Kamakura hours (about 1500 orbit, 35000 clock and 6500 code-bias entries per satellite and hour) equals cssrlib's `cssr_bds` decoder |
 | Float PPP with B2b corrections | **Supported** (`gnss_ppp --b2b <log>`): GPS (LNAV) and BDS-3 (B-CNAV1) |
-| Static float PPP on a known coordinate | **Validated** on the Kamakura hours below (0.03-0.15 m horizontal after one hour) |
+| Static float PPP on a known coordinate | **Validated** on the Kamakura hours below (0.10-0.14 m horizontal after one hour); `gnss reproduce bds-b2b-ppp` gates it ([lane](reproduce.md#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07)) |
 | Browser GUI | **Supported**: *PPP corrections: BeiDou PPP-B2b* with the log recognised from its content; run on the public sample in Node and Chromium by the Docs workflow ([Browser GUI](web_app.md)) |
 | PPP-AR | **Not available**: PPP-B2b carries no phase biases |
 
@@ -64,19 +64,34 @@ one-hour static Kamakura recordings (Septentrio mosaic-X5, JAVRINGANT_DM),
 each with the B2b messages of C59, C60 and C62 and a RINEX 4 NAV with
 B-CNAV1, and the coordinate -3962108.6836, 3381309.5672, 3668678.6720.
 
-| Hour | Horizontal / up after 1 h | Horizontal < 0.2 m from | cssrlib `test_pppbds` (B1C / B2a) | cssrlib with B1I / B3I |
-|---|---|---|---|---|
-| 2025-02-15 17h (`046r`) | 0.14 m / -0.29 m | 41 min | 0.10 m | 0.14 m |
-| 2025-08-21 07h (`233h`) | 0.10 m / -0.10 m | 41 min | 0.03 m | 0.05 m |
+| Hour | Horizontal / up after 1 h | Horizontal < 0.2 m from | Kinematic after 1 h | cssrlib `test_pppbds` (B1C / B2a) | cssrlib with B1I / B3I |
+|---|---|---|---|---|---|
+| 2025-02-15 17h (`046r`) | 0.14 m / -0.29 m | 41 min | 0.18 m / -0.56 m | 0.10 m | 0.14 m |
+| 2025-08-21 07h (`233h`) | 0.10 m / -0.11 m | 41 min | 0.06 m / -0.17 m | 0.03 m | 0.05 m |
 
-`gnss_ppp --b2b <log> --b2b-prn 59 --antex igs20.atx --elevation-mask 10
---static`, 3599 epochs, about 7 s per hour. cssrlib (26734271) runs its
-`samples/test_pppbds.py` on the same files (C59). cssrlib's uncombined
-filter converges faster (horizontal below 0.2 m after about 15-20 minutes)
-and moves less when B2b withdraws a satellite: on the 2025-08-21 hour B2b
-sends G15's, C34's and G18's clocks as invalid from 41, 53 and 56 min, and
-both programs stop using them (before expired corrections stopped being
-applied, libgnss++ kept their last values and ended at 0.03 m).
+`gnss_ppp --b2b <log> --b2b-prn 59 --antex igs20_2353.atx --elevation-mask
+10 --static` (or `--kinematic`), 3599 epochs, about 7 s per hour. cssrlib
+(26734271) runs its `samples/test_pppbds.py` on the same files (C59).
+`gnss reproduce bds-b2b-ppp` reruns all four and gates the decoder and the
+static runs:
+
+```bash
+python3 apps/gnss.py reproduce bds-b2b-ppp --has-sis-data-root /data/cssrlib-data/data --check
+```
+
+The antenna file matters. In IGS week 2405 the BDS-3 z-PCOs of every band
+except B1 were raised by about 0.13 m. This halves the B1I - B3I difference
+that PPP applies. With `igs20_2425.atx` the static runs end at 0.19 m and
+0.12 m instead. `igs20_2353.atx` (the immutable IGS archive copy of the
+2025-02-15 week) and the week-2290 igs20 that cssrlib uses have the earlier
+values.
+
+cssrlib's uncombined filter converges faster (horizontal below 0.2 m after
+about 15-20 minutes) and moves less when B2b withdraws a satellite: on the
+2025-08-21 hour B2b sends G15's, C34's and G18's clocks as invalid from 41,
+53 and 56 min, and both programs stop using them (before expired corrections
+stopped being applied, libgnss++ kept their last values and ended at
+0.03 m).
 
 Correction checks on the 2025-02-15 hour:
 

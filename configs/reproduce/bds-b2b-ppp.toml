@@ -1,0 +1,177 @@
+# BeiDou PPP-B2b float PPP (gnss_ppp --b2b) on the two public Kamakura hours.
+# Not a README row; see docs/bds_ppp_b2b.md.
+#
+# Inputs: the PPP-B2b samples of hirokawa/cssrlib-data (Kamakura, Japan,
+# Septentrio mosaic-X5 + JAVRINGANT_DM), the same directories as has-sis-ppp:
+#   data/doy2025-046/{046r_rnx.obs, 046r_rnx.nav, 046r_bdsb2b.txt}
+#                                                 2025-02-15 17:00-18:00 GPST
+#   data/doy2025-233/{233h_rnx.obs, 233h_rnx.nav, 233h_bdsb2b.txt}
+#                                                 2025-08-21 07:00-08:00 GPST
+# The *_rnx.nav files are the receiver's RINEX 4 NAV with the B-CNAV1 records
+# the BDS corrections refer to (a RINEX 3 merged NAV has none). Pass the
+# cssrlib-data data/ directory with --has-sis-data-root (or
+# GNSSPP_HAS_SIS_DATA_ROOT); nothing from cssrlib-data is redistributed here.
+#
+# Antenna model: igs20_2353.atx in the same directory, the immutable IGS
+# archive copy of week 2353 (the week of the 2025-02-15 hour, and one of the
+# ANTEX files cssrlib-data lists in data/igs_atx_files.txt):
+#   https://files.igs.org/pub/station/general/pcv_archive/igs20_2353.atx
+#   (SHA-256 485720bda474399c36ef9ed7eb1f9c06bdf69f5bc2697a1adeac1048fef90331).
+# The B2b BDS orbits and clocks refer to the B3I antenna phase centre, so
+# PPP's B1I / B3I combination applies the B1I - B3I PCO difference. IGS
+# week 2405 raised the BDS-3 z-PCOs of every band but B1 by about 0.13 m
+# ("Adjusted BeiDou-3 and QZSS scale"), which halves that difference; with
+# igs20_2425.atx (igs-final-ppp's file) the static runs end at 0.185 m
+# (2025-02-15) and 0.117 m (2025-08-21) after one hour instead of the values
+# below.
+#
+# cssrlib 26734271 samples/test_pppbds.py (C59, B1C / B2a, igs20.atx of week
+# 2290, same BDS-3 PCOs as week 2353): 0.10 m (2025-02-15) and 0.03 m
+# (2025-08-21) horizontal after one hour; with B1I / B3I 0.14 m and 0.05 m.
+
+[lane]
+name = "bds-b2b-ppp"
+status = "ready"
+title = "BeiDou PPP-B2b float PPP, Kamakura static / kinematic hours vs reference"
+readme_row = "(docs) BeiDou PPP-B2b float PPP: Kamakura hours"
+runtime_estimate = "~1 min"
+docs = "docs/bds_ppp_b2b.md"
+
+[datasets.has_sis]
+required = [
+  "igs20_2353.atx",
+  "doy2025-046/046r_rnx.obs",
+  "doy2025-046/046r_rnx.nav",
+  "doy2025-046/046r_bdsb2b.txt",
+  "doy2025-233/233h_rnx.obs",
+  "doy2025-233/233h_rnx.nav",
+  "doy2025-233/233h_bdsb2b.txt",
+]
+
+[tools.cssrlib_data]
+repository = "https://github.com/hirokawa/cssrlib-data"
+commit = "ec1dfa2c"
+path = "data/doy2025-046, data/doy2025-233"
+note = "Download locally, do not commit."
+
+[tools.igs_atx]
+repository = "https://files.igs.org/pub/station/general/pcv_archive/"
+path = "igs20_2353.atx"
+note = "Immutable IGS ANTEX archive copy; place it in the cssrlib-data data/ directory."
+
+[[steps]]
+name = "gnss-ppp-b2b-{hour}-{mode}"
+foreach = [
+  { hour = "046r", doy = "046", mode = "static" },
+  { hour = "046r", doy = "046", mode = "kinematic" },
+  { hour = "233h", doy = "233", mode = "static" },
+  { hour = "233h", doy = "233", mode = "kinematic" },
+]
+argv = [
+  "{bin:gnss_ppp}",
+  "--obs", "{has_sis_root}/doy2025-{doy}/{hour}_rnx.obs",
+  "--nav", "{has_sis_root}/doy2025-{doy}/{hour}_rnx.nav",
+  "--b2b", "{has_sis_root}/doy2025-{doy}/{hour}_bdsb2b.txt",
+  "--b2b-prn", "59",
+  "--antex", "{has_sis_root}/igs20_2353.atx",
+  "--elevation-mask", "10",
+  "--{mode}",
+  "--out", "{work_dir}/b2b_{hour}_{mode}.pos",
+  "--summary-json", "{work_dir}/b2b_{hour}_{mode}_run.json",
+  "--quiet",
+]
+
+[[steps]]
+name = "score"
+argv = [
+  "{python}", "scripts/experiments/has/has_idd_ppp_reproduce.py", "score",
+  "--reference-ecef", "-3962108.6836", "3381309.5672", "3668678.6720",
+  "--run", "b2b_046r_static={work_dir}/b2b_046r_static.pos",
+  "--run", "b2b_046r_kinematic={work_dir}/b2b_046r_kinematic.pos",
+  "--run", "b2b_233h_static={work_dir}/b2b_233h_static.pos",
+  "--run", "b2b_233h_kinematic={work_dir}/b2b_233h_kinematic.pos",
+  "--summary-json", "{work_dir}/summary.json",
+]
+
+# Decoder gates (C59 stream, from the static runs): one message per second
+# for the hour, no CRC failure, and no type 2-4 message dropped for an IODSSR
+# or IODP that differs from the mask's.
+[[metrics]]
+name = "{hour} B2b messages (C59)"
+source = "{work_dir}/b2b_{hour}_static_run.json"
+path = "b2b.messages"
+min = 3600
+readme = "docs/bds_ppp_b2b.md"
+foreach = [{ hour = "046r" }, { hour = "233h" }]
+
+[[metrics]]
+name = "{hour} B2b {field}"
+source = "{work_dir}/b2b_{hour}_static_run.json"
+path = "b2b.{field}"
+max = 0
+readme = "docs/bds_ppp_b2b.md"
+foreach = [
+  { hour = "046r", field = "crc_failures" },
+  { hour = "046r", field = "iodssr_mismatches" },
+  { hour = "046r", field = "iodp_mismatches" },
+  { hour = "233h", field = "crc_failures" },
+  { hour = "233h", field = "iodssr_mismatches" },
+  { hour = "233h", field = "iodp_mismatches" },
+]
+
+# PPP gates (reproduced 2026-11-07, Linux gcc): static float PPP on both hours
+# after one hour.
+[[metrics]]
+name = "b2b {hour} static H at 60 min (m)"
+source = "{work_dir}/summary.json"
+path = "runs.b2b_{hour}_static.checkpoints.60min.h_m"
+max = 0.20
+readme = "docs/bds_ppp_b2b.md"
+foreach = [{ hour = "046r" }, { hour = "233h" }]
+
+[[metrics]]
+name = "b2b {hour} static |U| at 60 min (m)"
+source = "{work_dir}/summary.json"
+path = "runs.b2b_{hour}_static.checkpoints.60min.abs_up_m"
+max = 0.40
+readme = "docs/bds_ppp_b2b.md"
+foreach = [{ hour = "046r" }, { hour = "233h" }]
+
+# docs/bds_ppp_b2b.md table values; reported, not gated.
+[[metrics]]
+name = "table: b2b {run} {field} at {t}"
+source = "{work_dir}/summary.json"
+path = "runs.{run}.checkpoints.{t}.{field}"
+gate = false
+abs_tol = 0.05
+readme = "docs/bds_ppp_b2b.md table"
+foreach = [
+  { run = "b2b_046r_static", t = "30min", field = "h_m", expected = 0.277 },
+  { run = "b2b_046r_static", t = "30min", field = "up_m", expected = 0.020 },
+  { run = "b2b_046r_static", t = "60min", field = "h_m", expected = 0.142 },
+  { run = "b2b_046r_static", t = "60min", field = "up_m", expected = -0.286 },
+  { run = "b2b_046r_kinematic", t = "30min", field = "h_m", expected = 0.301 },
+  { run = "b2b_046r_kinematic", t = "30min", field = "up_m", expected = 0.141 },
+  { run = "b2b_046r_kinematic", t = "60min", field = "h_m", expected = 0.180 },
+  { run = "b2b_046r_kinematic", t = "60min", field = "up_m", expected = -0.559 },
+  { run = "b2b_233h_static", t = "30min", field = "h_m", expected = 0.218 },
+  { run = "b2b_233h_static", t = "30min", field = "up_m", expected = 0.160 },
+  { run = "b2b_233h_static", t = "60min", field = "h_m", expected = 0.100 },
+  { run = "b2b_233h_static", t = "60min", field = "up_m", expected = -0.105 },
+  { run = "b2b_233h_kinematic", t = "30min", field = "h_m", expected = 0.179 },
+  { run = "b2b_233h_kinematic", t = "30min", field = "up_m", expected = -0.053 },
+  { run = "b2b_233h_kinematic", t = "60min", field = "h_m", expected = 0.060 },
+  { run = "b2b_233h_kinematic", t = "60min", field = "up_m", expected = -0.174 },
+]
+
+[[metrics]]
+name = "table: b2b {run} horizontal below 0.2 m from (min)"
+source = "{work_dir}/summary.json"
+path = "runs.{run}.convergence_h_below_0p20_min"
+gate = false
+abs_tol = 1.5
+readme = "docs/bds_ppp_b2b.md table"
+foreach = [
+  { run = "b2b_046r_static", expected = 41.53 },
+  { run = "b2b_233h_static", expected = 40.78 },
+]
