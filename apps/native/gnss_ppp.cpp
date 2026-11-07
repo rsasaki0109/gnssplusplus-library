@@ -95,7 +95,9 @@ struct Options {
     bool causal = false;
     // Post-processing forward + backward (--combined).
     bool combined = false;
-    double combined_max_fix_difference_m = 0.05;
+    // PPP-AR fixes of the two passes agree to a few cm horizontally but up to
+    // ~10 cm in height (MADOCA, MIZU): wider than gnss solve's 5 cm.
+    double combined_max_fix_difference_m = 0.10;
     double ssr_latency_s = 0.0;
     bool ssr_latency_set = false;
     bool low_dynamics_mode = false;
@@ -319,7 +321,7 @@ void printUsage(const char* program_name) {
         << "                          combine both passes at each epoch (not with CLAS)\n"
         << "  --combined-fix-tolerance <m>\n"
         << "                          With --combined, two FIX solutions further apart\n"
-        << "                          are averaged as FLOAT (default: 0.05)\n"
+        << "                          are averaged as FLOAT (default: 0.10)\n"
         << "  --ssr-latency <s>       With --realtime and --ssr-rtcm: use each SSR update\n"
         << "                          from <s> seconds after its reference epoch, when a\n"
         << "                          receiver has it (default 0)\n"
