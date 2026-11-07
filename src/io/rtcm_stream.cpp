@@ -51,6 +51,7 @@ void RTCMStreamDecoder::clear() {
     processor_.resetStats();
     navigation_data_.clear();
     reference_time_.reset();
+    last_observation_time_.reset();
 }
 
 void RTCMStreamDecoder::setReferenceTime(const GNSSTime& time) {
@@ -101,11 +102,18 @@ bool RTCMStreamDecoder::pushFrame(const uint8_t* buffer, size_t size, std::vecto
                     reference_time_ = event.observation.time;
                 }
             }
+            if (event.has_observation && isNormalizedGpst(event.observation.time) &&
+                (!last_observation_time_ || event.observation.time > *last_observation_time_)) {
+                last_observation_time_ = event.observation.time;
+            }
         }
 
         if (rtcm_utils::isEphemerisMessage(message.type)) {
             event.has_navigation = processor_.decodeNavigationData(message, event.navigation);
             if (event.has_navigation) {
+                stampEphemerisReceptionTimes(
+                    event.navigation, navigation_data_,
+                    last_observation_time_ ? &*last_observation_time_ : nullptr);
                 mergeNavigationData(navigation_data_, event.navigation);
                 if (!reference_time_) {
                     // Only GPS/Galileo/BeiDou/QZSS ephemerides seed; GLONASS (1020) times

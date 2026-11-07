@@ -405,6 +405,8 @@ public:
      * Useful when merging ephemerides decoded from a stream that repeats them.
      */
     bool addEphemerisIfNew(const Ephemeris& eph);
+    /** The held record that is the same broadcast as `eph` (see addEphemerisIfNew()), or null. */
+    const Ephemeris* findSameBroadcast(const Ephemeris& eph) const;
 
     /**
      * @brief Remove exactly one stored record, identified by every field.
@@ -597,6 +599,19 @@ private:
  * systems from toe.
  */
 GNSSTime ephemerisAvailableFrom(const Ephemeris& eph);
+
+/**
+ * @brief Date stream-decoded ephemerides without a transmission time.
+ *
+ * RTCM 1019 / 1042 / 1044 / 1045 / 1046 carry no transmission time. Each
+ * record of `decoded` whose tof is unset takes the tof of the same broadcast
+ * already in `held` (a rebroadcast keeps its first reception), else
+ * `reception_time` when given: the stream time it arrived at, i.e. the
+ * latest observation epoch decoded before it. The records are then added to
+ * `held` (addEphemerisIfNew()).
+ */
+void stampEphemerisReceptionTimes(NavigationData& decoded, NavigationData& held,
+                                  const GNSSTime* reception_time);
 
 /**
  * @brief Precise orbit and clock data

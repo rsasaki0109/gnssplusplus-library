@@ -585,26 +585,51 @@ void NavigationData::setGalileoEphemerisSource(GalileoEphemerisSource source) {
     ++revision_;
 }
 
-bool NavigationData::addEphemerisIfNew(const Ephemeris& eph) {
+const Ephemeris* NavigationData::findSameBroadcast(const Ephemeris& eph) const {
     const auto it = ephemeris_data.find(eph.satellite);
-    if (it != ephemeris_data.end()) {
-        // Galileo I/NAV and F/NAV share IODnav but differ in clock reference
-        // (data-source bits 9 / 8); the remaining source bits vary between
-        // RINEX writers for the same broadcast record.
-        constexpr int kGalClockSourceMask = (1 << 8) | (1 << 9);
-        const bool galileo = eph.satellite.system == GNSSSystem::Galileo;
-        for (const auto& existing : it->second) {
-            if (existing.iode == eph.iode &&
-                std::abs(existing.toe - eph.toe) < 1e-3 &&
-                std::abs(existing.toc - eph.toc) < 1e-3 &&
-                (!galileo || (existing.data_source_code & kGalClockSourceMask) ==
-                                 (eph.data_source_code & kGalClockSourceMask))) {
-                return false;
-            }
+    if (it == ephemeris_data.end()) {
+        return nullptr;
+    }
+    // Galileo I/NAV and F/NAV share IODnav but differ in clock reference
+    // (data-source bits 9 / 8); the remaining source bits vary between
+    // RINEX writers for the same broadcast record.
+    constexpr int kGalClockSourceMask = (1 << 8) | (1 << 9);
+    const bool galileo = eph.satellite.system == GNSSSystem::Galileo;
+    for (const auto& existing : it->second) {
+        if (existing.iode == eph.iode &&
+            std::abs(existing.toe - eph.toe) < 1e-3 &&
+            std::abs(existing.toc - eph.toc) < 1e-3 &&
+            (!galileo || (existing.data_source_code & kGalClockSourceMask) ==
+                             (eph.data_source_code & kGalClockSourceMask))) {
+            return &existing;
         }
+    }
+    return nullptr;
+}
+
+bool NavigationData::addEphemerisIfNew(const Ephemeris& eph) {
+    if (findSameBroadcast(eph) != nullptr) {
+        return false;
     }
     addEphemeris(eph);
     return true;
+}
+
+void stampEphemerisReceptionTimes(NavigationData& decoded, NavigationData& held,
+                                  const GNSSTime* reception_time) {
+    for (auto& [satellite, ephemerides] : decoded.ephemeris_data) {
+        (void)satellite;
+        for (auto& eph : ephemerides) {
+            if (eph.tof.week == 0 && eph.tof.tow == 0.0) {
+                if (const Ephemeris* first = held.findSameBroadcast(eph)) {
+                    eph.tof = first->tof;
+                } else if (reception_time != nullptr) {
+                    eph.tof = *reception_time;
+                }
+            }
+            held.addEphemerisIfNew(eph);
+        }
+    }
 }
 
 bool NavigationData::removeEphemeris(const Ephemeris& eph) {
