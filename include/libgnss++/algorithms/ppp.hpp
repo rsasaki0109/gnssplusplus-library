@@ -404,6 +404,11 @@ private:
     // (not the band-7 B2b signal the RINEX reader may select) and its own
     // receiver clock.
     bool bds_b2b_corrections_ = false;
+    // Corrections loaded as held updates sampled on the step grid (Galileo
+    // HAS IDD / SIS, PPP-B2b): an epoch uses the sample at or before it, and
+    // the end of a hold is marked, so a satellite has no correction in a gap
+    // instead of the last sample held on or the next update used early.
+    bool ssr_held_samples_ = false;
     bool ionex_products_loaded_ = false;
     bool dcb_products_loaded_ = false;
     struct OceanLoadingCoefficients {

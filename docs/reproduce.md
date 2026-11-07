@@ -1152,10 +1152,11 @@ python3 apps/gnss.py reproduce has-sis-ppp --has-sis-data-root /datasets/cssrlib
 
 Local result (MSVC Release, 2026-10-01): every metric passes. Each hour
 yields 432 MT1 messages without a CRC failure. The 2025-02-15 static run is at
-0.031 / +0.126 m after 30 min and 0.184 / -0.123 m after one hour (gates:
-H <= 0.20 m, |U| <= 0.40 m at 30 and 60 min; before the static
+0.031 / +0.126 m after 30 min and 0.172 / -0.121 m after one hour (gates:
+H <= 0.20 m, |U| <= 0.40 m at 30 and 60 min; 0.184 m after one hour before
+expired HAS corrections stopped being applied, 2026-11-07; before the static
 one-update-per-epoch fix 0.026 / +0.184 m and 0.010 / +0.041 m; the kinematic
-run, unchanged, ends at 0.184 / -0.256 m). The 2025-08-21 hour is reported
+run ends at 0.173 / -0.252 m). The 2025-08-21 hour is reported
 only: libgnss++ ends 0.1-0.4 m low there depending on the correction source
 (0.7-0.8 m before the static fix, about 1 m before the solid-earth-tide fix). Kamakura
 is outside the HAS service area, so the numbers are indicative. See

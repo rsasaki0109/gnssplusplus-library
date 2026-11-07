@@ -5,6 +5,7 @@
 #include <cctype>
 #include <ctime>
 #include <iostream>
+#include <iterator>
 #include <fstream>
 #include <limits>
 #include <sstream>
@@ -193,6 +194,15 @@ bool SSRProducts::interpolateCorrection(const SatelliteId& sat,
     }
 
     const auto& entries = sat_it->second;
+    // A held update ended at the newest entry at or before this epoch.
+    {
+        const auto newest = std::upper_bound(
+            entries.begin(), entries.end(), time,
+            [](const GNSSTime& lhs, const SSROrbitClockCorrection& rhs) { return lhs < rhs.time; });
+        if (newest != entries.begin() && std::prev(newest)->hold_end) {
+            return false;
+        }
+    }
     const bool galileo_clock_withdrawal_active =
         sat.system == GNSSSystem::Galileo &&
         (clock_selection_policy == SSRClockSelectionPolicy::MrtklibLiteralBaseHold ||

@@ -2894,6 +2894,9 @@ TEST(PPPTest, ProcessorHasIddProfileHoldsIodeTaggedUpdatesAndRtcmCodeBiases) {
     ASSERT_TRUE(query(processor, 345699.0));
     EXPECT_NEAR(clock_m, 0.24, 1e-9);
     EXPECT_EQ(iode, 78);
+    // and not after it.
+    EXPECT_FALSE(query(processor, 345700.0));
+    EXPECT_FALSE(query(processor, 346000.0));
 
     // The legacy profile keeps the historical conversion (no IODE tag).
     PPPProcessor legacy;
@@ -3881,7 +3884,7 @@ TEST(PPPTest, ProcessorLoadsBdsB2bUpdates) {
     nav_data.setBeiDouEphemerisSource(NavigationData::BeiDouEphemerisSource::BCnav1);
 
     const GNSSTime t0 = gps.toe;
-    std::vector<io::BdsB2bUpdate> updates(3);
+    std::vector<io::BdsB2bUpdate> updates(4);
     updates[0].satellite = gps.satellite;
     updates[0].time = t0;
     updates[0].iode = 77;
@@ -3901,6 +3904,12 @@ TEST(PPPTest, ProcessorLoadsBdsB2bUpdates) {
     updates[2].satellite = gps.satellite;
     updates[2].time = t0 + 30.0;
     updates[2].usable = false;
+    // A new valid pair 30 s after that.
+    updates[3].satellite = gps.satellite;
+    updates[3].time = t0 + 60.0;
+    updates[3].iode = 77;
+    updates[3].iod_corr = 3;
+    updates[3].c0_m = 0.7;
 
     PPPProcessor processor;
     ASSERT_TRUE(processor.loadBdsB2bProducts(updates, nav_data, 1.0));
@@ -3939,6 +3948,64 @@ TEST(PPPTest, ProcessorLoadsBdsB2bUpdates) {
     EXPECT_NEAR(code_bias_m.at(rtcmSsrSignalId(GNSSSystem::BeiDou, SignalType::BDS_B1I)), 3.8, 1e-12);
     EXPECT_NEAR(code_bias_m.at(rtcmSsrSignalId(GNSSSystem::BeiDou, SignalType::BDS_B3I)), 0.0, 1e-12);
 
-    // After the unusable update G01 has no correction.
+    // After the unusable update G01 has no correction: neither the last pair
+    // held on nor the next one used early.
+    EXPECT_FALSE(processor.interpolateLoadedSSRCorrection(gps.satellite, t0 + 30.0, orbit, clock_m));
     EXPECT_FALSE(processor.interpolateLoadedSSRCorrection(gps.satellite, t0 + 40.0, orbit, clock_m));
+    EXPECT_FALSE(processor.interpolateLoadedSSRCorrection(gps.satellite, t0 + 59.0, orbit, clock_m));
+    ASSERT_TRUE(processor.interpolateLoadedSSRCorrection(gps.satellite, t0 + 60.0, orbit, clock_m));
+    EXPECT_NEAR(clock_m, -0.7, 1e-12);
+    // The new pair holds for 96 s at most.
+    ASSERT_TRUE(processor.interpolateLoadedSSRCorrection(gps.satellite, t0 + 155.0, orbit, clock_m));
+    EXPECT_NEAR(clock_m, -0.7, 1e-12);
+    EXPECT_FALSE(processor.interpolateLoadedSSRCorrection(gps.satellite, t0 + 156.0, orbit, clock_m));
+    EXPECT_FALSE(processor.interpolateLoadedSSRCorrection(gps.satellite, t0 + 300.0, orbit, clock_m));
+}
+
+TEST(PPPTest, SSRProductsHoldEndStopsTheLastSample) {
+    SSRProducts products;
+    const SatelliteId g05(GNSSSystem::GPS, 5);
+    const GNSSTime t0(2350, 100000.0);
+    SSROrbitClockCorrection held;
+    held.satellite = g05;
+    held.orbit_reference_time = t0;
+    held.clock_reference_time = t0;
+    held.iode = 40;
+    held.orbit_correction_ecef = Vector3d(0.1, 0.2, 0.3);
+    held.clock_correction_m = 0.4;
+    held.orbit_valid = true;
+    held.clock_valid = true;
+    for (int second = 0; second < 5; ++second) {
+        held.time = t0 + static_cast<double>(second);
+        products.addCorrection(held);
+    }
+    SSROrbitClockCorrection end;
+    end.satellite = g05;
+    end.time = t0 + 5.0;
+    end.iode = -1;
+    end.hold_end = true;
+    products.addCorrection(end);
+    SSROrbitClockCorrection next = held;
+    next.time = t0 + 20.0;
+    next.orbit_reference_time = next.time;
+    next.clock_reference_time = next.time;
+    next.clock_correction_m = 0.9;
+    products.addCorrection(next);
+
+    Vector3d orbit = Vector3d::Zero();
+    double clock_m = 0.0;
+    ASSERT_TRUE(products.interpolateCorrection(g05, t0 + 4.0, orbit, clock_m));
+    EXPECT_NEAR(clock_m, 0.4, 1e-12);
+    // From the end of the hold to the next sample: no correction, with or
+    // without future samples allowed.
+    for (const double dt : {5.0, 5.5, 12.0, 19.9}) {
+        for (const bool allow_future : {true, false}) {
+            EXPECT_FALSE(products.interpolateCorrection(
+                g05, t0 + dt, orbit, clock_m, nullptr, nullptr, nullptr, nullptr, nullptr,
+                nullptr, nullptr, 0, nullptr, nullptr, nullptr, allow_future))
+                << "dt " << dt << " allow_future " << allow_future;
+        }
+    }
+    ASSERT_TRUE(products.interpolateCorrection(g05, t0 + 20.0, orbit, clock_m));
+    EXPECT_NEAR(clock_m, 0.9, 1e-12);
 }

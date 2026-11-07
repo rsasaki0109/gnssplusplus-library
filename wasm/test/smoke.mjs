@@ -231,13 +231,13 @@ export async function runSmoke(factoryFor, log = console.log, options = {}) {
 
     // BeiDou PPP-B2b (C59 stream; BDS on the B-CNAV1 records of the RINEX 4
     // NAV), 30 min static with the igs20 antenna model. Native gnss ppp: final
-    // position below (H 0.30 m after 30 min, 0.15 m after the hour).
+    // position below (H 0.28 m after 30 min, 0.14 m after the hour).
     await run(buildPostCommand({
       mode: 'ppp-static', rover: '046r_rnx.obs', nav: '046r_rnx.nav', corrections: 'b2b',
       b2bLog: '046r_bdsb2b.txt', antex: 'igs20.atx', elevationMask: '10', maxEpochs: '1800', out: 'b2b.pos',
     }));
     const b2b = parseSolution('b2b.pos', text('b2b.pos'));
-    const b2bDelta = ecefDistance(b2b, [-3962108.930432, 3381310.000330, 3668679.299290]);
+    const b2bDelta = ecefDistance(b2b, [-3962108.516625, 3381309.558166, 3668678.894529]);
     log(`PPP-B2b: ${b2b.n} epochs, H ${horizontalError(b2b, [-3962108.6836, 3381309.5672, 3668678.6720]).toFixed(3)} m, `
       + `final ${(b2bDelta * 1000).toFixed(2)} mm from native`);
     assert.equal(b2b.n, 1800);

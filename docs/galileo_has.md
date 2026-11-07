@@ -156,12 +156,12 @@ in the IDD table below:
 
 | Run | 10 min | 20 min | 30 min | 60 min | Converged H < 0.20 m | Converged \|U\| < 0.40 m |
 |---|---|---|---|---|---:|---:|
-| 2025-02-15 17h, libgnss++ SIS, static | 0.473 / +0.257 m | 0.102 / +0.075 m | **0.031 / +0.126 m** | **0.184 / -0.123 m** | 58.7 min | **4.0 min** |
-| 2025-02-15 17h, libgnss++ SIS, kinematic | 0.521 / +0.290 m | 0.117 / +0.123 m | 0.052 / +0.250 m | 0.184 / -0.256 m | 59.4 min | 5.2 min |
+| 2025-02-15 17h, libgnss++ SIS, static | 0.473 / +0.257 m | 0.102 / +0.075 m | **0.031 / +0.126 m** | **0.172 / -0.121 m** | 46.4 min | **4.0 min** |
+| 2025-02-15 17h, libgnss++ SIS, kinematic | 0.521 / +0.290 m | 0.117 / +0.123 m | 0.052 / +0.250 m | 0.173 / -0.252 m | 48.8 min | 5.2 min |
 | 2025-02-15 17h, cssrlib SIS, static (10 deg, E29 excluded, igs20.atx) | 0.531 / +0.450 m | 0.220 / -0.033 m | 0.077 / +0.193 m | 0.153 / -0.065 m | 48.4 min | 45.1 min |
 | 2025-02-15 17h, libgnss++ broadcast only, GPS + Galileo | 0.454 / -0.145 m | 0.122 / +0.214 m | 0.192 / +0.086 m | 0.319 / +0.123 m | never | 9.3 min |
-| 2025-08-21 07h, libgnss++ SIS, static | 0.849 / -0.317 m | 0.641 / +0.014 m | 0.668 / -0.066 m | 0.520 / -0.400 m | never | never |
-| 2025-08-21 07h, libgnss++ SIS, kinematic | 0.404 / +0.314 m | 0.368 / +0.504 m | 0.385 / +0.322 m | 0.372 / -0.540 m | never | never |
+| 2025-08-21 07h, libgnss++ SIS, static | 0.849 / -0.317 m | 0.641 / +0.014 m | 0.667 / -0.062 m | 0.438 / -0.301 m | never | 46.1 min |
+| 2025-08-21 07h, libgnss++ SIS, kinematic | 0.404 / +0.314 m | 0.368 / +0.504 m | 0.376 / +0.313 m | 0.267 / -0.416 m | never | never |
 | 2025-08-21 07h, cssrlib SIS, static (10 deg, L1 C/A + L2 CL) | 0.303 / -0.663 m | 0.112 / -0.501 m | 0.079 / -0.186 m | 0.079 / +0.212 m | 18.1 min | 22.2 min |
 | 2025-08-21 07h, cssrlib SIS, static (15 deg, L1 C/A + L2 W) | 0.381 / -1.214 m | 0.117 / -0.629 m | 0.139 / -0.607 m | 0.084 / +0.563 m | 18.4 min | never |
 | 2025-08-21 07h, libgnss++ JPL GDGPS RTCM SSR, GPS + Galileo | 1.050 / +0.886 m | 0.719 / -0.007 m | 0.640 / +0.092 m | 0.524 / -0.113 m | never | 17.8 min |
@@ -172,6 +172,17 @@ The lane gates the 2025-02-15 static run (H <= 0.20 m and |U| <= 0.40 m at
 30 and 60 min) and the decoder (all 432 MT1 messages of each hour, no CRC
 failure), and reports the other rows. The JPL and broadcast-only rows use the
 observation file limited to GPS and Galileo.
+
+**Expired corrections (2026-11-07).** A held SIS update ends with its ICD
+validity, and HAS ends one explicitly by sending a satellite's clock as
+"data not available" (G18 from 17:49 on 2025-02-15, while its orbit keeps
+coming). PPP used to keep applying the last sample after that, or, in a gap
+shorter than 15 minutes, interpolate towards the next update, possibly one
+of another IODE. Now the satellite has no correction, and is not used, until
+the next update, as in cssrlib. On these hours this moves the libgnss++ SIS
+rows above at 60 min: 2025-02-15 static 0.184 -> 0.172 m, kinematic
+0.184 -> 0.173 m; 2025-08-21 static 0.520 -> 0.438 m, kinematic
+0.372 -> 0.267 m. The IDD rows below are unchanged.
 
 **Static filter: one measurement update per epoch (2026-10-01).** The static
 rows above used to re-apply each epoch's rows eight times with the geometry

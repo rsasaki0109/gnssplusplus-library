@@ -700,6 +700,10 @@ struct SSROrbitClockCorrection {
     bool orbit_valid = false;
     bool clock_valid = false;
     bool clock_withdrawn = false;                       ///< Explicit invalid clock cell in the current CLAS network bank
+    /// End of a held update (PPPProcessor held-sample loaders): from this
+    /// time until the satellite's next sample there is no correction, and no
+    /// earlier sample is reused.
+    bool hold_end = false;
     bool base_clock_valid = false;
     bool mrtklib_base_clock_valid = false;
     bool ura_valid = false;
