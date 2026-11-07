@@ -189,7 +189,7 @@ void printUsage(const char* argv0) {
         << "    --no-rtcm-epoch-assembly  Treat every base RTCM observation message as its own epoch\n"
         << "                              (default: merge the per-constellation MSM messages of one epoch)\n"
         << "    --base-ecef <x> <y> <z>   Override base ECEF position\n"
-        << "    --causal                  Real-time equivalent: ephemerides only once broadcast or\n"
+        << "    --realtime                Real-time equivalent: ephemerides only once broadcast or\n"
         << "                              received, and the base RTCM station position as first\n"
         << "                              received (no epoch before it is solved)\n"
         << "    --quiet                   Suppress per-epoch prints\n"
@@ -417,7 +417,7 @@ ReplayConfig parseArguments(int argc, char** argv) {
             config.quiet = true;
         } else if (arg == "--verbose") {
             config.verbose = true;
-        } else if (arg == "--causal") {
+        } else if (arg == "--realtime") {
             config.causal = true;
         } else {
             argumentError("unknown or incomplete argument: " + arg, argv[0]);
@@ -928,7 +928,7 @@ size_t runReplay(const ReplayConfig& config) {
                   << " skipped_rover_epochs=" << skipped_rover_epochs
                   << " written_solutions=" << written_solutions
                   << " fixed_solutions=" << fixed_solutions
-                  << " causal=" << (config.causal ? "yes" : "no")
+                  << " realtime=" << (config.causal ? "yes" : "no")
                   << " out=" << config.output_pos_path
                   << " format=" << outputFormatString(config.output_format)
                   << "\n";

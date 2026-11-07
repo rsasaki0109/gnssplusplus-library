@@ -527,7 +527,7 @@ class PPPProcessingCases:
                                    "--ssr-rtcm-profile", "legacy", "--max-epochs", "1", "--out", out)
             self.assertNotIn("merged", legacy.stderr)
 
-    def test_ppp_and_spp_cli_causal_mode(self) -> None:
+    def test_ppp_and_spp_cli_realtime_mode(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_causal_cli_") as temp_dir:
             temp_root = Path(temp_dir)
             fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
@@ -546,23 +546,23 @@ class PPPProcessingCases:
             # Post-processed products and the interpolating legacy RTCM SSR
             # conversion are refused before any file is read.
             for args, message in (
-                (["--sp3", str(product)], "--causal cannot use --sp3/--clk"),
-                (["--clk", str(product)], "--causal cannot use --sp3/--clk"),
-                (["--ionex", str(product)], "--causal cannot use --ionex"),
+                (["--sp3", str(product)], "--realtime cannot use --sp3/--clk"),
+                (["--clk", str(product)], "--realtime cannot use --sp3/--clk"),
+                (["--ionex", str(product)], "--realtime cannot use --ionex"),
                 (["--ssr-rtcm", str(ssr), "--ssr-rtcm-profile", "legacy"],
-                 "--causal cannot use --ssr-rtcm-profile legacy"),
+                 "--realtime cannot use --ssr-rtcm-profile legacy"),
             ):
                 with self.subTest(tool="ppp", args=args):
                     result = self.run_gnss("ppp", "--obs", obs, "--nav", nav, "--out", out,
-                                           "--causal", *args)
+                                           "--realtime", *args)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn(message, result.stderr + result.stdout)
             for args in (["--sp3", str(product)], ["--ionex", str(product)]):
                 with self.subTest(tool="spp", args=args):
                     result = self.run_gnss("spp", "--obs", obs, "--nav", nav, "--out", out,
-                                           "--causal", *args)
+                                           "--realtime", *args)
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertIn("--causal cannot use --sp3/--clk/--ionex",
+                    self.assertIn("--realtime cannot use --sp3/--clk/--ionex",
                                   result.stderr + result.stdout)
             # The summary records the mode.
             for causal in (False, True):
@@ -570,15 +570,15 @@ class PPPProcessingCases:
                 result = self.run_gnss("ppp", "--obs", obs, "--nav", nav,
                                        "--max-epochs", "3", "--out", out, "--quiet",
                                        "--summary-json", str(summary_path),
-                                       *(["--causal"] if causal else []))
+                                       *(["--realtime"] if causal else []))
                 self.assertEqual(result.returncode, 0, msg=result.stderr)
-                self.assertIs(json.loads(summary_path.read_text())["causal"], causal)
+                self.assertIs(json.loads(summary_path.read_text())["realtime"], causal)
                 spp_summary = temp_root / f"spp_{causal}.json"
                 result = self.run_gnss("spp", "--obs", obs, "--nav", nav, "--max-epochs", "3",
                                        "--out", out, "--quiet", "--summary-json", str(spp_summary),
-                                       *(["--causal"] if causal else []))
+                                       *(["--realtime"] if causal else []))
                 self.assertEqual(result.returncode, 0, msg=result.stderr)
-                self.assertIs(json.loads(spp_summary.read_text())["causal"], causal)
+                self.assertIs(json.loads(spp_summary.read_text())["realtime"], causal)
 
     def test_ppp_cli_b2b_arguments_and_bcnav1_requirement(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_b2b_cli_") as temp_dir:
