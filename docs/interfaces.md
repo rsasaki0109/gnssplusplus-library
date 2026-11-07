@@ -876,6 +876,36 @@ nothing. If your navigation data carries ephemerides that are unhealthy because
 they are wrong (rather than flagged during a test campaign), RTK will still use
 them.
 
+### SSR URA in the PPP weights
+
+When the SSR corrections carry a URA (RTCM 1061 / 1067 / 1244 / 1250 / 1262,
+PPP-B2b message type 2, `ura_sigma_m=` in an `--ssr` CSV), `gnss ppp` adds
+URA² to the **code** variance only. The URA describes an orbit / clock error
+that changes slowly. The float ambiguity absorbs such an error in the phase, so
+it is not white phase noise. Added to the phase variance, against about 15 mm of
+ionosphere-free phase noise, it lets the code steer the solution (cssrlib does
+not use the URA at all). There are two exceptions, each following its reference
+implementation, where it also weights the phase:
+
+- coherent MADOCA (`--madoca-l6`): MADOCALIB, with `stats-uraratio = 0.1`
+  (0.1 URA² on code and phase);
+- the CLAS OSR filter (`--clas-osr`): its own MRTKLIB-parity weighting.
+
+Until 2026-11-07 every other SSR source added URA² to the phase as well.
+
+- **PPP-B2b (Kamakura, URA 0.07-0.22 m):** the static runs took 41 min to stay
+  below 0.2 m horizontal, against 16-18 min now ([PPP-B2b](bds_ppp_b2b.md)).
+- **RTCM SSR:** no public sample carries URA (the JPL GDGPS streams of
+  cssrlib-data send 1060 / 1243 orbit + clock, with or without biases, but no
+  1061 / 1244). Adding a URA to every satellite of those streams for a test
+  made the old weighting degrade the static results after one hour, while
+  code-only weighting kept them close to the results without URA:
+
+  | Run | No URA | URA 0.026 m, old | URA 0.222 m, old | URA 0.222 m, code only |
+  |---|---|---|---|---|
+  | 2025-08-21, legacy profile | 0.36 m | 0.55 m | 0.90 m | 0.43 m |
+  | 2024-02-12, `--ssr-rtcm-profile has-idd` | 0.11 m | 0.12 m | 0.23 m | 0.10 m |
+
 ### RTK hold-fix fallback (known weakness)
 
 After `min_hold_count` consecutive FIXED epochs (8 with `--preset low-cost`), an

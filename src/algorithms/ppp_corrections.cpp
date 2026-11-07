@@ -1250,14 +1250,17 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     const double ura_variance =
                         ura_variance_ratio * ura_sigma_m * ura_sigma_m;
                     deferred_variance_pr += ura_variance;
-                    // PPP-B2b: code only. The URA describes an orbit / clock
-                    // error that changes slowly, which the float ambiguity
-                    // absorbs; as white phase noise (0.07-0.22 m on the
-                    // Kamakura hours, against about 15 mm of
-                    // ionosphere-free phase noise) it made code dominate
-                    // and convergence took 40 min. cssrlib does not weight
-                    // by URA at all.
-                    if (!bds_b2b_corrections_) {
+                    // The URA describes an orbit / clock error that changes
+                    // slowly, which the float ambiguity absorbs. As white
+                    // phase noise (against about 15 mm of ionosphere-free
+                    // phase noise) it lets the code steer the solution:
+                    // PPP-B2b (URA 0.07-0.22 m) took 41 instead of 16-18 min
+                    // to stay below 0.2 m. So it weights the code only
+                    // (cssrlib does not use it at all), except where PPP
+                    // follows a reference that adds it to the phase too:
+                    // MADOCALIB (coherent MADOCA, ratio 0.1 above) and the
+                    // CLAS OSR filter.
+                    if (require_coherent_ssr_ || ppp_config_.use_clas_osr_filter) {
                         deferred_variance_cp += ura_variance;
                     }
                 }
