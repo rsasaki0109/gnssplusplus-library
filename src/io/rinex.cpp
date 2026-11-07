@@ -130,6 +130,13 @@ GNSSTime bdtWeekTowToGpst(int week, double tow) {
     return GNSSTime(week + kBdtWeekOffset, tow) + 14.0;
 }
 
+// Seconds counted from the start of `week`, which RINEX lets run below 0 or
+// past 604800 (the transmission time of message stays in the record's week).
+GNSSTime rinexWeekSeconds(int week, double seconds) {
+    const GNSSTime week_start(week, 0.0);
+    return seconds >= 0.0 ? week_start + seconds : week_start - (-seconds);
+}
+
 std::string trimCopy(const std::string& text) {
     const size_t first = text.find_first_not_of(' ');
     if (first == std::string::npos) {
@@ -2476,7 +2483,11 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
 
         // Suppress unused variable warnings
         (void)system_flag;
-        (void)transmission_time;
+        // Transmission time of message, in seconds of the record's week
+        // (RINEX lets it run below 0 or past 604800 to stay in that week);
+        // 0.9999E9 when unknown, as in merged BRDC files: tof stays unset.
+        const bool transmission_time_known =
+            std::isfinite(transmission_time) && std::abs(transmission_time) < 9.0e8;
 
         // Set times
         int week = static_cast<int>(system_week);
@@ -2492,12 +2503,18 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
         switch (eph.satellite.system) {
             case GNSSSystem::BeiDou:
                 eph.toe = bdtWeekTowToGpst(week, toe_seconds);
+                if (transmission_time_known) {
+                    eph.tof = rinexWeekSeconds(week + 1356, transmission_time) + 14.0;
+                }
                 eph.week = static_cast<uint16_t>(week);
                 eph.tgd_secondary = delay_2_or_iodc;
                 eph.iodc = static_cast<int>(fit_interval_or_aodc);
                 break;
             case GNSSSystem::Galileo:
                 eph.toe = GNSSTime(week, toe_seconds);
+                if (transmission_time_known) {
+                    eph.tof = rinexWeekSeconds(week, transmission_time);
+                }
                 eph.week = static_cast<uint16_t>(week);
                 eph.tgd_secondary = delay_2_or_iodc;
                 eph.iodc = static_cast<int>(iode);
@@ -2506,6 +2523,9 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
             case GNSSSystem::GPS:
             default:
                 eph.toe = GNSSTime(week, toe_seconds);
+                if (transmission_time_known) {
+                    eph.tof = rinexWeekSeconds(week, transmission_time);
+                }
                 eph.week = static_cast<uint16_t>(week);
                 eph.iodc = static_cast<int>(delay_2_or_iodc);
                 break;

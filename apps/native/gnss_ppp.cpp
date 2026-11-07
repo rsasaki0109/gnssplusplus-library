@@ -1210,6 +1210,9 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
         }
+        // Causal: only ephemerides already broadcast at the epoch, including
+        // those merged from an SSR file below.
+        nav_data.setCausal(options.causal);
 
         libgnss::PPPProcessor::PPPConfig ppp_config;
         ppp_config.orbit_file_path = options.sp3_path;

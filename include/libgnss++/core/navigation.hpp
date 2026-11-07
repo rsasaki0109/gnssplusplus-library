@@ -364,6 +364,17 @@ public:
     GalileoEphemerisSource galileoEphemerisSource() const { return galileo_ephemeris_source_; }
 
     /**
+     * @brief Causal (real-time equivalent) ephemeris selection.
+     *
+     * When set, getEphemeris() and getCnavEphemeris() only consider records
+     * already broadcast at the query time (ephemerisAvailableFrom()): a
+     * receiver cannot use the next upload before it is on air. Off (default):
+     * the record whose toe is nearest wins, whenever it was broadcast.
+     */
+    void setCausal(bool causal);
+    bool causal() const { return causal_; }
+
+    /**
      * @brief Which BeiDou broadcast ephemerides getEphemeris() may select.
      *
      * D1D2 (default) uses the D1 / D2 records of ephemeris_data, with the
@@ -572,7 +583,20 @@ private:
     size_t satellite_state_cache_limit_ = 0;
     GalileoEphemerisSource galileo_ephemeris_source_ = GalileoEphemerisSource::Any;
     BeiDouEphemerisSource beidou_ephemeris_source_ = BeiDouEphemerisSource::D1D2;
+    bool causal_ = false;
 };
+
+/**
+ * @brief When a broadcast record is first available to a receiver.
+ *
+ * Its transmission time when known (receiver RINEX NAV, RTCM / UBX
+ * decoders). Merged BRDC files write it as unknown (0.9999E9); then the
+ * offset at which each system starts broadcasting a record, as seen on the
+ * receiver RINEX NAV of the cssrlib-data Kamakura hours: GPS two hours
+ * before toe, QZSS one hour before, Galileo (after toe there) and the other
+ * systems from toe.
+ */
+GNSSTime ephemerisAvailableFrom(const Ephemeris& eph);
 
 /**
  * @brief Precise orbit and clock data
