@@ -11,7 +11,7 @@ service area (BDS-SIS-ICD-PPP-B2b, Version 1.0, 2020).
 | PPP-B2b message decoder (`io::BdsB2bDecoder`) | **Supported**: cssrlib `wn tow prn type len hex` logs, CRC-24Q, message types 1 (mask), 2 (orbit + URA), 3 (code bias), 4 (clock), the IODP / IODSSR / IOD Corr bookkeeping |
 | Decoder parity with cssrlib | **Exact**: every mask, orbit, clock and code-bias entry of C59, C60 and C62 on the two public Kamakura hours (about 1500 orbit, 35000 clock and 6500 code-bias entries per satellite and hour) equals cssrlib's `cssr_bds` decoder |
 | Float PPP with B2b corrections | **Supported** (`gnss_ppp --b2b <log>`): GPS (LNAV) and BDS-3 (B-CNAV1) |
-| Static float PPP on a known coordinate | **Validated** on the Kamakura hours below (0.10-0.14 m horizontal after one hour); `gnss reproduce bds-b2b-ppp` gates it ([lane](reproduce.md#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07)) |
+| Static float PPP on a known coordinate | **Validated** on the Kamakura hours below (0.01-0.08 m horizontal after one hour, below 0.2 m from 16-18 min); `gnss reproduce bds-b2b-ppp` gates it ([lane](reproduce.md#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07)) |
 | Browser GUI | **Supported**: *PPP corrections: BeiDou PPP-B2b* with the log recognised from its content; run on the public sample in Node and Chromium by the Docs workflow ([Browser GUI](web_app.md)) |
 | PPP-AR | **Not available**: PPP-B2b carries no phase biases |
 
@@ -55,6 +55,10 @@ What `gnss_ppp --b2b` does:
   the B1I code bias of message type 3 is applied) with its own receiver
   clock. GPS uses the observation's L1 / L2 codes; the B2b stream of the
   samples carries no GPS code biases.
+- **Weights.** The URA of message type 2 is added to the code variance only.
+  It describes an orbit / clock error that changes slowly, which the float
+  ambiguities absorb, so it is not phase noise (cssrlib does not use it at
+  all).
 
 ## Validation
 
@@ -66,8 +70,8 @@ B-CNAV1, and the coordinate -3962108.6836, 3381309.5672, 3668678.6720.
 
 | Hour | Horizontal / up after 1 h | Horizontal < 0.2 m from | Kinematic after 1 h | cssrlib `test_pppbds` (B1C / B2a) | cssrlib with B1I / B3I |
 |---|---|---|---|---|---|
-| 2025-02-15 17h (`046r`) | 0.14 m / -0.29 m | 41 min | 0.18 m / -0.56 m | 0.10 m | 0.14 m |
-| 2025-08-21 07h (`233h`) | 0.10 m / -0.11 m | 41 min | 0.06 m / -0.17 m | 0.03 m | 0.05 m |
+| 2025-02-15 17h (`046r`) | 0.01 m / -0.31 m | 16 min | 0.05 m / -0.53 m | 0.09 m, from 39 min | 0.14 m, from 54 min |
+| 2025-08-21 07h (`233h`) | 0.08 m / -0.22 m | 18 min | 0.01 m / -0.12 m | 0.04 m, from 14 min | 0.05 m, from 13 min |
 
 `gnss_ppp --b2b <log> --b2b-prn 59 --antex igs20_2353.atx --elevation-mask
 10 --static` (or `--kinematic`), 3599 epochs, about 7 s per hour. cssrlib
@@ -81,17 +85,20 @@ python3 apps/gnss.py reproduce bds-b2b-ppp --has-sis-data-root /data/cssrlib-dat
 
 The antenna file matters. In IGS week 2405 the BDS-3 z-PCOs of every band
 except B1 were raised by about 0.13 m. This halves the B1I - B3I difference
-that PPP applies. With `igs20_2425.atx` the static runs end at 0.19 m and
-0.12 m instead. `igs20_2353.atx` (the immutable IGS archive copy of the
-2025-02-15 week) and the week-2290 igs20 that cssrlib uses have the earlier
-values.
+that PPP applies. With `igs20_2425.atx` the static runs end at 0.02 m and
+0.04 m, and the 2025-08-21 hour stays below 0.2 m only from 28 min.
+`igs20_2353.atx` (the immutable IGS archive copy of the 2025-02-15 week) and
+the week-2290 igs20 that cssrlib uses have the earlier values.
 
-cssrlib's uncombined filter converges faster (horizontal below 0.2 m after
-about 15-20 minutes) and moves less when B2b withdraws a satellite: on the
-2025-08-21 hour B2b sends G15's, C34's and G18's clocks as invalid from 41,
-53 and 56 min, and both programs stop using them (before expired corrections
-stopped being applied, libgnss++ kept their last values and ended at
-0.03 m).
+**URA weights (2026-11-07).** Until 2026-11-07 the B2b URA (0.07-0.22 m on
+these hours) also went into the phase variance. Against about 15 mm of
+ionosphere-free phase noise that let the code (with its uncorrected GPS
+C1C / C1W and remaining BDS biases of up to 1-2 m ionosphere-free) steer the
+solution. Both static runs took 41 min to stay below 0.2 m and ended at
+0.14 m and 0.10 m; the kinematic runs ended at 0.18 m and 0.06 m. On the
+2025-08-21 hour B2b sends G15's, C34's and G18's clocks as invalid from 41, 53
+and 56 min, and both programs stop using them. libgnss++ now stays at
+0.05-0.08 m after that.
 
 Correction checks on the 2025-02-15 hour:
 

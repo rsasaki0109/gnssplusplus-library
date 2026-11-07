@@ -30,7 +30,7 @@ runner adds no scoring logic of its own.
 | Smartphone GSDC official submission | `gsdc-official` | ready | Linux GCC: full run ~3 h with `--jobs 4` on 4 cores (the third pass doubles the long drives) | **Pass on one build.** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 57742915 (`12d39d57...`), and the Kaggle score is readback-only. Every drive is pinned to one Linux GCC 15 build; MSVC outputs differ by up to 0.08 m and do not pass. On 2026-10-25 the full lane (25 stage-0 runs, 25 height maps, 40 final drives) ran on that build; the 9 final drives and 8 stage-0 runs already pinned to GCC came out byte-identical, and the assembled file was submitted as 57619467. 57626255 / 57629197 then solved ebf-x Mi8 from the taroz IdxStart epoch, 57664241 / 57678818 added the upstream third pass, 57717122 tuned 18 drives on Kaggle probes, 57733487 picked 22 drives by a rule fixed on train and snapped toward a train-truth road map, and 57742915 moves that road map into the factor graph; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
 | (docs, not a README row) Galileo HAS float PPP via IDD | `has-idd-ppp` | ready | ~1 min | **Pass.** Static and kinematic OBE4 hour; see [has-idd-ppp](#has-idd-ppp-galileo-has-float-ppp-2026-09-29) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) Galileo HAS float PPP via SIS (E6-B pages) | `has-sis-ppp` | ready | ~1 min | **Pass.** Decoder (432 MT1 messages per hour, no CRC failure) and static Kamakura 2025-02-15 hour; indicative only (outside the HAS service area); see [has-sis-ppp](#has-sis-ppp-galileo-has-sis-float-ppp-2026-09-30) and [Galileo HAS support](galileo_has.md) |
-| (docs, not a README row) BeiDou PPP-B2b float PPP | `bds-b2b-ppp` | ready | ~30 s | **Pass.** Decoder (3600 C59 messages per hour, no CRC failure or IOD mismatch) and static Kamakura 2025-02-15 / 2025-08-21 hours within 0.14 m horizontal / 0.29 m vertical after one hour; see [bds-b2b-ppp](#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07) and [BeiDou PPP-B2b support](bds_ppp_b2b.md) |
+| (docs, not a README row) BeiDou PPP-B2b float PPP | `bds-b2b-ppp` | ready | ~30 s | **Pass.** Decoder (3600 C59 messages per hour, no CRC failure or IOD mismatch) and static Kamakura 2025-02-15 / 2025-08-21 hours: horizontal below 0.2 m from 16 / 18 min, within 0.08 m horizontal / 0.32 m vertical after one hour; see [bds-b2b-ppp](#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07) and [BeiDou PPP-B2b support](bds_ppp_b2b.md) |
 | (docs, not a README row) Precise-product PPP with IGS final SP3/CLK | `igs-final-ppp` | ready | ~2 min | **Pass.** Static Kamakura 2025-02-15 / 2025-08-21 hours and OBE4 2023-08-17 hour within 0.32 m horizontal / 0.27 m vertical after one hour, level with RTKLIB demo5 on the same inputs; see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01) |
 
 Runtimes were measured on a 12-thread Windows 11 workstation with an MSVC
@@ -1188,19 +1188,23 @@ IODP mismatch.
 
 | Run | 30 min | 60 min | H < 0.20 m from |
 |---|---|---|---:|
-| 2025-02-15 static (gated) | 0.277 / +0.020 m | 0.142 / -0.286 m | 41.5 min |
-| 2025-02-15 kinematic | 0.301 / +0.141 m | 0.180 / -0.559 m | |
-| 2025-08-21 static (gated) | 0.218 / +0.160 m | 0.100 / -0.105 m | 40.8 min |
-| 2025-08-21 kinematic | 0.179 / -0.053 m | 0.060 / -0.174 m | |
+| 2025-02-15 static (gated) | 0.111 / -0.439 m | 0.014 / -0.311 m | 15.8 min |
+| 2025-02-15 kinematic | 0.108 / -0.240 m | 0.052 / -0.526 m | |
+| 2025-08-21 static (gated) | 0.090 / -0.058 m | 0.078 / -0.217 m | 18.1 min |
+| 2025-08-21 kinematic | 0.039 / -0.249 m | 0.013 / -0.120 m | |
 
-The gates are H <= 0.20 m and |U| <= 0.40 m after one hour on both static
-runs. The antenna file is pinned because the result depends on it. The B2b
+The gates are H <= 0.20 m and |U| <= 0.40 m after one hour, and H below
+0.20 m from no later than 25 min, on both static runs. Until the B2b URA
+stopped weighting the phase (2026-11-07) both static runs needed 41 min and
+ended at 0.142 / -0.286 m and 0.100 / -0.105 m; see
+[URA weights](bds_ppp_b2b.md#validation). The antenna file is pinned because the result depends on it. The B2b
 BDS orbits and clocks refer to the B3I phase centre, so PPP's B1I / B3I
 combination applies the B1I - B3I PCO difference of each BDS-3 satellite.
 IGS week 2405 raised the BDS-3 z-PCOs of every band except B1 by about
 0.13 m, which halves that difference. With `igs20_2425.atx` (the file of
-`igs-final-ppp`) the static runs end at 0.185 m (2025-02-15) and 0.117 m
-(2025-08-21) after one hour. cssrlib's `test_pppbds.py` uses igs20 of week
+`igs-final-ppp`) the static runs end at 0.021 m (2025-02-15) and 0.040 m
+(2025-08-21) after one hour, but the 2025-08-21 hour stays below 0.2 m only
+from 27.7 min. cssrlib's `test_pppbds.py` uses igs20 of week
 2290, which has the same BDS-3 PCOs as week 2353. See
 [BeiDou PPP-B2b support](bds_ppp_b2b.md) for the decoder parity with
 cssrlib and the comparison.

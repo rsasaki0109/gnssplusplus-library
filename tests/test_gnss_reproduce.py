@@ -427,6 +427,7 @@ class BdsB2bPppLaneTest(unittest.TestCase):
                 self.assertEqual(gated[f"{hour} B2b {field}"]["max"], 0)
             self.assertEqual(gated[f"b2b {hour} static H at 60 min (m)"]["max"], 0.20)
             self.assertEqual(gated[f"b2b {hour} static |U| at 60 min (m)"]["max"], 0.40)
+            self.assertEqual(gated[f"b2b {hour} static H < 0.20 m from (min)"]["max"], 25)
 
 
 class IgsFinalPppLaneTest(unittest.TestCase):
