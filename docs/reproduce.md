@@ -30,6 +30,7 @@ runner adds no scoring logic of its own.
 | Smartphone GSDC official submission | `gsdc-official` | ready | Linux GCC: full run ~3 h with `--jobs 4` on 4 cores (the third pass doubles the long drives) | **Pass on one build.** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 57742915 (`12d39d57...`), and the Kaggle score is readback-only. Every drive is pinned to one Linux GCC 15 build; MSVC outputs differ by up to 0.08 m and do not pass. On 2026-10-25 the full lane (25 stage-0 runs, 25 height maps, 40 final drives) ran on that build; the 9 final drives and 8 stage-0 runs already pinned to GCC came out byte-identical, and the assembled file was submitted as 57619467. 57626255 / 57629197 then solved ebf-x Mi8 from the taroz IdxStart epoch, 57664241 / 57678818 added the upstream third pass, 57717122 tuned 18 drives on Kaggle probes, 57733487 picked 22 drives by a rule fixed on train and snapped toward a train-truth road map, and 57742915 moves that road map into the factor graph; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
 | (docs, not a README row) Galileo HAS float PPP via IDD | `has-idd-ppp` | ready | ~1 min | **Pass.** Static and kinematic OBE4 hour; see [has-idd-ppp](#has-idd-ppp-galileo-has-float-ppp-2026-09-29) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) Galileo HAS float PPP via SIS (E6-B pages) | `has-sis-ppp` | ready | ~1 min | **Pass.** Decoder (432 MT1 messages per hour, no CRC failure) and static Kamakura 2025-02-15 hour; indicative only (outside the HAS service area); see [has-sis-ppp](#has-sis-ppp-galileo-has-sis-float-ppp-2026-09-30) and [Galileo HAS support](galileo_has.md) |
+| (docs, not a README row) BeiDou PPP-B2b float PPP | `bds-b2b-ppp` | ready | ~30 s | **Pass.** Decoder (3600 C59 messages per hour, no CRC failure or IOD mismatch) and static Kamakura 2025-02-15 / 2025-08-21 hours within 0.14 m horizontal / 0.29 m vertical after one hour; see [bds-b2b-ppp](#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07) and [BeiDou PPP-B2b support](bds_ppp_b2b.md) |
 | (docs, not a README row) Precise-product PPP with IGS final SP3/CLK | `igs-final-ppp` | ready | ~2 min | **Pass.** Static Kamakura 2025-02-15 / 2025-08-21 hours and OBE4 2023-08-17 hour within 0.32 m horizontal / 0.27 m vertical after one hour, level with RTKLIB demo5 on the same inputs; see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01) |
 
 Runtimes were measured on a 12-thread Windows 11 workstation with an MSVC
@@ -46,6 +47,7 @@ Release build. Lanes that run in parallel slow each other down.
 | PPC goal-matrix frozen tier inputs | `ppc-goal` | Not published; the 26 files (~33 MB) exist only in the `output/` tree of the checkout that produced the README. See [ppc-goal inputs](#ppc-goal-frozen-inputs) | `<ppc-goal-inputs>/` in the historical `output/` layout (`tokyo1_selected_quality_rtkbaseline_tier2_truthfree.pos`, `gici_common/tokyo1.pos`, ...); SHA-256 pinned in `scripts/experiments/ppc/stage_ppc_goal_inputs.py` |
 | Galileo HAS IDD sample ([hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data) `data/doy2023-229`) | `has-idd-ppp` | Download `OBE42023229c.obs`, `OBE42023229c.nav` and `idd2023229c.rtc` from that directory. The upstream license is not stated, so the files are not redistributed | `<has-data-root>/{OBE42023229c.obs,OBE42023229c.nav,idd2023229c.rtc}` |
 | Galileo HAS SIS samples ([hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data) `data/doy2025-046`, `data/doy2025-233`) plus IGS BRDC navigation | `has-sis-ppp` | Download `046r_rnx.obs`, `046r_gale6.txt`, `233h_rnx.obs`, `233h_gale6.txt` from those directories and the IGS merged navigation files `BRDC00WRD_S_2025{046,233}0000_01D_MN.rnx.gz` from `https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2025/{046,233}/` (gunzip next to them). The cssrlib-data license is not stated, so nothing is redistributed | `<has-sis-data-root>/doy2025-046/{046r_rnx.obs,046r_gale6.txt,BRDC00WRD_S_20250460000_01D_MN.rnx}`, same for `doy2025-233/233h_*` |
+| BeiDou PPP-B2b samples ([hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data) ec1dfa2c, `data/doy2025-046`, `data/doy2025-233`) plus `igs20_2353.atx` | `bds-b2b-ppp` | Download `046r_rnx.obs`, `046r_rnx.nav`, `046r_bdsb2b.txt`, `233h_rnx.obs`, `233h_rnx.nav`, `233h_bdsb2b.txt` from those directories (the `*_rnx.nav` files are the receiver's RINEX 4 NAV with the B-CNAV1 records) and the immutable IGS archive copy `https://files.igs.org/pub/station/general/pcv_archive/igs20_2353.atx` (SHA-256 `485720bd...`). Nothing from cssrlib-data is redistributed | `<has-sis-data-root>/igs20_2353.atx`, `<has-sis-data-root>/doy2025-046/{046r_rnx.obs,046r_rnx.nav,046r_bdsb2b.txt}`, same for `doy2025-233/233h_*` |
 | IGS final orbits/clocks and `igs20.atx` (public, IGS) on top of the two cssrlib-data sets above | `igs-final-ppp` | `IGS0OPSFIN_{20250460000,20252330000,20232290000}_01D_{15M_ORB.SP3,30S_CLK.CLK}.gz` from `https://igs.bkg.bund.de/root_ftp/IGS/products/{2353,2380,2275}/` (gunzip next to the observations of that day) and `igs20.atx` from the immutable IGS archive copy `https://files.igs.org/pub/station/general/pcv_archive/igs20_2425.atx.gz` (gunzip; SHA-256 `8715268e...`) | `<has-sis-data-root>/igs20.atx`, `<has-sis-data-root>/doy2025-{046,233}/IGS0OPSFIN_2025{046,233}0000_01D_*` next to `{046r,233h}_rnx.obs`, and `<has-data-root>/IGS0OPSFIN_20232290000_01D_*` next to `OBE42023229c.obs` |
 | QZSS L6 CLAS archive | `clas-ppc` | Downloaded automatically from `https://sys.qzss.go.jp/archives/l6` | Cached under `<work-dir>/inputs/l6_cache` (about 1.7 GB of expanded SSR CSV per run) |
 
@@ -152,6 +154,9 @@ python3 apps/gnss.py reproduce has-sis-ppp --has-sis-data-root /datasets/cssrlib
 # Static float PPP with IGS final orbits/clocks on the same hours (docs lane)
 python3 apps/gnss.py reproduce igs-final-ppp --has-sis-data-root /datasets/cssrlib-data/data \
   --has-data-root /datasets/cssrlib-data/data/doy2023-229 --check
+
+# BeiDou PPP-B2b float PPP on the same hours (docs lane)
+python3 apps/gnss.py reproduce bds-b2b-ppp --has-sis-data-root /datasets/cssrlib-data/data --check
 ```
 
 Common options:
@@ -1162,6 +1167,43 @@ only: libgnss++ ends 0.1-0.4 m low there depending on the correction source
 is outside the HAS service area, so the numbers are indicative. See
 [Galileo HAS support](galileo_has.md) for the decoder parity with cssrlib and
 the full comparison.
+
+## bds-b2b-ppp: BeiDou PPP-B2b float PPP (2026-11-07)
+
+`bds-b2b-ppp` is a docs lane, not a README row. It runs `gnss_ppp --b2b
+--b2b-prn 59 --antex igs20_2353.atx --elevation-mask 10` static and kinematic
+on the two Kamakura hours of [hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data)
+(`data/doy2025-046`, 2025-02-15 17h, and `data/doy2025-233`, 2025-08-21 07h),
+each with its PPP-B2b log (C59, C60 and C62) and the receiver's RINEX 4 NAV,
+and scores each `.pos` against the cssrlib reference coordinate. The decoder
+statistics come from the `b2b` object of `gnss_ppp --summary-json`.
+
+```bash
+python3 apps/gnss.py reproduce bds-b2b-ppp --has-sis-data-root /datasets/cssrlib-data/data --check
+```
+
+Local result (Linux gcc 13.3 Release, 2026-11-07): every metric passes in
+30 s. Each hour holds 3600 C59 messages without a CRC failure or an IODSSR /
+IODP mismatch.
+
+| Run | 30 min | 60 min | H < 0.20 m from |
+|---|---|---|---:|
+| 2025-02-15 static (gated) | 0.277 / +0.020 m | 0.142 / -0.286 m | 41.5 min |
+| 2025-02-15 kinematic | 0.301 / +0.141 m | 0.180 / -0.559 m | |
+| 2025-08-21 static (gated) | 0.218 / +0.160 m | 0.100 / -0.105 m | 40.8 min |
+| 2025-08-21 kinematic | 0.179 / -0.053 m | 0.060 / -0.174 m | |
+
+The gates are H <= 0.20 m and |U| <= 0.40 m after one hour on both static
+runs. The antenna file is pinned because the result depends on it. The B2b
+BDS orbits and clocks refer to the B3I phase centre, so PPP's B1I / B3I
+combination applies the B1I - B3I PCO difference of each BDS-3 satellite.
+IGS week 2405 raised the BDS-3 z-PCOs of every band except B1 by about
+0.13 m, which halves that difference. With `igs20_2425.atx` (the file of
+`igs-final-ppp`) the static runs end at 0.185 m (2025-02-15) and 0.117 m
+(2025-08-21) after one hour. cssrlib's `test_pppbds.py` uses igs20 of week
+2290, which has the same BDS-3 PCOs as week 2353. See
+[BeiDou PPP-B2b support](bds_ppp_b2b.md) for the decoder parity with
+cssrlib and the comparison.
 
 ## igs-final-ppp: precise-product PPP (2026-10-01)
 

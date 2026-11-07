@@ -397,6 +397,8 @@ class PPPProcessingCases:
             self.assertIn("ambiguity resolution: on", result.stdout)
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(summary["ar_method"], "per-freq")
+            # PPP-B2b decoder statistics only with --b2b.
+            self.assertIsNone(summary["b2b"])
             self.assertTrue(summary["estimate_ionosphere"])
             self.assertFalse(summary["use_ionosphere_free"])
             self.assertEqual(summary["phase_measurement_min_lock_count"], 1)
