@@ -1,3 +1,4 @@
+#include "cli_numbers.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -246,7 +247,7 @@ Eigen::Vector3d parseVector3(const std::string& text, const std::string& arg) {
     std::string component;
     std::vector<double> values;
     while (std::getline(stream, component, ',')) {
-        values.push_back(std::stod(component));
+        values.push_back(libgnss_apps::optionDouble(arg, component));
     }
     if (values.size() != 3) {
         throw std::invalid_argument(arg + " requires exactly 3 comma-separated values, got: " + text);
@@ -817,7 +818,7 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         } else if (arg ==
                    "--integrity-student-t-degrees-of-freedom") {
             options.integrity_student_t_degrees_of_freedom =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
             if (options.integrity_student_t_degrees_of_freedom <= 0.0) {
                 argumentError(
                     "--integrity-student-t-degrees-of-freedom must be > 0",
@@ -836,7 +837,7 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         } else if (arg ==
                    "--integrity-heavy-tail-activation-sigma") {
             options.integrity_heavy_tail_activation_sigma =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
             if (options.integrity_heavy_tail_activation_sigma < 0.0) {
                 argumentError(
                     "--integrity-heavy-tail-activation-sigma must be >= 0",
@@ -855,7 +856,7 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.fusion_config.zupt_gnss_speed_gate_enable = false;
         } else if (arg == "--zupt-gnss-speed-threshold-mps") {
             options.fusion_config.zupt_gnss_speed_gate_threshold_mps =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--nhc") {
             options.fusion_config.nhc_enable = true;
         } else if (arg == "--no-nhc") {
@@ -864,28 +865,28 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             imu_grade = requireValue(arg, i, argc, argv);
         } else if (arg == "--align-vel-thresh") {
             options.fusion_config.align_velocity_threshold_mps =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--align-static-window-s") {
             options.fusion_config.align_static_window_s =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--align-heading-window-s") {
             options.fusion_config.align_heading_window_s =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--align-heading-min-samples") {
             options.fusion_config.align_heading_min_samples =
-                std::stoi(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--align-heading-max-scatter-deg") {
             options.fusion_config.align_heading_max_course_scatter_deg =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--heading-recovery-nis") {
             options.fusion_config.heading_recovery_nis_threshold =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--heading-recovery-min-bad-epochs") {
             options.fusion_config.heading_recovery_min_bad_epochs =
-                std::stoi(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--heading-recovery-cooldown-epochs") {
             options.fusion_config.heading_recovery_cooldown_epochs =
-                std::stoi(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--consider-before-heading-latch") {
             options.fusion_config.consider_attitude_and_biases_before_heading_latch = true;
         } else if (arg == "--independent-output-filter") {
@@ -901,23 +902,23 @@ FuseOptions parseArguments(int argc, char* argv[]) {
 
         if (arg == "--max-position-nis") {
             options.fusion_config.max_position_update_nis_per_observation =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--max-velocity-nis") {
             options.fusion_config.max_velocity_update_nis_per_observation =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--max-consecutive-velocity-gate-rejections") {
             options.fusion_config.max_consecutive_velocity_gate_rejections =
-                std::stoi(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--max-gnss-velocity-reanchor-mps") {
             options.fusion_config.max_gnss_velocity_reanchor_mps =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--max-consecutive-gate-rejections") {
             options.fusion_config.max_consecutive_gate_rejections =
-                std::stoi(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--preset") {
             options.rtk_preset = requireValue(arg, i, argc, argv);
         } else if (arg == "--ratio") {
-            options.ratio_threshold = std::stod(requireValue(arg, i, argc, argv));
+            options.ratio_threshold = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
             options.ratio_threshold_set = true;
         } else if (arg == "--ar-policy") {
             const auto value = requireValue(arg, i, argc, argv);
@@ -955,20 +956,20 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             }
         } else if (arg == "--max-pos-jump") {
             options.max_position_jump_m =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-update-outlier-threshold") {
             options.rtk_update_outlier_threshold =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--max-baseline-m") {
-            options.max_baseline_length_m = std::stod(requireValue(arg, i, argc, argv));
+            options.max_baseline_length_m = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--elevation-mask-deg") {
-            options.elevation_mask_deg = std::stod(requireValue(arg, i, argc, argv));
+            options.elevation_mask_deg = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--base-ecef") {
             if (i + 3 >= argc) {
                 throw std::invalid_argument("--base-ecef requires 3 values");
             }
             options.base_position_ecef =
-                Eigen::Vector3d(std::stod(argv[i + 1]), std::stod(argv[i + 2]), std::stod(argv[i + 3]));
+                Eigen::Vector3d(libgnss_apps::optionDouble(arg, argv[i + 1]), libgnss_apps::optionDouble(arg, argv[i + 2]), libgnss_apps::optionDouble(arg, argv[i + 3]));
             i += 3;
             options.base_position_override = true;
         } else if (arg == "--no-base-interp") {
@@ -982,7 +983,7 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.tightly_coupled_dd_imu = true;
             options.tightly_coupled_dd_code_only = true;
         } else if (arg == "--max-epochs") {
-            options.max_epochs = std::stoi(requireValue(arg, i, argc, argv));
+            options.max_epochs = libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--verbose") {
             options.verbose = true;
         } else if (arg == "--quiet") {
@@ -990,13 +991,13 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         } else if (arg == "--rtk-ins-prior") {
             options.rtk_ins_prior = true;
         } else if (arg == "--rtk-ins-prior-inflation") {
-            options.rtk_ins_prior_inflation = std::stod(requireValue(arg, i, argc, argv));
+            options.rtk_ins_prior_inflation = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-ins-prior-spp-gate") {
             options.rtk_ins_prior_spp_gate = true;
         } else if (arg == "--rtk-ins-prior-min-sats") {
-            options.rtk_ins_prior_min_sats = std::stoi(requireValue(arg, i, argc, argv));
+            options.rtk_ins_prior_min_sats = libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-ins-prior-max-nis") {
-            options.rtk_ins_prior_max_nis = std::stod(requireValue(arg, i, argc, argv));
+            options.rtk_ins_prior_max_nis = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-ins-prior-always") {
             options.rtk_ins_prior_spp_gate = false;
             options.rtk_ins_prior_max_nis = 0.0;
@@ -1032,32 +1033,32 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         } else if (arg == "--tc-sequential-doppler-update") {
             options.tc_sequential_doppler_update = true;
         } else if (arg == "--tc-doppler-sigma") {
-            options.tc_doppler_sigma_mps = std::stod(requireValue(arg, i, argc, argv));
+            options.tc_doppler_sigma_mps = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-doppler-max-baseline") {
-            options.tc_doppler_max_baseline_m = std::stod(requireValue(arg, i, argc, argv));
+            options.tc_doppler_max_baseline_m = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--imu-time-offset") {
-            options.imu_time_offset_s = std::stod(requireValue(arg, i, argc, argv));
+            options.imu_time_offset_s = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--imu-time-offset-score-start-epoch") {
             options.imu_time_offset_score_start_epoch =
-                std::stoi(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-tdcp-diagnostics") {
             options.tc_tdcp_diagnostics = true;
         } else if (arg == "--tc-ins-position-q-floor") {
-            options.tc_ins_position_q_floor_m2 = std::stod(requireValue(arg, i, argc, argv));
+            options.tc_ins_position_q_floor_m2 = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-ins-max-sample-gap") {
-            options.tc_ins_max_sample_gap_s = std::stod(requireValue(arg, i, argc, argv));
+            options.tc_ins_max_sample_gap_s = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-cp-pr-threshold") {
-            options.tc_cp_pr_threshold_m = std::stod(requireValue(arg, i, argc, argv));
+            options.tc_cp_pr_threshold_m = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-cp-pr-min-pairs") {
-            options.tc_cp_pr_min_pairs = std::stoi(requireValue(arg, i, argc, argv));
+            options.tc_cp_pr_min_pairs = libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-cp-pr-max-bad-pairs") {
-            options.tc_cp_pr_max_bad_pairs = std::stoi(requireValue(arg, i, argc, argv));
+            options.tc_cp_pr_max_bad_pairs = libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-cp-pr-escalation") {
-            options.tc_cp_pr_escalation_epochs = std::stoi(requireValue(arg, i, argc, argv));
+            options.tc_cp_pr_escalation_epochs = libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-ddpr-fde-threshold") {
-            options.tc_ddpr_fde_threshold_m = std::stod(requireValue(arg, i, argc, argv));
+            options.tc_ddpr_fde_threshold_m = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--tc-ddpr-max-fde-removals") {
-            options.tc_ddpr_max_fde_removals = std::stoi(requireValue(arg, i, argc, argv));
+            options.tc_ddpr_max_fde_removals = libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--arfilter") {
             options.arfilter_override = true;
             options.arfilter_value = true;
@@ -1067,17 +1068,17 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         } else if (arg == "--rtk-snr-weighting") {
             options.rtk_snr_weighting = true;
         } else if (arg == "--rtk-snr-reference-dbhz") {
-            options.rtk_snr_reference_dbhz = std::stod(requireValue(arg, i, argc, argv));
+            options.rtk_snr_reference_dbhz = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-snr-max-variance-scale") {
-            options.rtk_snr_max_variance_scale = std::stod(requireValue(arg, i, argc, argv));
+            options.rtk_snr_max_variance_scale = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--max-subset-ar-drop-steps") {
-            options.max_subset_ar_drop_steps = std::stoi(requireValue(arg, i, argc, argv));
+            options.max_subset_ar_drop_steps = libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--hold-kalman-update") {
             options.hold_kalman_update = true;
         } else if (arg == "--hold-kalman-update-validated-only") {
             options.hold_kalman_update_validated_only = true;
         } else if (arg == "--min-fix-satellites") {
-            options.min_fix_satellites = std::stoi(requireValue(arg, i, argc, argv));
+            options.min_fix_satellites = libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
             if (options.min_fix_satellites < 0) {
                 argumentError("--min-fix-satellites must be >= 0", argv[0]);
             }
@@ -1086,15 +1087,15 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         } else if (arg == "--rtk-single-stabilizer") {
             options.rtk_single_stabilizer = true;
         } else if (arg == "--rtk-adaptive-noise-alpha-phase") {
-            options.rtk_adaptive_noise_alpha_phase = std::stod(requireValue(arg, i, argc, argv));
+            options.rtk_adaptive_noise_alpha_phase = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-adaptive-noise-alpha-code") {
-            options.rtk_adaptive_noise_alpha_code = std::stod(requireValue(arg, i, argc, argv));
+            options.rtk_adaptive_noise_alpha_code = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-adaptive-noise-min-scale") {
-            options.rtk_adaptive_noise_min_scale = std::stod(requireValue(arg, i, argc, argv));
+            options.rtk_adaptive_noise_min_scale = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-adaptive-noise-max-scale") {
-            options.rtk_adaptive_noise_max_scale = std::stod(requireValue(arg, i, argc, argv));
+            options.rtk_adaptive_noise_max_scale = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-adaptive-noise-max-baseline") {
-            options.rtk_adaptive_noise_max_baseline_m = std::stod(requireValue(arg, i, argc, argv));
+            options.rtk_adaptive_noise_max_baseline_m = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-adaptive-noise-phase-only") {
             options.rtk_adaptive_noise_phase_only = true;
         } else if (arg == "--rtk-adaptive-noise-per-system-alpha") {
@@ -1104,15 +1105,15 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         } else if (arg == "--cmc-ref") {
             options.cmc_aware_reference_selection = true;
         } else if (arg == "--cmc-ref-level") {
-            options.cmc_ref_level_m = std::stod(requireValue(arg, i, argc, argv));
+            options.cmc_ref_level_m = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--cmc-ref-switch-epochs") {
-            options.cmc_ref_switch_epochs = std::stoi(requireValue(arg, i, argc, argv));
+            options.cmc_ref_switch_epochs = libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--cmc-ref-return-min-elev") {
-            options.cmc_ref_return_min_elev_deg = std::stod(requireValue(arg, i, argc, argv));
+            options.cmc_ref_return_min_elev_deg = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--cmc-ref-switch-max-elev-drop") {
-            options.cmc_ref_switch_max_elev_drop_deg = std::stod(requireValue(arg, i, argc, argv));
+            options.cmc_ref_switch_max_elev_drop_deg = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--cmc-ref-switch-min-elev") {
-            options.cmc_ref_switch_min_elev_deg = std::stod(requireValue(arg, i, argc, argv));
+            options.cmc_ref_switch_min_elev_deg = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else {
             argumentError("unknown or incomplete argument: " + arg, argv[0]);
         }
