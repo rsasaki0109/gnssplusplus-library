@@ -63,7 +63,8 @@ What `gnss_ppp --b2b` does:
 ## Validation
 
 Public data: [hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data)
-(commit `ec1dfa2c`, no stated license, so nothing is redistributed) has two
+(commit `ec1dfa2c`; MIT-licensed, but its LICENSE leaves the sample data to
+their sources' terms, so nothing is redistributed) has two
 one-hour static Kamakura recordings (Septentrio mosaic-X5, JAVRINGANT_DM),
 each with the B2b messages of C59, C60 and C62 and a RINEX 4 NAV with
 B-CNAV1, and the coordinate -3962108.6836, 3381309.5672, 3668678.6720.

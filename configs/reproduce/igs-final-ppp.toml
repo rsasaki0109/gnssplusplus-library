@@ -57,7 +57,7 @@ required = [
 [tools.cssrlib_data]
 repository = "https://github.com/hirokawa/cssrlib-data"
 path = "data/doy2025-046, data/doy2025-233, data/doy2023-229"
-note = "License not stated upstream; download locally, do not commit."
+note = "MIT-licensed repository whose LICENSE leaves the sample data to their sources' terms; download locally, do not commit."
 
 [tools.igs_products]
 repository = "https://igs.bkg.bund.de/root_ftp/IGS/products/"

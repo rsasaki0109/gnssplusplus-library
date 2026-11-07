@@ -169,8 +169,9 @@ and compares them with native `gnss ppp`:
 | cssrlib-data ec1dfa2c: Kamakura 2025-02-15, E6-B pages (`046r_gale6.txt`) and the receiver's NAV | static, 1800 epochs (30 min) | 0.09 m horizontal from the Kamakura coordinate, indicative only (outside the HAS service area); final position within 0.01 mm of native. 4 s natively |
 | cssrlib-data ec1dfa2c: Kamakura 2025-02-15, PPP-B2b (`046r_bdsb2b.txt`, C59) and the receiver's RINEX 4 NAV, igs20.atx, 10° mask | static, 1800 epochs (30 min) | 0.11 m horizontal from the Kamakura coordinate (0.01 m after the full hour); final position within 0.01 mm of native. 4 s natively |
 
-The cssrlib-data files have no stated license, so CI checks them out for the
-test and nothing is redistributed. MIZU's RINEX header position is 4.4 m
+cssrlib-data is MIT-licensed, but its LICENSE leaves the sample data to their
+sources' terms, so CI checks them out for the test and nothing is
+redistributed. MIZU's RINEX header position is 4.4 m
 from its PPP-AR fixed solution
 ([MADOCALIB native migration](madocalib_native_migration.md)), so it is not
 a truth for scoring. CLAS is marked experimental: the CLI's `gnss clas-ppp`
