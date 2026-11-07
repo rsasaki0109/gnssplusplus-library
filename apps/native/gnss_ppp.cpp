@@ -1,4 +1,3 @@
-#include "cli_output_paths.hpp"
 #include <algorithm>
 #include <chrono>
 #include <ctime>
@@ -25,6 +24,7 @@
 #include <libgnss++/io/rtcm.hpp>
 
 #include "cli_toml_config.hpp"
+#include "cli_output_paths.hpp"
 
 #ifndef GNSSPP_MADOCALIB_ORACLE_CLI
 #define GNSSPP_MADOCALIB_ORACLE_CLI 0

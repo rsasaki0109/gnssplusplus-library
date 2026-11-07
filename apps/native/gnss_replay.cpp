@@ -1,4 +1,3 @@
-#include "cli_output_paths.hpp"
 #include <Eigen/Dense>
 
 #include <cmath>
@@ -25,6 +24,7 @@
 
 #include "navigation_merge.hpp"
 #include "rtcm_frame_common.hpp"
+#include "cli_output_paths.hpp"
 
 namespace {
 

@@ -1,4 +1,3 @@
-#include "cli_output_paths.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -23,6 +22,7 @@
 
 #include "cli_toml_config.hpp"
 #include "rtk_base_epoch_align.hpp"
+#include "cli_output_paths.hpp"
 
 namespace {
 

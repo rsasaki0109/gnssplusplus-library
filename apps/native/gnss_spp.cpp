@@ -1,4 +1,3 @@
-#include "cli_output_paths.hpp"
 #include <cstdlib>
 #include <algorithm>
 #include <chrono>
@@ -18,6 +17,7 @@
 #include <libgnss++/io/rinex.hpp>
 
 #include "json_output_helpers.hpp"
+#include "cli_output_paths.hpp"
 
 namespace {
 

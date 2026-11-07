@@ -1,4 +1,3 @@
-#include "cli_output_paths.hpp"
 #include <Eigen/Dense>
 #include <algorithm>
 #include <chrono>
@@ -35,6 +34,7 @@
 
 #include "cli_toml_config.hpp"
 #include "rtk_base_epoch_align.hpp"
+#include "cli_output_paths.hpp"
 #include <libgnss++/algorithms/rtk_base_alignment.hpp>
 
 namespace {

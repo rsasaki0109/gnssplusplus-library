@@ -1,4 +1,3 @@
-#include "cli_output_paths.hpp"
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/doppler_contract.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
@@ -40,6 +39,7 @@
 #include <vector>
 
 #include "json_output_helpers.hpp"
+#include "cli_output_paths.hpp"
 
 namespace {
 

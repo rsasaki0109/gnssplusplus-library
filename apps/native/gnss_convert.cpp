@@ -1,4 +1,3 @@
-#include "cli_output_paths.hpp"
 #include <libgnss++/io/observation_epoch_assembler.hpp>
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
@@ -28,6 +27,7 @@
 #endif
 
 #include "ubx_input_source.hpp"
+#include "cli_output_paths.hpp"
 
 namespace {
 
