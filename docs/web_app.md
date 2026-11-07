@@ -90,12 +90,14 @@ post-processed result ([Real-time and post-processing
 modes](processing_modes.md)). It is saved in options files as
 `realtime = true`.
 
-**Forward + backward** (RTK modes) adds `--combined`: after the forward pass a
+**Forward + backward** (RTK and PPP modes, not CLAS) adds `--combined`: after the forward pass a
 second filter runs the same epochs backward, and each epoch takes the better
 of the two (or their weighted mean), which fills, for example, the FLOAT
 epochs after an outage. It is the opposite of *Real-time equivalent* (it uses
 every later epoch), takes about twice the run time, and is saved as
-`combined = true` ([Forward + backward](processing_modes.md#forward-backward-gnss-solve-combined)).
+`combined = true` ([Forward + backward](processing_modes.md#forward-backward-gnss-solve-combined),
+[PPP](processing_modes.md#forward-backward-ppp-gnss-ppp-combined)). In PPP it
+covers the forward filter's convergence.
 
 **Kinematic RTK + IMU** runs `gnss fuse` with an IMU CSV (PPC format, or
 rtklibexplorer with *IMU format*), the IMU-to-antenna lever arm in body FLU

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../core/copyable_mutex.hpp"
 #include "barometer_height.hpp"
 #include "../core/processor.hpp"
 #include "../core/observation.hpp"
@@ -188,6 +189,8 @@ public:
 
     SPPProcessor();
     explicit SPPProcessor(const SPPConfig& spp_config);
+    SPPProcessor(const SPPProcessor&) = default;
+    SPPProcessor& operator=(const SPPProcessor&) = delete;
     ~SPPProcessor() override = default;
     
     // ProcessorBase interface
@@ -318,7 +321,7 @@ private:
     double last_valid_clock_bias_ = 0.0;
     
     // Statistics
-    mutable std::mutex stats_mutex_;
+    mutable CopyableMutex stats_mutex_;
     mutable size_t total_epochs_processed_ = 0;
     mutable size_t successful_solutions_ = 0;
     mutable double total_processing_time_ms_ = 0.0;

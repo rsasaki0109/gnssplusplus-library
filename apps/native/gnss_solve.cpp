@@ -4098,26 +4098,9 @@ int main(int argc, char* argv[]) {
             }
             return true;
         };
-        // An LLI flag marks a slip since the previous epoch. Going backward
-        // that slip lies before the next epoch processed, so each epoch takes
-        // the flag of the epoch after it in time, processed just before it
-        // (as RTKLIB does).
-        using SlipFlags = std::map<std::pair<libgnss::SatelliteId, libgnss::SignalType>, bool>;
-        SlipFlags later_rover_slips;
-        SlipFlags later_base_slips;
-        const auto shift_loss_of_lock = [](libgnss::ObservationData& epoch, SlipFlags& later_slips) {
-            SlipFlags own;
-            for (const auto& observation : epoch.observations) {
-                own[{observation.satellite, observation.signal}] = (observation.lli & 0x01) != 0;
-            }
-            for (auto& observation : epoch.observations) {
-                const auto it = later_slips.find({observation.satellite, observation.signal});
-                const bool slip = it != later_slips.end() && it->second;
-                observation.lli = static_cast<uint8_t>((observation.lli & ~0x01) | (slip ? 0x01 : 0x00));
-                observation.loss_of_lock = slip;
-            }
-            later_slips = std::move(own);
-        };
+        // Loss-of-lock flags shifted for the backward direction.
+        libgnss::forward_backward::BackwardLossOfLock backward_rover_lli;
+        libgnss::forward_backward::BackwardLossOfLock backward_base_lli;
         // The base epoch of a backward-pass epoch, aligned as on the forward pass.
         const auto align_backward_base = [&](const CombinedEpoch& epoch,
                                              const libgnss::ObservationData& rover,
@@ -4171,8 +4154,8 @@ int main(int argc, char* argv[]) {
             // Each epoch takes the base epochs aligned to it forward.
             base_ok = false;
             has_previous_base = false;
-            later_rover_slips.clear();
-            later_base_slips.clear();
+            backward_rover_lli.reset();
+            backward_base_lli.reset();
             backward_index = combined_epochs.size() - 1;
             if (!read_rover_at(combined_epochs[backward_index], rover_obs)) {
                 return false;
@@ -4266,8 +4249,8 @@ int main(int argc, char* argv[]) {
                 }
                 used_interpolated_base = epoch.base == CombinedEpoch::Base::Interpolated;
                 have_aligned_base = true;
-                shift_loss_of_lock(rover_obs, later_rover_slips);
-                shift_loss_of_lock(aligned_base_obs, later_base_slips);
+                backward_rover_lli.apply(rover_obs);
+                backward_base_lli.apply(aligned_base_obs);
             }
 
             if (!have_aligned_base) {

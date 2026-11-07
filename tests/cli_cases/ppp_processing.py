@@ -595,6 +595,46 @@ class PPPProcessingCases:
                 self.assertEqual(result.returncode, 0, msg=result.stderr)
                 self.assertIs(json.loads(spp_summary.read_text())["realtime"], causal)
 
+    def test_ppp_cli_combined_runs_a_backward_pass(self) -> None:
+        # --combined (post-processing) runs a copy of the loaded processor
+        # backward over the same epochs and combines both passes per epoch.
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_combined_") as temp_dir:
+            temp_root = Path(temp_dir)
+            fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+            obs = str(temp_root / "rover.obs")
+            nav = str(temp_root / "base.nav")
+            for args in (["--input", str(fixture / "rover.rtcm"), "--obs-out", obs],
+                         ["--input", str(fixture / "base.rtcm"), "--nav-out", nav]):
+                converted = self.run_gnss("convert", *args, "--format", "rtcm",
+                                          "--gps-week", "2324", "--quiet")
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            out = temp_root / "out.pos"
+            summary_path = temp_root / "summary.json"
+            result = self.run_gnss("ppp", "--obs", obs, "--nav", nav, "--kinematic",
+                                   "--max-epochs", "20", "--out", str(out),
+                                   "--summary-json", str(summary_path), "--combined")
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIs(json.loads(summary_path.read_text())["combined"], True)
+            line = next(text for text in result.stdout.splitlines()
+                        if "combined (forward + backward):" in text)
+            stats = dict(item.split("=") for item in line.split(":", 1)[1].split())
+            self.assertEqual(stats["both"], "20")
+            self.assertEqual(stats["forward_only"], "0")
+            self.assertEqual(stats["backward_only"], "0")
+            ssr = temp_root / "ssr.rtcm3"
+            ssr.write_bytes(build_rtcm1060(3, 518400))
+            for args, message in (
+                (["--combined", "--realtime"], "--combined cannot be used with --realtime"),
+                (["--combined", "--live-output"], "--combined cannot use --live-output"),
+                (["--combined", "--clas-osr", "--ssr", str(ssr)], "--combined cannot use --clas-osr"),
+                (["--combined", "--combined-fix-tolerance", "-1"],
+                 "--combined-fix-tolerance must be >= 0"),
+            ):
+                with self.subTest(args=args):
+                    refused = self.run_gnss("ppp", "--obs", obs, "--nav", nav, "--out", str(out), *args)
+                    self.assertNotEqual(refused.returncode, 0)
+                    self.assertIn(message, refused.stderr + refused.stdout)
+
     def test_ppp_cli_b2b_arguments_and_bcnav1_requirement(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_b2b_cli_") as temp_dir:
             temp_root = Path(temp_dir)

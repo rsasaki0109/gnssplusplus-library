@@ -920,7 +920,7 @@ void PPPProcessor::checkConvergence(const GNSSTime& current_time) {
 
     if (stable) {
         converged_ = true;
-        convergence_time_ = current_time - convergence_start_time_;
+        convergence_time_ = std::abs(current_time - convergence_start_time_);
         convergence_telemetry_.gate_reason = "converged";
     } else {
         ++convergence_telemetry_.unstable_position_epochs;

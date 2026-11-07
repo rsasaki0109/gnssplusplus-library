@@ -387,14 +387,20 @@ bool loadOceanLoadingCoefficients(
 
     return false;
 }
+// Signed: negative when the epochs are processed backward (gnss ppp
+// --combined), so the state prediction runs backward; the process noise uses
+// its magnitude.
 double clampDt(double dt) {
-    if (!std::isfinite(dt) || dt <= 0.0) {
+    if (!std::isfinite(dt) || dt == 0.0) {
         return 1.0;
     }
-    return std::min(dt, 300.0);
+    return std::copysign(std::min(std::abs(dt), 300.0), dt);
 }
 
 }  // namespace
+
+static_assert(std::is_copy_constructible_v<PPPProcessor>,
+              "gnss ppp --combined copies a loaded processor");
 
 PPPProcessor::PPPProcessor()
     : env_overrides_(PPPEnvOverrides::fromEnvironment()), spp_processor_() {

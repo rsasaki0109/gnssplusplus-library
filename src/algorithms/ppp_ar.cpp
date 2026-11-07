@@ -202,7 +202,7 @@ EligibleAmbiguities collectEligibleAmbiguities(
         }
         if (time.week > 0 && ambiguity.has_last_slip_time &&
             slip_ar_exclusion_seconds > 0.0 &&
-            (time - ambiguity.last_slip_time) < slip_ar_exclusion_seconds) {
+            std::abs(time - ambiguity.last_slip_time) < slip_ar_exclusion_seconds) {
             ++eligible.skipped_slip_window;
             continue;
         }

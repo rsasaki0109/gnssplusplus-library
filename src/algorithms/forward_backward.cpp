@@ -78,6 +78,20 @@ void average(const Entry& forward, const Entry& backward,
 
 }  // namespace
 
+void BackwardLossOfLock::apply(ObservationData& epoch) {
+    std::map<std::pair<SatelliteId, SignalType>, bool> own;
+    for (const auto& observation : epoch.observations) {
+        own[{observation.satellite, observation.signal}] = (observation.lli & 0x01) != 0;
+    }
+    for (auto& observation : epoch.observations) {
+        const auto it = later_slips_.find({observation.satellite, observation.signal});
+        const bool slip = it != later_slips_.end() && it->second;
+        observation.lli = static_cast<uint8_t>((observation.lli & ~0x01) | (slip ? 0x01 : 0x00));
+        observation.loss_of_lock = slip;
+    }
+    later_slips_ = std::move(own);
+}
+
 int statusRank(const PositionSolution& solution) {
     if (!solution.isValid() || !solution.position_ecef.allFinite()) {
         return -1;
