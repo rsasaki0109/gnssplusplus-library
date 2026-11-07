@@ -165,7 +165,7 @@ export function defaultPosName(rover, mode, corrections) {
  * Post-processing (RTKPOST equivalent).
  * opts: { mode, rover, base, nav, sp3, clk, out, elevationMask, maxEpochs,
  *         preset, iono, ratio, baseEcef: [x,y,z] | null, kml, verbose,
- *         ionoFree, enableAr, realtime, imu, leverArm: [x,y,z] | null, tightCoupling,
+ *         ionoFree, enableAr, realtime, combined, imu, leverArm: [x,y,z] | null, tightCoupling,
  *         imuFormat, fgoPreset, corrections, l6e: [names], l6d: [names],
  *         clasL6, hasIdd, hasPages, hasPagesFormat, b2bLog, antex, extra, workspaceNames }
  */
@@ -204,6 +204,14 @@ export function buildPostCommand(opts) {
   if (opts.realtime && mode.tool !== 'gnss_solve' && corrections === 'products' && (opts.sp3 || opts.clk)) {
     throw new Error('Real-time equivalent (--realtime) cannot use SP3 / CLK products (they are post-processed)');
   }
+  // --combined (gnss solve): a backward pass over the same epochs, so it uses
+  // every later epoch.
+  if (opts.combined && mode.tool !== 'gnss_solve') {
+    throw new Error(`${mode.label} has no forward + backward mode`);
+  }
+  if (opts.combined && opts.realtime) {
+    throw new Error('Forward + backward (--combined) uses later epochs: it cannot be real-time equivalent');
+  }
   const out = opts.out || defaultPosName(opts.rover, opts.mode, corrections);
   const elevation = finite(opts.elevationMask);
   const maxEpochs = finite(opts.maxEpochs);
@@ -238,6 +246,7 @@ export function buildPostCommand(opts) {
     else cmd.flag('--no-kml');
     if (opts.verbose) cmd.flag('--verbose');
     if (opts.realtime) cmd.flag('--realtime');
+    if (opts.combined) cmd.flag('--combined');
   } else if (mode.tool === 'gnss_fuse') {
     // GNSS/IMU fusion: the fused trajectory (--out) plus the RTK solution the
     // fusion ran on (--rtk-pos-out), which --navi776-tc refines with the IMU.
