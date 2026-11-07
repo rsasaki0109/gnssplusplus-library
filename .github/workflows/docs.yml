@@ -125,7 +125,7 @@ jobs:
             data/sept_2019239.nav
             data/2019239Q.l6
       # License not stated upstream: checked out for the test only, never published.
-      - name: Fetch the cssrlib-data Galileo HAS samples (OBE4 IDD, Kamakura E6-B)
+      - name: Fetch the cssrlib-data Galileo HAS and PPP-B2b samples (OBE4 IDD, Kamakura E6-B and B2b)
         uses: actions/checkout@v7
         with:
           repository: hirokawa/cssrlib-data
@@ -140,6 +140,7 @@ jobs:
             data/doy2025-046/046r_rnx.obs
             data/doy2025-046/046r_rnx.nav
             data/doy2025-046/046r_gale6.txt
+            data/doy2025-046/046r_bdsb2b.txt
       - name: Smoke-test WebAssembly tools (demo pipeline and PPP corrections in Node)
         run: node wasm/test/smoke.mjs build-wasm/wasm/dist --samples ppp-samples
       - name: Add browser GUI to the site (/app/)

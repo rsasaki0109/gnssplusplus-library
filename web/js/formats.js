@@ -64,9 +64,11 @@ export function sniffKind(name, headBytes) {
   const text = new TextDecoder('latin1').decode(bytes.subarray(0, 4096));
   const firstLine = text.split(/\r?\n/, 1)[0] || '';
   if (firstLine.includes('ANTEX VERSION / SYST')) return 'atx';
-  // Galileo E6-B (HAS) pages as cssrlib logs them: week, tow, PRN, ... and
-  // the page in hex, tab separated.
-  if (/^\d+\t\d+(\.\d+)?\t *\d+\t *\d+\t *\d+\t[0-9a-fA-F]{100,}\s*$/.test(firstLine)) return 'has';
+  // Galileo E6-B (HAS) pages and BeiDou PPP-B2b messages as cssrlib logs
+  // them: week, tow, PRN, ... and the page in hex, tab separated. B2b comes
+  // from the BDS GEO satellites (PRN 59-63), HAS from Galileo (PRN 1-36).
+  const cssrlibLog = /^\d+\t\d+(\.\d+)?\t *(\d+)\t *\d+\t *\d+\t[0-9a-fA-F]{100,}\s*$/.exec(firstLine);
+  if (cssrlibLog) return Number(cssrlibLog[2]) >= 59 ? 'b2b' : 'has';
   if (firstLine.includes('RINEX VERSION / TYPE')) {
     const type = firstLine.charAt(20).toUpperCase();
     if (type === 'O') return 'obs';

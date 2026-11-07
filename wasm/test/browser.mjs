@@ -251,6 +251,22 @@ try {
     assert.match(await text('#tool-post [data-cmd]'), /--has-pages 046r_gale6\.txt --has-pages-format cssrlib/);
     await shot('web_app_has.png');
 
+    await post('BeiDou PPP-B2b', async () => {
+      await page.selectOption('#post-form select[name="pppCorr"]', 'b2b');
+      await page.selectOption('#post-form select[name="rover"]', '046r_rnx.obs');
+      await page.selectOption('#post-form select[name="nav"]', '046r_rnx.nav');
+      // The B2b log is sniffed as its own kind, apart from the HAS pages.
+      assert.deepEqual(await page.$$eval('#post-form select[name="b2bLog"] option', (els) => els.map((e) => e.value)),
+        ['046r_bdsb2b.txt']);
+      await page.selectOption('#post-form select[name="antex"]', 'igs20.atx');
+      await page.fill('#post-form input[name="elevationMask"]', '10');
+      await page.fill('#post-form input[name="maxEpochs"]', '600');
+      assert.ok(await page.isHidden('#post-form input[name="enableAr"]'), 'AR hidden for PPP-B2b');
+    }, ['046r_rnx_b2b.pos']);
+    assert.match(await text('#tool-post [data-cmd]'), /--b2b 046r_bdsb2b\.txt --antex igs20\.atx/);
+    assert.match(await text('#tool-post [data-log]'), /b2b: C59: \d+ messages \(0 CRC failures/);
+    await shot('web_app_b2b.png');
+
     // Plot: PPP convergence of the HAS IDD run against the OBE4 coordinate.
     await page.click('button[data-tool="plot"]');
     await page.selectOption('#plot-map', '');

@@ -91,7 +91,7 @@ Remove the symlinks afterwards so `RTKRealDataTest.*` returns to skipping.
   sites than the map tile hosts. Run it locally with
   `node wasm/test/browser.mjs <site dir>` after `wasm/assemble_site.py`.
   With `--samples <dir>` both also run Galileo HAS (IDD and E6-B pages),
-  MADOCA-PPP and CLAS on public samples (`PPP_SAMPLES` in `smoke.mjs`:
+  BeiDou PPP-B2b, MADOCA-PPP and CLAS on public samples (`PPP_SAMPLES` in `smoke.mjs`:
   MADOCALIB, CLASLIB, cssrlib-data; the Docs workflow checks out exactly
   those files) and compare with the native `gnss ppp` results recorded there.
 - The wasm link sets mirror `apps/CMakeLists.txt`; keep them in step, and do

@@ -41,8 +41,9 @@ const FIXTURES = {
 // MADOCALIB 0089f7dc (the CI MADOCA matrix pin; IGS station MIZU, 2025-04-01
 // 00:00-01:00), CLASLIB 4320e844 (2019-08-27) and hirokawa/cssrlib-data
 // ec1dfa2c (Galileo HAS: OBE4 IDD hour 2023-08-17, the has-idd-ppp lane;
-// Kamakura E6-B hour 2025-02-15 with the receiver's own NAV). The Docs
-// workflow checks out exactly these files.
+// Kamakura hour 2025-02-15 with the receiver's own RINEX 4 NAV: HAS E6-B pages
+// and BeiDou PPP-B2b messages). The Docs workflow checks out exactly these
+// files.
 export const PPP_SAMPLES = {
   madocalib: [
     'sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx',
@@ -61,6 +62,7 @@ export const PPP_SAMPLES = {
     'data/doy2025-046/046r_rnx.obs',
     'data/doy2025-046/046r_rnx.nav',
     'data/doy2025-046/046r_gale6.txt',
+    'data/doy2025-046/046r_bdsb2b.txt',
   ],
 };
 
@@ -226,6 +228,20 @@ export async function runSmoke(factoryFor, log = console.log, options = {}) {
       + `final ${(hasSisDelta * 1000).toFixed(2)} mm from native`);
     assert.equal(hasSis.n, 1800);
     assert.ok(hasSisDelta < 0.05, `HAS E6-B final position ${hasSisDelta} m from native`);
+
+    // BeiDou PPP-B2b (C59 stream; BDS on the B-CNAV1 records of the RINEX 4
+    // NAV), 30 min static with the igs20 antenna model. Native gnss ppp: final
+    // position below (H 0.30 m after 30 min, 0.15 m after the hour).
+    await run(buildPostCommand({
+      mode: 'ppp-static', rover: '046r_rnx.obs', nav: '046r_rnx.nav', corrections: 'b2b',
+      b2bLog: '046r_bdsb2b.txt', antex: 'igs20.atx', elevationMask: '10', maxEpochs: '1800', out: 'b2b.pos',
+    }));
+    const b2b = parseSolution('b2b.pos', text('b2b.pos'));
+    const b2bDelta = ecefDistance(b2b, [-3962108.930432, 3381310.000330, 3668679.299290]);
+    log(`PPP-B2b: ${b2b.n} epochs, H ${horizontalError(b2b, [-3962108.6836, 3381309.5672, 3668678.6720]).toFixed(3)} m, `
+      + `final ${(b2bDelta * 1000).toFixed(2)} mm from native`);
+    assert.equal(b2b.n, 1800);
+    assert.ok(b2bDelta < 0.05, `PPP-B2b final position ${b2bDelta} m from native`);
 
     // MADOCA PPP-AR with L6D ionosphere, 1 h kinematic (the matrix's pppar-ion
     // case). Native gnss ppp: 91 PPP FIX / 27 float, final position below.
