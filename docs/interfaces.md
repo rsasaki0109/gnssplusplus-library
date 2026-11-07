@@ -889,7 +889,12 @@ Internet Data Distribution):
   until the next one of the satellite, at most 90 s;
 - code biases are mapped from the RTCM SSR signal IDs (e.g. GPS 2 = L1 W,
   11 = L2 W) and their sign converted (RTCM biases are added to the
-  observation).
+  observation); a GPS L2 P(Y) / Z-tracked code (C2W) takes the L2 W / L2 P
+  bias and an L2C code the L2C one (until 2026-11-07 C2W took the L2C bias
+  when a stream sent both, as HAS IDD and the 2024-02-12 JPL stream do);
+- Galileo has a receiver clock of its own (since 2026-11-07; it used to share
+  the GPS one, see
+  [Galileo HAS support](galileo_has.md#validation-has-sis-kamakura-2025)).
 
 `--ssr-rtcm-profile legacy` keeps the conversion used before 2026-11-07, for
 comparison only. It evaluates the broadcast ephemeris nearest in time instead
@@ -901,18 +906,22 @@ On the cssrlib-data JPL GDGPS streams (GPS + Galileo, static, horizontal):
 | Run | 10 min | 30 min | 60 min |
 |---|---|---|---|
 | Kamakura 2024-02-12 (orbit, clock, code and phase biases), legacy | 2.89 m | 2.12 m | 0.41 m |
-| Kamakura 2024-02-12, standard | 0.11 m | 0.22 m | 0.11 m |
+| Kamakura 2024-02-12, standard, GPS receiver clock for Galileo | 0.11 m | 0.22 m | 0.11 m |
+| Kamakura 2024-02-12, standard | 0.27 m | 0.33 m | 0.03 m |
 | Kamakura 2025-08-21 (orbit and clock only), legacy | 1.01 m | 0.98 m | 0.36 m |
-| Kamakura 2025-08-21, standard | 0.86 m | 0.52 m | 0.46 m |
+| Kamakura 2025-08-21, standard, GPS receiver clock for Galileo | 0.86 m | 0.52 m | 0.46 m |
+| Kamakura 2025-08-21, standard | 0.51 m | 0.25 m | 0.06 m |
 
 On 2024-02-12 the legacy ionosphere-free code residual of G02 sat at -6.3 m
 and that of E15 at +3.4 m (first 15 min, relative to the other satellites);
 with the standard conversion they are -0.25 / -0.19 m, and the corrected
 satellite positions and clocks equal cssrlib's within 0.1 mm. cssrlib
-(`test_ppprtcm.py`) still converges faster on both hours (0.05 / 0.06 m after
-one hour, below 0.2 m from 25 / 10 min). The difference is in the Galileo
-part of the solution (GPS-only reaches 0.10 m on 2025-08-21, Galileo-only
-stays at 0.4-0.6 m) and is not explained yet.
+(`test_ppprtcm.py`) reaches 0.05 / 0.06 m after one hour, below 0.2 m from
+25 / 10 min. Most of the gap was in the Galileo part of the solution
+(Galileo-only stayed at 0.4-0.6 m on 2025-08-21, GPS-only reached 0.10 m):
+Galileo shared the GPS receiver clock. With a clock of its own libgnss++ ends
+the hours at 0.03 / 0.06 m but converges later than cssrlib (below 0.2 m
+from 38.6 / 42.1 min; 6.4 min on 2024-02-12 before the C2W bias change).
 
 Satellites without an SSR correction still fall back to their broadcast orbit
 and clock (cssrlib and RTKLIB drop them). Dropping them (the

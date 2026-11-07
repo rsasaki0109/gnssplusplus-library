@@ -11,7 +11,11 @@
 # cssrlib (hirokawa/cssrlib main, 2026-09) on the same hour, static float PPP
 # with igs20.atx: H 0.214 / 0.162 / 0.140 / 0.152 m and U -0.487 / -0.215 /
 # -0.100 / -0.300 m at 10 / 20 / 30 / 60 min, converging to H < 0.20 m after
-# 11.0 min and |U| < 0.40 m after 12.9 min (from 02:00:00).
+# 11.0 min and |U| < 0.40 m after 12.9 min (from 02:00:00). That sample uses
+# GPS C1C / C2W and Galileo E1-C / E5b-Q; with E1-C / E5a-Q, the libgnss++
+# pair, cssrlib 26734271 gives H 0.277 / 0.261 / 0.233 / 0.197 m and stays
+# below 0.20 m only from 59.9 min (E5b-Q: 0.214 / 0.162 / 0.140 / 0.142 m,
+# from 11.8 min; 2026-11-07).
 
 [lane]
 name = "has-idd-ppp"
@@ -100,8 +104,8 @@ path = "runs.has_idd_static.convergence_abs_up_below_0p40_min"
 max = 30.0
 readme = "docs/galileo_has.md"
 
-# docs/galileo_has.md table values (re-measured 2026-10-01 after the static
-# one-update-per-epoch fix); reported, not gated.
+# docs/galileo_has.md table values (re-measured 2026-11-07 with the Galileo
+# receiver clock and the tracked GPS L2 code bias); reported, not gated.
 [[metrics]]
 name = "table: has-idd static {field} at {t}"
 source = "{work_dir}/summary.json"
@@ -110,14 +114,14 @@ gate = false
 abs_tol = 0.03
 readme = "docs/galileo_has.md table"
 foreach = [
-  { t = "10min", field = "h_m", expected = 0.056 },
-  { t = "10min", field = "up_m", expected = -0.147 },
-  { t = "20min", field = "h_m", expected = 0.067 },
-  { t = "20min", field = "up_m", expected = -0.170 },
-  { t = "30min", field = "h_m", expected = 0.092 },
-  { t = "30min", field = "up_m", expected = 0.049 },
-  { t = "60min", field = "h_m", expected = 0.014 },
-  { t = "60min", field = "up_m", expected = 0.050 },
+  { t = "10min", field = "h_m", expected = 0.063 },
+  { t = "10min", field = "up_m", expected = -0.099 },
+  { t = "20min", field = "h_m", expected = 0.192 },
+  { t = "20min", field = "up_m", expected = -0.157 },
+  { t = "30min", field = "h_m", expected = 0.123 },
+  { t = "30min", field = "up_m", expected = 0.036 },
+  { t = "60min", field = "h_m", expected = 0.116 },
+  { t = "60min", field = "up_m", expected = 0.002 },
 ]
 
 [[metrics]]
@@ -128,20 +132,23 @@ gate = false
 abs_tol = 1.5
 readme = "docs/galileo_has.md table"
 foreach = [
-  { field = "convergence_h_below_0p20_min", expected = 0.85 },
-  { field = "convergence_abs_up_below_0p40_min", expected = 5.77 },
+  { field = "convergence_h_below_0p20_min", expected = 5.75 },
+  { field = "convergence_abs_up_below_0p40_min", expected = 0.0 },
 ]
 
 # Kinematic float PPP (white-noise position re-seeded from SPP each epoch,
 # one measurement update per epoch, post-fit residual screening). Before the
 # one-update fix it settled at H 1.87 m / U -5.61 m after one hour; before the
 # screening it read 0.136 / +0.058 m at 30 min and 0.018 / -0.390 m at 60 min
-# (hour RMS after 10 min: H 0.156 m, U 0.206 m; now 0.086 m, 0.099 m).
+# (hour RMS after 10 min: H 0.156 m, U 0.206 m; then 0.086 m, 0.099 m).
+# Until 2026-11-07 Galileo shared the GPS receiver clock and C2W took the HAS
+# L2 CL code bias: 0.057 / 0.114 m at 30 / 60 min, helped by those two
+# errors offsetting each other (docs/galileo_has.md); the gate was 0.30 m.
 [[metrics]]
 name = "has-idd kinematic H at {t} (m)"
 source = "{work_dir}/summary.json"
 path = "runs.has_idd_kinematic.checkpoints.{t}.h_m"
-max = 0.30
+max = 0.40
 readme = "docs/galileo_has.md"
 foreach = [{ t = "30min" }, { t = "60min" }]
 
@@ -161,14 +168,14 @@ gate = false
 abs_tol = 0.05
 readme = "docs/galileo_has.md table"
 foreach = [
-  { t = "10min", field = "h_m", expected = 0.033 },
-  { t = "10min", field = "up_m", expected = -0.201 },
-  { t = "20min", field = "h_m", expected = 0.064 },
-  { t = "20min", field = "up_m", expected = -0.128 },
-  { t = "30min", field = "h_m", expected = 0.057 },
-  { t = "30min", field = "up_m", expected = 0.018 },
-  { t = "60min", field = "h_m", expected = 0.114 },
-  { t = "60min", field = "up_m", expected = 0.077 },
+  { t = "10min", field = "h_m", expected = 0.127 },
+  { t = "10min", field = "up_m", expected = -0.282 },
+  { t = "20min", field = "h_m", expected = 0.240 },
+  { t = "20min", field = "up_m", expected = -0.248 },
+  { t = "30min", field = "h_m", expected = 0.205 },
+  { t = "30min", field = "up_m", expected = -0.177 },
+  { t = "60min", field = "h_m", expected = 0.305 },
+  { t = "60min", field = "up_m", expected = -0.236 },
 ]
 
 # The same stream through the legacy RTCM SSR conversion (no IODE match,
@@ -181,6 +188,6 @@ gate = false
 abs_tol = 0.03
 readme = "docs/galileo_has.md table"
 foreach = [
-  { field = "h_m", expected = 0.105 },
-  { field = "up_m", expected = 0.284 },
+  { field = "h_m", expected = 0.095 },
+  { field = "up_m", expected = 0.233 },
 ]
