@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../core/processor.hpp"
+#include "../core/copyable_mutex.hpp"
 #include "../core/observation.hpp"
 #include "../core/navigation.hpp"
 #include "../core/solution.hpp"
@@ -117,6 +118,11 @@ public:
     
     PPPProcessor();
     explicit PPPProcessor(const PPPConfig& ppp_config);
+    /// A copy carries the configuration, the loaded products and the filter
+    /// state (gnss ppp --combined copies a loaded processor for its backward
+    /// pass).
+    PPPProcessor(const PPPProcessor&) = default;
+    PPPProcessor& operator=(const PPPProcessor&) = delete;
     ~PPPProcessor() override = default;
     
     // ProcessorBase interface
@@ -434,7 +440,7 @@ private:
     };
     OceanLoadingCoefficients ocean_loading_coefficients_{};
     bool ocean_loading_loaded_ = false;
-    std::unique_ptr<iers::EopTable> eop_table_;
+    std::shared_ptr<const iers::EopTable> eop_table_;  // read only: copies share it
     iers::AtmosphericTidalLoadingCoefficients atm_tidal_loading_coefficients_{};
     bool atm_tidal_loading_loaded_ = false;
     std::map<std::string, std::map<SignalType, Vector3d>> receiver_antex_offsets_;
@@ -545,7 +551,8 @@ private:
     std::map<SatelliteId, std::map<uint8_t, int>> prev_phase_bias_discnt_;  ///< Last-seen SSR phase-bias discontinuity counters (GNSS_PPP_SSR_DISCNT_SLIP)
     std::map<SatelliteId, CLASPhaseBiasRepairInfo> clas_phase_bias_repair_;
     ppp_clas_sd::DdAmbAccumulator clas_dd_accumulator_;  ///< Multi-epoch DD amb accumulator
-    std::unique_ptr<ppp_clas_dd::DdFilterScaffold> clas_dd_filter_;
+    // Copies share it until one of them updates it (copy on write).
+    std::shared_ptr<ppp_clas_dd::DdFilterScaffold> clas_dd_filter_;
     PPPState last_clas_constrained_fixed_state_;
     bool last_clas_constrained_fixed_state_valid_ = false;
     // Tow of the most recent CLAS kinematic full-state reset (FLOATCNT wipe
@@ -565,7 +572,7 @@ private:
     int last_obs_gps_week_ = 0;  ///< GPS week from latest observation (for L6 decode)
 
     // Statistics
-    mutable std::mutex stats_mutex_;
+    mutable CopyableMutex stats_mutex_;
     size_t total_epochs_processed_ = 0;
     size_t converged_solutions_ = 0;
     double total_convergence_time_ = 0.0;

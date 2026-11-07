@@ -1,9 +1,12 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/solution.hpp>
 
 #include <cstddef>
+#include <map>
+#include <utility>
 #include <vector>
 
 namespace libgnss::forward_backward {
@@ -54,6 +57,23 @@ struct CombineStats {
 struct Pass {
     std::vector<PositionSolution> solutions;
     std::vector<Eigen::Matrix3d> weights;
+};
+
+/**
+ * @brief Loss-of-lock flags for a backward pass.
+ *
+ * An LLI flag (bit 0) marks a slip since the previous epoch. Going backward
+ * that slip lies before the next epoch processed, so each epoch takes the
+ * flag of the epoch after it in time, processed just before it (as RTKLIB
+ * does). Call apply() on the epochs in the backward (decreasing time) order.
+ */
+class BackwardLossOfLock {
+public:
+    void apply(ObservationData& epoch);
+    void reset() { later_slips_.clear(); }
+
+private:
+    std::map<std::pair<SatelliteId, SignalType>, bool> later_slips_;
 };
 
 /// Status rank used to pick a solution: higher is better, -1 for invalid.

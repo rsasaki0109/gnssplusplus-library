@@ -175,7 +175,7 @@
             </div>
             <div class="checks">
               <label data-show="spp rtk ppp" class="check" title="Use no data from after each epoch (base epochs, corrections, ephemerides), as a real-time receiver would: docs/processing_modes.md"><input type="checkbox" name="realtime"> Real-time equivalent (<code>--realtime</code>)</label>
-              <label data-show="rtk" class="check" title="Post-processing: also run the filter backward over the same epochs and combine both passes at each epoch: docs/processing_modes.md"><input type="checkbox" name="combined"> Forward + backward (<code>--combined</code>)</label>
+              <label data-show="rtk ppp" data-show-corr="products madoca has-idd has-sis b2b" class="check" title="Post-processing: also run the filter backward over the same epochs and combine both passes at each epoch: docs/processing_modes.md"><input type="checkbox" name="combined"> Forward + backward (<code>--combined</code>)</label>
               <label data-show="spp" class="check"><input type="checkbox" name="ionoFree"> Ionosphere-free code (dual frequency)</label>
               <label data-show="ppp" data-show-corr="products madoca" class="check"><input type="checkbox" name="enableAr"> PPP ambiguity resolution</label>
               <label data-show="imu" class="check"><input type="checkbox" name="tightCoupling" checked> Tight coupling (<code>--navi776-tc</code>)</label>

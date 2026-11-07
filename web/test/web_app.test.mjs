@@ -266,21 +266,31 @@ test('Real-time equivalent checkbox: --realtime and its TOML key', () => {
   assert.equal(importOptionsToml(exportOptionsToml({ mode: 'kinematic', kml: true, extra: '' })).fields.realtime, false);
 });
 
-test('Forward + backward checkbox: --combined (RTK) and its TOML key', () => {
+test('Forward + backward checkbox: --combined (RTK, PPP) and its TOML key', () => {
   const rtk = buildPostCommand({ mode: 'kinematic', rover: 'r.obs', base: 'b.obs', nav: 'b.nav', combined: true });
   assert.ok(rtk.args.includes('--combined'), rtk.commandLine);
   assert.ok(!buildPostCommand({ mode: 'kinematic', rover: 'r.obs', base: 'b.obs', nav: 'b.nav' }).args.includes('--combined'));
   assert.throws(() => buildPostCommand({ mode: 'single', rover: 'r.obs', nav: 'b.nav', combined: true }),
     /no forward \+ backward mode/);
+  const ppp = buildPostCommand({
+    mode: 'ppp-kinematic', rover: 'r.obs', nav: 'b.nav', corrections: 'has-sis', hasPages: 'p.txt', combined: true,
+  });
+  assert.ok(ppp.args.includes('--combined'), ppp.commandLine);
+  assert.throws(() => buildPostCommand({
+    mode: 'ppp-static', rover: 'r.obs', nav: 'b.nav', corrections: 'clas', clasL6: 'x.l6', combined: true,
+  }), /CLAS has no forward \+ backward mode/);
   assert.throws(() => buildPostCommand({
     mode: 'kinematic', rover: 'r.obs', base: 'b.obs', nav: 'b.nav', combined: true, realtime: true,
   }), /cannot be real-time equivalent/);
 
-  const toml = exportOptionsToml({ mode: 'kinematic', combined: true, kml: true, extra: '' });
-  assert.match(toml, /^combined = true$/m);
-  const back = importOptionsToml(toml);
-  assert.equal(back.fields.combined, true);
-  assert.equal(back.extra, '');
+  for (const mode of ['kinematic', 'ppp-kinematic']) {
+    const toml = exportOptionsToml({ mode, combined: true, kml: true, extra: '' });
+    assert.match(toml, /^combined = true$/m);
+    const back = importOptionsToml(toml);
+    assert.equal(back.mode, mode);
+    assert.equal(back.fields.combined, true);
+    assert.equal(back.extra, '');
+  }
   assert.equal(importOptionsToml(exportOptionsToml({ mode: 'kinematic', kml: true, extra: '' })).fields.combined, false);
 });
 

@@ -204,10 +204,13 @@ export function buildPostCommand(opts) {
   if (opts.realtime && mode.tool !== 'gnss_solve' && corrections === 'products' && (opts.sp3 || opts.clk)) {
     throw new Error('Real-time equivalent (--realtime) cannot use SP3 / CLK products (they are post-processed)');
   }
-  // --combined (gnss solve): a backward pass over the same epochs, so it uses
-  // every later epoch.
-  if (opts.combined && mode.tool !== 'gnss_solve') {
+  // --combined (gnss solve / ppp): a backward pass over the same epochs, so
+  // it uses every later epoch. Not CLAS, whose state only runs forward.
+  if (opts.combined && !['gnss_solve', 'gnss_ppp'].includes(mode.tool)) {
     throw new Error(`${mode.label} has no forward + backward mode`);
+  }
+  if (opts.combined && mode.tool === 'gnss_ppp' && corrections === 'clas') {
+    throw new Error('CLAS has no forward + backward mode');
   }
   if (opts.combined && opts.realtime) {
     throw new Error('Forward + backward (--combined) uses later epochs: it cannot be real-time equivalent');
@@ -318,6 +321,7 @@ export function buildPostCommand(opts) {
     cmd.output('--out', out);
     cmd.flag(mode.pppMotion);
     if (opts.realtime) cmd.flag('--realtime');
+    if (opts.combined) cmd.flag('--combined');
     if (elevation !== null) cmd.flag('--elevation-mask', elevation);
     if (maxEpochs) cmd.flag('--max-epochs', maxEpochs);
     if (corrections === 'madoca') {

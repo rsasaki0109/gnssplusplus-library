@@ -550,7 +550,7 @@ function postOptions() {
     ionoFree: v.ionoFree,
     enableAr: v.enableAr,
     realtime: v.realtime,
-    combined: group === 'rtk' && v.combined,
+    combined: (group === 'rtk' || group === 'ppp') && v.combined,
     extra: v.extra,
     workspaceNames: workspace.names(),
   };

@@ -497,6 +497,9 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
         ppp_config_.kinematic_mode && (!use_broadcast_rtklib_model || ppp_config_.use_dynamics_model);
     const bool pva_dynamics =
         pvaDynamicsEnabled(ppp_config_) && filter_state_.accel_index >= 0;
+    // dt is negative on a backward pass (gnss ppp --combined): the prediction
+    // runs backward, the process noise grows with the elapsed time.
+    const double adt = std::abs(dt);
     MatrixXd F = MatrixXd::Identity(filter_state_.total_states, filter_state_.total_states);
     if (use_dynamic_prediction) {
         F.block(filter_state_.pos_index, filter_state_.vel_index, 3, 3) =
@@ -517,10 +520,10 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     MatrixXd Q = MatrixXd::Zero(filter_state_.total_states, filter_state_.total_states);
     if (!ppp_config_.kinematic_mode) {
         Q.block(filter_state_.pos_index, filter_state_.pos_index, 3, 3) =
-            MatrixXd::Identity(3, 3) * ppp_config_.process_noise_position * dt;
+            MatrixXd::Identity(3, 3) * ppp_config_.process_noise_position * adt;
     } else if (use_dynamic_prediction && !pva_dynamics) {
         Q.block(filter_state_.pos_index, filter_state_.pos_index, 3, 3) =
-            MatrixXd::Identity(3, 3) * ppp_config_.process_noise_position * dt;
+            MatrixXd::Identity(3, 3) * ppp_config_.process_noise_position * adt;
     }
     if (pva_dynamics) {
         // Process noise on the acceleration only (RTKLIB udpos_ppp()).
@@ -532,15 +535,15 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
                 dt);
     } else if (use_dynamic_prediction) {
         Q.block(filter_state_.vel_index, filter_state_.vel_index, 3, 3) =
-            MatrixXd::Identity(3, 3) * ppp_config_.process_noise_velocity * dt;
+            MatrixXd::Identity(3, 3) * ppp_config_.process_noise_velocity * adt;
     } else {
         Q.block(filter_state_.vel_index, filter_state_.vel_index, 3, 3) =
             MatrixXd::Identity(3, 3) * 1e-12;
     }
     const double clock_process_noise =
         use_broadcast_rtklib_model ? ppp_config_.process_noise_clock : 100.0;
-    Q(filter_state_.clock_index, filter_state_.clock_index) = clock_process_noise * dt;
-    Q(filter_state_.glo_clock_index, filter_state_.glo_clock_index) = clock_process_noise * dt;
+    Q(filter_state_.clock_index, filter_state_.clock_index) = clock_process_noise * adt;
+    Q(filter_state_.glo_clock_index, filter_state_.glo_clock_index) = clock_process_noise * adt;
     // ISB process noise: an inter-system receiver hardware bias is essentially a
     // constant, so it must be a slow random walk (NOT white noise like the
     // receiver clock). A white-noise ISB re-estimates a free QZSS/Galileo clock
@@ -549,23 +552,23 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     // lets the ISB converge to the true bias and then hold.
     if (filter_state_.gal_clock_index >= 0)
         Q(filter_state_.gal_clock_index, filter_state_.gal_clock_index) =
-            env_overrides_.isb_process_noise * dt;
+            env_overrides_.isb_process_noise * adt;
     if (filter_state_.qzs_clock_index >= 0)
         Q(filter_state_.qzs_clock_index, filter_state_.qzs_clock_index) =
-            env_overrides_.isb_process_noise * dt;
+            env_overrides_.isb_process_noise * adt;
     if (filter_state_.bds_clock_index >= 0)
         Q(filter_state_.bds_clock_index, filter_state_.bds_clock_index) =
-            env_overrides_.isb_process_noise * dt;
+            env_overrides_.isb_process_noise * adt;
     if (filter_state_.bds2_clock_index >= 0)
         Q(filter_state_.bds2_clock_index, filter_state_.bds2_clock_index) =
-            env_overrides_.isb_process_noise * dt;
+            env_overrides_.isb_process_noise * adt;
     Q(filter_state_.trop_index, filter_state_.trop_index) =
-        ppp_config_.process_noise_troposphere * dt;
+        ppp_config_.process_noise_troposphere * adt;
     // Ambiguity process noise for every appended state. Ionosphere states may
     // be lazily appended above amb_index (est-stec), so apply the ionosphere
     // process noise AFTERWARDS to overwrite those indices with the correct value.
     for (int idx = filter_state_.amb_index; idx < filter_state_.total_states; ++idx) {
-        Q(idx, idx) = ppp_config_.process_noise_ambiguity * dt;
+        Q(idx, idx) = ppp_config_.process_noise_ambiguity * adt;
     }
     // Ionosphere process noise. Coherent MADOCA applies the per-satellite
     // elevation scaling later, after corrected observations provide az/el.
@@ -576,7 +579,7 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
         for (const auto& [sat, idx] : filter_state_.ionosphere_indices) {
             Q(idx, idx) = madoca_per_frequency
                 ? 0.0
-                : ppp_config_.process_noise_ionosphere * dt;
+                : ppp_config_.process_noise_ionosphere * adt;
         }
     }
 

@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include <libgnss++/algorithms/forward_backward.hpp>
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/solution.hpp>
@@ -92,6 +93,9 @@ struct Options {
     bool madocalib_trace_ar = false;
     bool kinematic_mode = false;
     bool causal = false;
+    // Post-processing forward + backward (--combined).
+    bool combined = false;
+    double combined_max_fix_difference_m = 0.05;
     double ssr_latency_s = 0.0;
     bool ssr_latency_set = false;
     bool low_dynamics_mode = false;
@@ -311,6 +315,11 @@ void printUsage(const char* program_name) {
         << "                          tagged after the epoch (no interpolation towards the\n"
         << "                          next update); refuses --sp3/--clk/--ionex and\n"
         << "                          --ssr-rtcm-profile legacy\n"
+        << "  --combined              Post-processing: also run the filter backward and\n"
+        << "                          combine both passes at each epoch (not with CLAS)\n"
+        << "  --combined-fix-tolerance <m>\n"
+        << "                          With --combined, two FIX solutions further apart\n"
+        << "                          are averaged as FLOAT (default: 0.05)\n"
         << "  --ssr-latency <s>       With --realtime and --ssr-rtcm: use each SSR update\n"
         << "                          from <s> seconds after its reference epoch, when a\n"
         << "                          receiver has it (default 0)\n"
@@ -536,6 +545,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.emit_epoch_time = true;
         } else if (arg == "--realtime") {
             options.causal = true;
+        } else if (arg == "--combined") {
+            options.combined = true;
+        } else if (arg == "--combined-fix-tolerance" && i + 1 < argc) {
+            options.combined_max_fix_difference_m = std::stod(argv[++i]);
         } else if (arg == "--ssr-latency" && i + 1 < argc) {
             options.ssr_latency_s = std::stod(argv[++i]);
             options.ssr_latency_set = true;
@@ -641,6 +654,26 @@ Options parseArguments(int argc, char* argv[]) {
         }
         if (options.madocalib_bridge) {
             argumentError("--realtime cannot use --madocalib-bridge", argv[0]);
+        }
+    }
+    if (options.combined) {
+        // The backward pass uses every later epoch. CLAS keeps state across
+        // epochs that only runs forward (SIS continuity, atmosphere banks).
+        if (options.causal) {
+            argumentError("--combined cannot be used with --realtime", argv[0]);
+        }
+        if (options.live_output) {
+            argumentError("--combined cannot use --live-output", argv[0]);
+        }
+        if (options.use_clas_osr_filter) {
+            argumentError("--combined cannot use --clas-osr", argv[0]);
+        }
+        if (options.madocalib_bridge) {
+            argumentError("--combined cannot use --madocalib-bridge", argv[0]);
+        }
+        if (!std::isfinite(options.combined_max_fix_difference_m) ||
+            options.combined_max_fix_difference_m < 0.0) {
+            argumentError("--combined-fix-tolerance must be >= 0", argv[0]);
         }
     }
     if (options.ssr_latency_set) {
@@ -1736,8 +1769,25 @@ int main(int argc, char* argv[]) {
             skip_until_env != nullptr ? std::atof(skip_until_env) : -1.0;
         ProgressReporter progress(options.progress_interval_s, obs_header.first_obs,
                                   obs_header.last_obs);
+        // --combined: a copy of the loaded processor runs the epochs backward
+        // after this forward pass; the forward pass records where each epoch
+        // starts in the observation file to read it again.
+        std::optional<libgnss::PPPProcessor> backward_processor;
+        if (options.combined) {
+            backward_processor.emplace(processor);
+        }
+        struct CombinedEpoch {
+            libgnss::GNSSTime time;
+            std::streampos offset;
+        };
+        std::vector<CombinedEpoch> combined_epochs;
+        std::streampos epoch_offset = std::streampos(-1);
+        const auto read_epoch = [&]() {
+            epoch_offset = options.combined ? obs_reader.tell() : std::streampos(-1);
+            return obs_reader.readObservationEpoch(observation_data);
+        };
         while ((options.max_epochs == 0 || processed_epochs < options.max_epochs) &&
-               obs_reader.readObservationEpoch(observation_data)) {
+               read_epoch()) {
             if (skip_until_tow >= 0.0 &&
                 observation_data.time.tow < skip_until_tow) {
                 continue;
@@ -1747,6 +1797,9 @@ int main(int argc, char* argv[]) {
             }
 
             const auto solution = processor.processEpoch(observation_data, nav_data);
+            if (options.combined) {
+                combined_epochs.push_back({observation_data.time, epoch_offset});
+            }
             atmospheric_trop_corrections +=
                 processor.getLastAppliedAtmosphericTroposphereCorrections();
             atmospheric_iono_corrections +=
@@ -1802,6 +1855,50 @@ int main(int argc, char* argv[]) {
         }
 
         progress.finish(processed_epochs, valid_solutions, ppp_fixed_solutions);
+
+        libgnss::forward_backward::CombineStats combine_stats;
+        if (options.combined && !combined_epochs.empty()) {
+            libgnss::forward_backward::Pass forward;
+            forward.solutions = std::move(solutions.solutions);
+            solutions.solutions.clear();
+            libgnss::forward_backward::Pass backward;
+            libgnss::forward_backward::BackwardLossOfLock backward_lli;
+            for (auto it = combined_epochs.rbegin(); it != combined_epochs.rend(); ++it) {
+                libgnss::ObservationData epoch;
+                if (!obs_reader.seekTo(it->offset) || !obs_reader.readObservationEpoch(epoch) ||
+                    std::abs(epoch.time - it->time) > 1e-6) {
+                    std::cerr << "Error: --combined could not read the epochs again for the "
+                                 "backward pass\n";
+                    return 1;
+                }
+                if (obs_header.approximate_position.norm() > 0.0) {
+                    epoch.receiver_position = obs_header.approximate_position;
+                }
+                backward_lli.apply(epoch);
+                const auto solution = backward_processor->processEpoch(epoch, nav_data);
+                if (solution.isValid()) {
+                    backward.solutions.push_back(solution);
+                }
+            }
+            libgnss::forward_backward::CombineConfig combine_config;
+            combine_config.max_fix_difference_m = options.combined_max_fix_difference_m;
+            solutions.solutions = libgnss::forward_backward::combine(
+                forward, backward, combine_config, &combine_stats);
+            valid_solutions = 0;
+            ppp_float_solutions = 0;
+            ppp_fixed_solutions = 0;
+            fallback_solutions = 0;
+            for (const auto& solution : solutions.solutions) {
+                ++valid_solutions;
+                if (solution.status == libgnss::SolutionStatus::PPP_FLOAT) {
+                    ppp_float_solutions++;
+                } else if (solution.status == libgnss::SolutionStatus::PPP_FIXED) {
+                    ppp_fixed_solutions++;
+                } else {
+                    fallback_solutions++;
+                }
+            }
+        }
 
         if (solutions.isEmpty()) {
             std::cerr << "Error: PPP processing produced no valid solutions\n";
@@ -1878,6 +1975,7 @@ int main(int argc, char* argv[]) {
                     << "  \"out\": \"" << jsonEscape(options.out_path) << "\",\n"
                     << "  \"mode\": \"" << (options.kinematic_mode ? "kinematic" : "static") << "\",\n"
                     << "  \"realtime\": " << (options.causal ? "true" : "false") << ",\n"
+                    << "  \"combined\": " << (options.combined ? "true" : "false") << ",\n"
                     << "  \"ssr_latency_s\": " << options.ssr_latency_s << ",\n"
                     << "  \"low_dynamics\": " << (options.low_dynamics_mode ? "true" : "false") << ",\n"
                     << "  \"static_anchor_blend\": " << (options.apply_static_anchor_blend ? "true" : "false") << ",\n"
@@ -2042,6 +2140,16 @@ int main(int argc, char* argv[]) {
             std::cout << "  valid solutions: " << valid_solutions << "\n";
             std::cout << "  PPP float solutions: " << ppp_float_solutions << "\n";
             std::cout << "  PPP fixed solutions: " << ppp_fixed_solutions << "\n";
+            if (options.combined) {
+                std::cout << "  combined (forward + backward): both=" << combine_stats.both
+                          << " forward_only=" << combine_stats.forward_only
+                          << " backward_only=" << combine_stats.backward_only
+                          << " averaged=" << combine_stats.averaged
+                          << " from_backward=" << combine_stats.from_backward
+                          << " fix_from_backward=" << combine_stats.fix_upgrades
+                          << " fix_inconsistent=" << combine_stats.fix_inconsistent
+                          << " fix_unconfirmed=" << combine_stats.fix_unconfirmed << "\n";
+            }
             std::cout << "  fallback solutions: " << fallback_solutions << "\n";
             std::cout << "  CLAS epoch policy: " << options.clas_epoch_policy << "\n";
             std::cout << "  CLAS OSR application: " << options.clas_osr_application << "\n";

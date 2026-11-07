@@ -4293,6 +4293,40 @@ TEST(PPPTest, RealtimeB2bUpdatesApplyInReceptionOrder) {
     EXPECT_NEAR(clock_m, early_epoch_clock, 1e-9);
 }
 
+TEST(PPPTest, ACopyOfALoadedProcessorKeepsItsOwnProducts) {
+    // gnss ppp --combined copies the loaded processor for its backward pass.
+    const auto first_path = tempFilePath("libgnss_ppp_copy_first.rtcm3");
+    const auto second_path = tempFilePath("libgnss_ppp_copy_second.rtcm3");
+    NavigationData nav_data;
+    const Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(eph);
+    writeBinaryFile(first_path, buildGps1060CombinedFrame(1, 345600, 77, 1200));
+    writeBinaryFile(second_path, buildGps1060CombinedFrame(1, 345600, 77, 2400));
+    const SatelliteId g01(GNSSSystem::GPS, 1);
+    const GNSSTime time(eph.toe.week, 345600.0);
+    const auto clock_of = [&](const PPPProcessor& processor) {
+        Vector3d orbit = Vector3d::Zero();
+        double clock_m = 0.0;
+        EXPECT_TRUE(processor.interpolateLoadedSSRCorrection(g01, time, orbit, clock_m));
+        return clock_m;
+    };
+
+    PPPProcessor original;
+    ASSERT_TRUE(original.loadRTCMSSRProducts(
+        first_path.string(), nav_data, 1.0, PPPProcessor::RTCMSSRProfile::Standard));
+    const double first_clock = clock_of(original);
+    const PPPProcessor copy(original);
+    EXPECT_TRUE(copy.hasLoadedSSRProducts());
+    EXPECT_NEAR(clock_of(copy), first_clock, 1e-12);
+    // Loading other products into the original leaves the copy as it was.
+    ASSERT_TRUE(original.loadRTCMSSRProducts(
+        second_path.string(), nav_data, 1.0, PPPProcessor::RTCMSSRProfile::Standard));
+    EXPECT_GT(std::abs(clock_of(original) - first_clock), 0.05);
+    EXPECT_NEAR(clock_of(copy), first_clock, 1e-12);
+    std::filesystem::remove(first_path);
+    std::filesystem::remove(second_path);
+}
+
 TEST(PPPTest, RtcmSsrUraWeightsTheCodeOnly) {
     // The same GPS 1060 correction with and without a 1061 URA of 0.22175 m
     // (class 4, value 7): the URA adds URA^2 to the code variance and leaves
