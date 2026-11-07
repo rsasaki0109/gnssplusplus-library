@@ -349,8 +349,12 @@ bool PPPProcessor::loadMadocaL6Products(const std::vector<std::string>& l6_files
     }
     const int gps_week = ppp_config_.l6_gps_week > 0 ? ppp_config_.l6_gps_week
                                                      : last_obs_gps_week_;
-    const int added =
-        io::decodeMadocaL6eFilesToProducts(l6_files, gps_week, ssr_products_);
+    // --realtime: the L6 log holds no reception time; --ssr-latency dates
+    // each correction when a receiver has it.
+    const double availability_delay_s =
+        ppp_config_.causal ? std::max(0.0, ppp_config_.ssr_latency_s) : 0.0;
+    const int added = io::decodeMadocaL6eFilesToProducts(
+        l6_files, gps_week, ssr_products_, availability_delay_s);
     ssr_products_loaded_ = added > 0;
     require_coherent_ssr_ =
         ssr_products_loaded_ && !env_overrides_.madoca_allow_partial_ssr;

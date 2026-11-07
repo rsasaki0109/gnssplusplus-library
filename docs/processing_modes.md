@@ -37,9 +37,12 @@ data from after its epoch (`PPPConfig::causal`, `SPPConfig::causal`,
     page or message that completes it. On the Kamakura hours that is 1 to 4 s
     after the reference epoch for HAS (median 1 s), 6 to 29 s for B2b
     (median 7 s). Updates apply in the order they are received.
-  - RTCM SSR (`--ssr-rtcm`): the files hold no reception time.
-    `--ssr-latency <s>` applies each update *s* seconds after its reference
-    epoch (default 0).
+  - RTCM SSR (`--ssr-rtcm`) and MADOCA L6E / L6D (`--madoca-l6`,
+    `--madoca-l6d`): the files hold no reception time. `--ssr-latency <s>`
+    applies each update *s* seconds after its reference epoch (default 0).
+    In an L6 log the corrections all sit at the same offset from the
+    one-per-second L6 message that completes them, so the log does not give
+    the latency either.
   - With RTCM SSR, PPP starts once the first update is in hand; the epochs
     before it are SPP. Starting on broadcast orbits and switching every
     satellite to its correction a few seconds later jumps the filter (HAS
@@ -107,6 +110,17 @@ below 0.20 m):
     100 epochs against the published antenna coordinate is 1.36 m with the
     existing no-future switch `GNSS_PPP_CLAS_BASE_CLOCK_PARITY=1`, and
     0.72 m with `GNSS_PPP_CLAS_ATMOS_LIFECYCLE=1`.
+
+MADOCA PPP-AR (MIZU sample with L6D, kinematic, 118 epochs) with
+`--realtime --ssr-latency <s>`, against a 24 h static PPP of MIZU with the
+IGS final orbits and clocks:
+
+| Latency | FIX | H RMS | U RMS |
+|---|---|---|---|
+| 0 s | 91 | 0.099 m | 0.154 m |
+| 5 s | 92 | 0.101 m | 0.161 m |
+| 10 s | 90 | 0.115 m | 0.185 m |
+| 20 s | 93 | 0.120 m | 0.186 m |
 
 RTCM SSR with `--realtime --ssr-latency <s>` (same columns):
 
@@ -189,9 +203,9 @@ stress fixture:
 These parts still see data after the epoch, also with `--realtime`; they are
 the next steps of this work:
 
-- **MADOCA and CLAS L6 reception time.** Their corrections are still tagged
-  with their reference epoch, not the time a receiver has them (CLAS about
-  15 s later), so a `--realtime` run uses each update slightly early.
+- **CLAS reception time.** CLAS corrections are still tagged with their
+  reference epoch, not the time a receiver has them (about 15 s later), so a
+  `--realtime` run uses each update slightly early.
 
 A priori configuration is not treated as future data: the RINEX header
 position, ANTEX, ocean and atmospheric loading and DCB files are used in

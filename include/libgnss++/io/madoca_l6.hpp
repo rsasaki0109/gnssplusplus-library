@@ -147,9 +147,13 @@ double madocaSsrUraSigmaMeters(int ura_index);
 // its orbit or clock correction epoch advances. gps_week seeds the decoder's
 // week-rollover (a mid-week reference epoch is used; <=0 falls back to the
 // sample epoch). Orbit deltas are RAC. Returns the number of samples appended.
+// availability_delay_s (>= 0, gnss ppp --realtime --ssr-latency) dates each
+// sample that many seconds after its correction epoch, when a receiver has
+// it; the orbit / clock reference times are kept.
 int decodeMadocaL6eFilesToProducts(const std::vector<std::string>& files,
                                    int gps_week,
-                                   libgnss::SSRProducts& products);
+                                   libgnss::SSRProducts& products,
+                                   double availability_delay_s = 0.0);
 
 // Write the materialized native SSRProducts view used by MADOCA PPP. This is a
 // diagnostic boundary dump: it records the satellite key, correction epoch,
