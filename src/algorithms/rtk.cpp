@@ -328,7 +328,9 @@ void RTKProcessor::rememberSolution(const PositionSolution& solution) {
         } else if (!has_last_trusted_position_ || !has_last_trusted_time_) {
             refresh_trusted = true;
         } else {
-            double dt = solution.time - last_trusted_time_;
+            // Elapsed time whatever the processing direction (the
+            // gnss solve --combined backward pass runs time backward).
+            double dt = std::abs(solution.time - last_trusted_time_);
             if (!std::isfinite(dt) || dt < 0.5) {
                 dt = 1.0;
             }
@@ -356,7 +358,7 @@ void RTKProcessor::rememberSolution(const PositionSolution& solution) {
         // than once at the same epoch. Replace that epoch's current sample
         // without turning it into its own predecessor (zero-span velocity).
         if (has_last_trusted_position_ && has_last_trusted_time_ &&
-            solution.time - last_trusted_time_ > 0.0) {
+            std::abs(solution.time - last_trusted_time_) > 0.0) {
             prev_trusted_position_ = last_trusted_position_;
             prev_trusted_time_ = last_trusted_time_;
             has_prev_trusted_position_ = true;
@@ -547,8 +549,13 @@ std::vector<RTKProcessor::DoubleDifference> RTKProcessor::formDoubleDifferences(
 
     if (!reuse_processed_epoch) {
         const_cast<RTKProcessor*>(this)->current_sat_data_ = sat_data;
-        const double bias_dt =
-            has_last_epoch_ ? std::max(rover_obs.time - last_epoch_time_, 1e-3) : 1.0;
+        // Signed: the Doppler slip prediction follows the processing
+        // direction (negative in the --combined backward pass).
+        double bias_dt = 1.0;
+        if (has_last_epoch_) {
+            const double elapsed = rover_obs.time - last_epoch_time_;
+            bias_dt = std::abs(elapsed) >= 1e-3 ? elapsed : 1e-3;
+        }
         const_cast<RTKProcessor*>(this)->updateBias(sat_data, bias_dt, rover_obs.time,
                                                     base_obs.time);
     }

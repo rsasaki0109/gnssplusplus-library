@@ -199,7 +199,7 @@ bool RTKProcessor::validateFixedDopplerConsensus(const Vector3d& position,
     }
     // An expired track is no reference: its integration error has outgrown the
     // gate and only an accepted FIX could re-anchor it.
-    const double anchor_age = current_time - doppler_continuity_anchor_time_;
+    const double anchor_age = std::abs(current_time - doppler_continuity_anchor_time_);
     debug_telemetry_.fixed_candidate_doppler_consensus_age_s = anchor_age;
     if (rtk_config_.max_fixed_doppler_consensus_age_s > 0.0 && std::isfinite(anchor_age) &&
         anchor_age > rtk_config_.max_fixed_doppler_consensus_age_s) {
@@ -325,7 +325,7 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         has_fixed_update_gate_previous_solution_ &&
         new_pos.allFinite() &&
         fixed_update_gate_previous_position_.allFinite()) {
-        const double dt = current_time - fixed_update_gate_previous_time_;
+        const double dt = std::abs(current_time - fixed_update_gate_previous_time_);
         if (std::isfinite(dt) && dt > 1e-3) {
             fixed_update_gate_speed_mps =
                 (new_pos - fixed_update_gate_previous_position_).norm() / dt;
@@ -404,8 +404,10 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
     // This catches wrong integers that pass the ratio test
     const bool has_fixed_jump_dt = has_last_fixed_time_ &&
         std::isfinite(current_time - last_fixed_time_);
+    // Elapsed time whatever the processing direction (the gnss solve
+    // --combined backward pass runs time backward).
     const double fixed_jump_dt =
-        has_fixed_jump_dt ? current_time - last_fixed_time_ : 0.0;
+        has_fixed_jump_dt ? std::abs(current_time - last_fixed_time_) : 0.0;
     const bool fixed_anchor_usable = rtk_validation::fixedAnchorUsable(
         has_last_fixed_position_,
         has_last_fixed_time_,
@@ -424,10 +426,11 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         rtk_config_.position_mode != RTKConfig::PositionMode::STATIC &&
         has_last_fixed_time_ && has_last_doppler_velocity_ &&
         last_doppler_velocity_ecef_.allFinite()) {
+        // Signed dt: the prediction follows the processing direction.
         const double dt = current_time - last_fixed_time_;
         const double velocity_age = current_time - last_doppler_velocity_time_;
-        if (std::isfinite(dt) && dt > 0.0 && dt <= 2.0 &&
-            std::isfinite(velocity_age) && velocity_age >= 0.0 && velocity_age <= 2.0) {
+        if (std::isfinite(dt) && std::abs(dt) > 0.0 && std::abs(dt) <= 2.0 &&
+            std::isfinite(velocity_age) && std::abs(velocity_age) <= 2.0) {
             motion_reference += last_doppler_velocity_ecef_ * dt;
         }
     }

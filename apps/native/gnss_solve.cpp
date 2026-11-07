@@ -18,6 +18,7 @@
 
 #include <libgnss++/algorithms/integrity_consensus.hpp>
 #include <libgnss++/algorithms/fix_recovery_guard.hpp>
+#include <libgnss++/algorithms/forward_backward.hpp>
 #include <libgnss++/algorithms/nlos_weights.hpp>
 #include <libgnss++/algorithms/float_trust_policy.hpp>
 #include <libgnss++/algorithms/rtk.hpp>
@@ -101,6 +102,10 @@ struct SolveConfig {
     // this many seconds when no exact or interpolated base epoch exists.
     double base_hold_seconds = 0.0;
     bool causal = false;
+    // Post-processing forward + backward (--combined): a second, fresh filter
+    // runs the epochs backward and the two passes are combined per epoch.
+    bool combined = false;
+    double combined_max_fix_difference_m = 0.05;
     bool verbose = false;
     bool base_position_override = false;
     Eigen::Vector3d base_position_ecef = Eigen::Vector3d::Zero();
@@ -1302,6 +1307,8 @@ void printUsage(const char* program_name) {
         << "  --preset <name>         survey|low-cost|moving-base|odaiba|urban\n"
         << "  --realtime              Use no data from after each epoch, as a real-time\n"
         << "                          receiver (see --help-advanced: --base-hold-seconds)\n"
+        << "  --combined              Post-processing: also run the filter backward and\n"
+        << "                          combine both passes at each epoch\n"
         << "  --mode <name>           auto|kinematic|static|moving-base\n"
         << "  --iono <name>           auto|off|iflc|est\n"
         << "  --ratio <value>         Ambiguity ratio threshold\n"
@@ -1866,6 +1873,12 @@ void printAdvancedUsage(const char* program_name) {
         << "  --realtime                 Real-time equivalent: no base interpolation (only exact\n"
         << "                             or --base-hold-seconds), no guards that look at later\n"
         << "                             epochs, ephemerides only once broadcast\n"
+        << "  --combined                 Post-processing forward + backward: a second filter runs\n"
+        << "                             the epochs backward; each epoch takes the better status,\n"
+        << "                             or the covariance-weighted mean of two equal ones\n"
+        << "  --combined-fix-tolerance <m>\n"
+        << "                             With --combined, two FIX solutions further apart are\n"
+        << "                             averaged as FLOAT (default: 0.05)\n"
         << "  --base-interp-curvature    Evaluate the modeled base range at the rover epoch when\n"
         << "                             interpolating the base (keeps the range curvature;\n"
         << "                             default: off)\n"
@@ -2260,6 +2273,14 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--realtime") {
             config.causal = true;
+            continue;
+        }
+        if (arg == "--combined") {
+            config.combined = true;
+            continue;
+        }
+        if (arg == "--combined-fix-tolerance" && i + 1 < argc) {
+            config.combined_max_fix_difference_m = std::stod(argv[++i]);
             continue;
         }
         if (arg == "--base-hold-seconds" && i + 1 < argc) {
@@ -3242,6 +3263,26 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         config.enable_nonfix_drift_guard = false;
         config.enable_float_bridge_tail_guard = false;
     }
+    if (config.combined) {
+        // The backward pass uses every later epoch; per-epoch gates that
+        // keep their own time-ordered state run forward only.
+        if (config.causal) {
+            argumentError("--combined cannot be used with --realtime", argv[0]);
+        }
+        if (config.enable_fix_recovery) {
+            argumentError("--combined cannot use --fix-recovery", argv[0]);
+        }
+        if (config.enable_realtime_fix_integrity) {
+            argumentError("--combined cannot use --realtime-fix-integrity", argv[0]);
+        }
+        if (config.pos_fix_diagnostics) {
+            argumentError("--combined cannot use --pos-fix-diagnostics", argv[0]);
+        }
+        if (!std::isfinite(config.combined_max_fix_difference_m) ||
+            config.combined_max_fix_difference_m < 0.0) {
+            argumentError("--combined-fix-tolerance must be >= 0", argv[0]);
+        }
+    }
 
     return config;
 }
@@ -3641,11 +3682,15 @@ int main(int argc, char* argv[]) {
             config.safe_float_continuity_max_age_s;
         rtk_config.safe_float_continuity.maximum_velocity_age_s =
             config.safe_float_continuity_max_age_s;
+        // Kept for the --combined backward-pass filter.
+        std::shared_ptr<const libgnss::nlos_weights::NlosWeightTable> nlos_weight_table;
+        std::shared_ptr<const libgnss::road_height::RoadHeightMap> road_height_map;
         if (!config.nlos_weights_csv_path.empty()) {
             auto table = std::make_shared<libgnss::nlos_weights::NlosWeightTable>(
                 libgnss::nlos_weights::loadNlosWeightsCsv(config.nlos_weights_csv_path));
             std::cout << "Loaded NLOS weights: " << config.nlos_weights_csv_path
                       << " (" << table->by_tow.size() << " distinct epochs)" << std::endl;
+            nlos_weight_table = table;
             rtk_processor.setNlosWeightTable(std::move(table));
         }
         if (!config.road_height_map_path.empty()) {
@@ -3655,6 +3700,7 @@ int main(int argc, char* argv[]) {
                                                         config.road_height_radius_m));
             std::cout << "Loaded road heights: " << config.road_height_map_path << " ("
                       << map->points.size() << " points)" << std::endl;
+            road_height_map = map;
             rtk_processor.setRoadHeightMap(std::move(map));
         }
         rtk_config.road_height_sigma_m = config.road_height_sigma_m;
@@ -3949,9 +3995,25 @@ int main(int argc, char* argv[]) {
         libgnss::PositionSolution last_guard_output;
         bool have_last_guard_output = false;
 
+        // --combined: the covariance to weight each output by when the passes
+        // are combined (the filter's own FLOAT covariance where the output is
+        // the filter's FLOAT position, else the output's).
+        std::vector<Eigen::Matrix3d> pass_weights;
+        bool epoch_float_weight_valid = false;
+        Eigen::Matrix3d epoch_float_weight = Eigen::Matrix3d::Identity();
+        Eigen::Vector3d epoch_float_position = Eigen::Vector3d::Zero();
+
         const auto record_output = [&](const libgnss::PositionSolution& output_solution) {
             if (!output_solution.isValid()) return;
             solution.addSolution(output_solution);
+            if (config.combined) {
+                const bool filter_float =
+                    epoch_float_weight_valid &&
+                    output_solution.status == libgnss::SolutionStatus::FLOAT &&
+                    (output_solution.position_ecef - epoch_float_position).norm() < 1e-6;
+                pass_weights.push_back(filter_float ? epoch_float_weight
+                                                    : output_solution.position_covariance);
+            }
             ++valid_solution_count;
             if (output_solution.isFixed()) ++fixed_solution_count;
             if (config.verbose &&
@@ -3975,8 +4037,87 @@ int main(int argc, char* argv[]) {
         libgnss::PositionSolution last_real_output;
         bool have_last_real_output = false;
 
+        // --combined: the forward pass stores each epoch with its aligned base
+        // epoch. Once it ends, a fresh filter runs them backward through the
+        // same loop (same guards), and the two passes are combined below.
+        struct CombinedEpoch {
+            libgnss::ObservationData rover;
+            libgnss::ObservationData base;
+            bool interpolated_base = false;
+        };
+        std::vector<CombinedEpoch> combined_epochs;
+        bool backward_pass = false;
+        std::size_t backward_index = 0;
+        libgnss::forward_backward::Pass forward_pass;
+        std::unique_ptr<libgnss::RTKProcessor> backward_rtk_processor;
+        std::unique_ptr<libgnss::SPPProcessor> backward_spp_processor;
+        libgnss::RTKProcessor* active_rtk = &rtk_processor;
+        libgnss::SPPProcessor* active_spp = &spp_processor;
+        const Eigen::Vector3d initial_rover_seed = rover_obs.receiver_position;
+        const auto begin_backward_pass = [&]() {
+            if (!config.combined || backward_pass || combined_epochs.empty()) {
+                return false;
+            }
+            backward_pass = true;
+            forward_pass.solutions = std::move(solution.solutions);
+            forward_pass.weights = std::move(pass_weights);
+            solution.solutions.clear();
+            pass_weights.clear();
+            backward_rtk_processor = std::make_unique<libgnss::RTKProcessor>();
+            if (nlos_weight_table) {
+                backward_rtk_processor->setNlosWeightTable(nlos_weight_table);
+            }
+            if (road_height_map) {
+                backward_rtk_processor->setRoadHeightMap(road_height_map);
+            }
+            backward_rtk_processor->setRTKConfig(rtk_config);
+            backward_rtk_processor->setBasePosition(base_position);
+            backward_spp_processor = std::make_unique<libgnss::SPPProcessor>();
+            backward_spp_processor->setSPPConfig(spp_config);
+            active_rtk = backward_rtk_processor.get();
+            active_spp = backward_spp_processor.get();
+            last_fixed_output = libgnss::PositionSolution{};
+            have_last_fixed_output = false;
+            last_guard_output = libgnss::PositionSolution{};
+            have_last_guard_output = false;
+            last_real_output = libgnss::PositionSolution{};
+            have_last_real_output = false;
+            // Each epoch keeps the base epoch aligned to it forward.
+            base_ok = false;
+            has_previous_base = false;
+            // An LLI flag marks a slip since the previous epoch. Going
+            // backward that slip lies before the next epoch processed, so each
+            // epoch takes the flag of the epoch after it (as RTKLIB does).
+            const auto shift_loss_of_lock = [&](libgnss::ObservationData CombinedEpoch::*member) {
+                for (std::size_t index = 0; index < combined_epochs.size(); ++index) {
+                    std::map<std::pair<libgnss::SatelliteId, libgnss::SignalType>, bool> next_slip;
+                    if (index + 1 < combined_epochs.size()) {
+                        for (const auto& next : (combined_epochs[index + 1].*member).observations) {
+                            next_slip[{next.satellite, next.signal}] = (next.lli & 0x01) != 0;
+                        }
+                    }
+                    for (auto& observation : (combined_epochs[index].*member).observations) {
+                        const auto it = next_slip.find({observation.satellite, observation.signal});
+                        const bool slip = it != next_slip.end() && it->second;
+                        observation.lli = static_cast<uint8_t>((observation.lli & ~0x01) | (slip ? 0x01 : 0x00));
+                        observation.loss_of_lock = slip;
+                    }
+                }
+            };
+            shift_loss_of_lock(&CombinedEpoch::rover);
+            shift_loss_of_lock(&CombinedEpoch::base);
+            backward_index = combined_epochs.size() - 1;
+            rover_obs = combined_epochs[backward_index].rover;
+            rover_obs.receiver_position = initial_rover_seed;
+            return true;
+        };
+
         while (rover_ok) {
-            if (config.max_epochs > 0 && processed_rover_epochs >= config.max_epochs) {
+            if (!backward_pass && config.max_epochs > 0 &&
+                processed_rover_epochs >= config.max_epochs) {
+                if (begin_backward_pass()) {
+                    continue;
+                }
                 break;
             }
 
@@ -4040,12 +4181,21 @@ int main(int argc, char* argv[]) {
                 }
             }
 
+            if (backward_pass) {
+                // --combined backward pass: the base epoch aligned forward.
+                aligned_base_obs = combined_epochs[backward_index].base;
+                used_interpolated_base = combined_epochs[backward_index].interpolated_base;
+                have_aligned_base = true;
+            }
+
             if (!have_aligned_base) {
                 skipped_rover_epochs++;
                 const Eigen::Vector3d saved_rover_pos = rover_obs.receiver_position;
                 rover_ok = rover_reader.readObservationEpoch(rover_obs);
                 if (rover_ok) {
                     rover_obs.receiver_position = saved_rover_pos;
+                } else {
+                    rover_ok = begin_backward_pass();
                 }
                 processed_rover_epochs++;
                 continue;
@@ -4059,11 +4209,26 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            const bool timing_enabled = timing_csv.is_open();
+            if (config.combined && !backward_pass) {
+                CombinedEpoch stored{rover_obs, aligned_base_obs, used_interpolated_base};
+                // RTK reads only the selected observations: drop the full
+                // RINEX tracking-code sets to keep the stored epochs small.
+                for (auto* epoch : {&stored.rover, &stored.base}) {
+                    epoch->rinex_tracking_observations.clear();
+                    epoch->rinex_frequency_slots.clear();
+                }
+                combined_epochs.push_back(std::move(stored));
+            }
+
+            // Per-epoch logs describe the forward pass.
+            const bool timing_enabled = timing_csv.is_open() && !backward_pass;
             const auto epoch_start = timing_enabled
                                          ? std::chrono::steady_clock::now()
                                          : std::chrono::steady_clock::time_point{};
-            auto pos_solution = rtk_processor.processRTKEpoch(rover_obs, aligned_base_obs, nav_data);
+            auto pos_solution = active_rtk->processRTKEpoch(rover_obs, aligned_base_obs, nav_data);
+            epoch_float_weight_valid =
+                config.combined && pos_solution.status == libgnss::SolutionStatus::FLOAT &&
+                active_rtk->getFloatPosteriorPosition(epoch_float_position, epoch_float_weight);
             if (config.pos_fix_diagnostics &&
                 pos_solution.status == libgnss::SolutionStatus::FIXED) {
                 // Read-only record of the RTK epoch's own fixed position, taken
@@ -4202,7 +4367,9 @@ int main(int argc, char* argv[]) {
                 if (!have_last_output) {
                     return kDefaultNonFixedJumpGuardMeters;
                 }
-                double dt = pos_solution.time - last_output->time;
+                // Elapsed time whatever the direction (--combined runs a
+                // backward pass).
+                double dt = std::abs(pos_solution.time - last_output->time);
                 if (!std::isfinite(dt) || dt <= 0.0) {
                     dt = 1.0;
                 }
@@ -4222,7 +4389,7 @@ int main(int argc, char* argv[]) {
                 !pos_solution.isValid() &&
                 config.enable_safe_availability_fallback) {
                 auto spp_fallback =
-                    spp_processor.processEpoch(rover_obs, nav_data);
+                    active_spp->processEpoch(rover_obs, nav_data);
                 if (spp_fallback.isValid() &&
                     spp_fallback.position_ecef.allFinite()) {
                     spp_fallback.status =
@@ -4351,7 +4518,7 @@ int main(int argc, char* argv[]) {
                 }
             }
             if (used_interpolated_base && pos_solution.status == libgnss::SolutionStatus::FLOAT) {
-                auto spp_solution = spp_processor.processEpoch(rover_obs, nav_data);
+                auto spp_solution = active_spp->processEpoch(rover_obs, nav_data);
                 if (spp_solution.isValid()) {
                     const double float_vs_spp = (pos_solution.position_ecef - spp_solution.position_ecef).norm();
                     if (std::isfinite(float_vs_spp) && float_vs_spp > kDefaultFloatVsSppGuardMeters) {
@@ -4389,7 +4556,7 @@ int main(int argc, char* argv[]) {
                 pos_solution.status != libgnss::SolutionStatus::FIXED &&
                 !immediate_guard_continuity_used &&
                 have_last_fixed_output) {
-                double dt_since_fixed = pos_solution.time - last_fixed_output.time;
+                double dt_since_fixed = std::abs(pos_solution.time - last_fixed_output.time);
                 if (std::isfinite(dt_since_fixed) && dt_since_fixed > 0.0 && dt_since_fixed <= 5.0) {
                     const double drift_from_fixed =
                         (pos_solution.position_ecef - last_fixed_output.position_ecef).norm();
@@ -4521,8 +4688,11 @@ int main(int argc, char* argv[]) {
                 record_integrity_emissions(integrity_update.emitted);
             }
 
-            debug_writer.write(pos_solution, rtk_processor.getLastDebugTelemetry());
-            if (rtk_covariance_log.is_open() && pos_solution.position_ecef.allFinite()) {
+            if (!backward_pass) {
+                debug_writer.write(pos_solution, rtk_processor.getLastDebugTelemetry());
+            }
+            if (rtk_covariance_log.is_open() && !backward_pass &&
+                pos_solution.position_ecef.allFinite()) {
                 const auto& c = pos_solution.position_covariance;
                 rtk_covariance_log << pos_solution.time.week << ',' << std::setprecision(12)
                     << pos_solution.time.tow << ',' << static_cast<int>(pos_solution.status) << ','
@@ -4531,7 +4701,7 @@ int main(int argc, char* argv[]) {
                     << c(0, 2) << ',' << c(1, 1) << ',' << c(1, 2) << ',' << c(2, 2) << '\n';
             }
 
-            if (diagnostics_csv.is_open()) {
+            if (diagnostics_csv.is_open() && !backward_pass) {
                 EpochDiagnostics diag;
                 diag.epoch_index = static_cast<int>(processed_rover_epochs);
                 diag.gps_week = rover_obs.time.week;
@@ -4553,7 +4723,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (integrity_reset_requested) {
-                rtk_processor.reset();
+                active_rtk->reset();
                 have_last_fixed_output = false;
             }
 
@@ -4567,7 +4737,7 @@ int main(int argc, char* argv[]) {
                     last_fixed_output = gated_feedback_solution;
                 if (!immediate_guard_continuity_used &&
                     !availability_fallback_used &&
-                    !rtk_processor.getLastDebugTelemetry()
+                    !active_rtk->getLastDebugTelemetry()
                          .safe_float_continuity_used) {
                     last_real_output = feedback_solution;
                     have_last_real_output =
@@ -4578,8 +4748,21 @@ int main(int argc, char* argv[]) {
             }
 
             const Eigen::Vector3d saved_rover_pos = rover_obs.receiver_position;
-            rover_ok = rover_reader.readObservationEpoch(rover_obs);
-            if (rover_ok) {
+            bool new_pass = false;
+            if (backward_pass) {
+                rover_ok = backward_index > 0;
+                if (rover_ok) {
+                    --backward_index;
+                    rover_obs = combined_epochs[backward_index].rover;
+                }
+            } else {
+                rover_ok = rover_reader.readObservationEpoch(rover_obs);
+                if (!rover_ok) {
+                    // --combined: the backward pass starts from its own seed.
+                    rover_ok = new_pass = begin_backward_pass();
+                }
+            }
+            if (rover_ok && !new_pass) {
                 const bool trusted_spp_seed =
                     pos_solution.status == libgnss::SolutionStatus::SPP &&
                     pos_solution.num_satellites >= 7;
@@ -4596,6 +4779,18 @@ int main(int argc, char* argv[]) {
 
         if (integrity_gate) {
             record_integrity_emissions(integrity_gate->flush());
+        }
+        libgnss::forward_backward::CombineStats combine_stats;
+        if (backward_pass) {
+            libgnss::forward_backward::Pass backward;
+            backward.solutions = std::move(solution.solutions);
+            backward.weights = std::move(pass_weights);
+            libgnss::forward_backward::CombineConfig combine_config;
+            combine_config.max_fix_difference_m = config.combined_max_fix_difference_m;
+            solution.solutions = libgnss::forward_backward::combine(
+                forward_pass, backward, combine_config, &combine_stats);
+            combined_epochs.clear();
+            combined_epochs.shrink_to_fit();
         }
         const std::vector<libgnss::PositionSolution>
             availability_source_solutions =
@@ -4833,6 +5028,16 @@ int main(int argc, char* argv[]) {
         std::cout << "  interpolated base epochs: " << interpolated_base_epochs << std::endl;
         std::cout << "  held base epochs: " << held_base_epochs << std::endl;
         std::cout << "  realtime: " << (config.causal ? "yes" : "no") << std::endl;
+        if (config.combined) {
+            std::cout << "  combined (forward + backward): both=" << combine_stats.both
+                      << " forward_only=" << combine_stats.forward_only
+                      << " backward_only=" << combine_stats.backward_only
+                      << " averaged=" << combine_stats.averaged
+                      << " from_backward=" << combine_stats.from_backward
+                      << " fix_from_backward=" << combine_stats.fix_upgrades
+                      << " fix_inconsistent=" << combine_stats.fix_inconsistent
+                      << " fix_unconfirmed=" << combine_stats.fix_unconfirmed << std::endl;
+        }
         std::cout << "  skipped rover epochs: " << skipped_rover_epochs << std::endl;
         if (config.cmc_aware_reference_selection) {
             const auto cmc_ref_diag = rtk_processor.getCmcReferenceDiagnostics();

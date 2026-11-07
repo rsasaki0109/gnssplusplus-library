@@ -166,8 +166,8 @@ bool RTKProcessor::floatResidualTrustedJumpPassesGate(
         !float_solution.position_ecef.allFinite()) {
         return false;
     }
-    const double dt = float_solution.time - saved_last_trusted_time;
-    if (!std::isfinite(dt) || dt < 0.0) {
+    const double dt = std::abs(float_solution.time - saved_last_trusted_time);
+    if (!std::isfinite(dt)) {
         return false;
     }
     const double trusted_jump =
@@ -463,23 +463,25 @@ void RTKProcessor::resetPositionToSPP(
         if (rtk_config_.use_doppler_float_seed &&
             has_last_trusted_position_ && has_last_trusted_time_ &&
             has_last_doppler_velocity_) {
+            // Signed anchor_age: the prediction follows the processing
+            // direction (backward in the gnss solve --combined backward pass).
             const double anchor_age = rover_obs.time - last_trusted_time_;
             const double velocity_age = rover_obs.time - last_doppler_velocity_time_;
-            if (std::isfinite(anchor_age) && anchor_age >= 0.0 &&
-                anchor_age <= rtk_config_.doppler_float_seed_max_age_s &&
-                std::isfinite(velocity_age) && velocity_age >= 0.0 &&
-                velocity_age <= 1.0 && last_doppler_velocity_ecef_.allFinite()) {
+            if (std::isfinite(anchor_age) &&
+                std::abs(anchor_age) <= rtk_config_.doppler_float_seed_max_age_s &&
+                std::isfinite(velocity_age) &&
+                std::abs(velocity_age) <= 1.0 && last_doppler_velocity_ecef_.allFinite()) {
                 rover_pos = last_trusted_position_ +
                             last_doppler_velocity_ecef_ * anchor_age;
                 var_pos = std::max(25.0,
-                    std::pow(doppler_velocity_sigma_mps_ * std::max(anchor_age, 0.2), 2.0));
+                    std::pow(doppler_velocity_sigma_mps_ * std::max(std::abs(anchor_age), 0.2), 2.0));
                 seeded = true;
             }
         }
         if (!seeded && rtk_config_.prefer_trusted_position_seed &&
             has_last_trusted_position_ && has_last_trusted_time_) {
-            const double dt = rover_obs.time - last_trusted_time_;
-            if (std::isfinite(dt) && dt >= 0.0 && dt <= 1.0) {
+            const double dt = std::abs(rover_obs.time - last_trusted_time_);
+            if (std::isfinite(dt) && dt <= 1.0) {
                 rover_pos = last_trusted_position_;
                 var_pos = std::max(25.0, std::pow(3.0 * std::max(dt, 0.2), 2.0));
                 seeded = true;

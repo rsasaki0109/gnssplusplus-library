@@ -34,14 +34,16 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
     const ObservationData& base_obs, const NavigationData& nav) {
     if (rtk_config_.max_fixed_doppler_consensus_m > 0.0 &&
         has_doppler_continuity_position_ && has_last_doppler_velocity_) {
+        // Signed dt: the track follows the processing direction (backward in
+        // the gnss solve --combined backward pass).
         const double dt = rover_obs.time - doppler_continuity_time_;
         const double velocity_age = rover_obs.time - last_doppler_velocity_time_;
-        if (std::isfinite(dt) && dt > 0.0 && dt <= 2.0 &&
-            std::isfinite(velocity_age) && velocity_age >= 0.0 && velocity_age <= 2.0 &&
+        if (std::isfinite(dt) && std::abs(dt) > 0.0 && std::abs(dt) <= 2.0 &&
+            std::isfinite(velocity_age) && std::abs(velocity_age) <= 2.0 &&
             last_doppler_velocity_ecef_.allFinite()) {
             doppler_continuity_position_ecef_ += last_doppler_velocity_ecef_ * dt;
             doppler_continuity_time_ = rover_obs.time;
-        } else if (!std::isfinite(dt) || dt < 0.0 || dt > 2.0) {
+        } else if (!std::isfinite(dt) || std::abs(dt) > 2.0) {
             has_doppler_continuity_position_ = false;
         }
     }
@@ -172,7 +174,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                     // trusted anchor's age; 0 (default) = no limit.
                     const double max_anchor_age =
                         rtk_config_.spp_fallback_blank_max_anchor_age_s;
-                    const double anchor_age = rover_obs.time - last_trusted_time_;
+                    const double anchor_age = std::abs(rover_obs.time - last_trusted_time_);
                     if (max_anchor_age > 0.0 && !(anchor_age <= max_anchor_age)) {
                         debug_telemetry_.spp_blank_age_limited = true;
                     } else {
@@ -183,7 +185,8 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 }
             }
             if (!moving_base_mode && spp.isValid() && has_last_solution_position_ && has_last_epoch_) {
-                double dt = rover_obs.time - last_epoch_time_;
+                // Elapsed time whatever the processing direction.
+                double dt = std::abs(rover_obs.time - last_epoch_time_);
                 if (!std::isfinite(dt) || dt < 0.5) dt = 1.0;
                 const double jump =
                     (spp.position_ecef - last_solution_position_).norm();
@@ -293,7 +296,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
 
         double state_dt = 1.0;
         if (has_last_epoch_) {
-            state_dt = rover_obs.time - last_epoch_time_;
+            state_dt = std::abs(rover_obs.time - last_epoch_time_);
         }
         updateGlonassHardwareBias(state_dt);
 
@@ -476,7 +479,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             }
 
             if (!moving_base_mode && saved_has_last_trusted && saved_has_last_trusted_time) {
-                double dt = rover_obs.time - saved_last_trusted_time;
+                double dt = std::abs(rover_obs.time - saved_last_trusted_time);
                 if (!std::isfinite(dt) || dt < 0.5) {
                     dt = 1.0;
                 }
@@ -492,7 +495,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             }
 
             if (!moving_base_mode && saved_has_last_solution && saved_has_last_solution_time) {
-                double dt = rover_obs.time - saved_last_solution_time;
+                double dt = std::abs(rover_obs.time - saved_last_solution_time);
                 if (!std::isfinite(dt) || dt < 0.5) dt = 1.0;
                 const double jump =
                     (solution.position_ecef - saved_last_solution_position).norm();
@@ -665,7 +668,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                     debug_telemetry_.fixed_float_jump_m = fixed_float_jump;
                     bool exceeds_trusted_jump = false;
                     if (saved_has_last_trusted && saved_has_last_trusted_time) {
-                        const double dt = rover_obs.time - saved_last_trusted_time;
+                        const double dt = std::abs(rover_obs.time - saved_last_trusted_time);
                         exceeds_trusted_jump = rtk_validation::exceedsAdaptiveJump(
                             solution.position_ecef,
                             saved_last_trusted_position,

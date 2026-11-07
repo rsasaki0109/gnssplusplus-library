@@ -7,7 +7,7 @@ epoch *t* may use, not in the solver.
 |---|---|---|---|
 | Real-time | Data received up to *t* (with its latency) | `gnss live`, `gnss online` | Operation |
 | Post-processing, real-time equivalent (`--realtime`) | Data tagged up to *t* | `gnss solve --realtime`, `gnss replay --realtime`, `gnss ppp --realtime`, `gnss spp --realtime` | Real-time performance from recorded data |
-| Post-processing | Anything in the files, including data after *t* | `gnss solve`, `gnss ppp`, `gnss spp`, `gnss fgo` | Best accuracy after the fact |
+| Post-processing | Anything in the files, including data after *t* | `gnss solve`, `gnss solve --combined`, `gnss ppp`, `gnss spp`, `gnss fgo` | Best accuracy after the fact |
 
 A `--realtime` run is meant to give what a real-time receiver would have
 given on the same data, so results quoted for real-time use should come from
@@ -196,3 +196,56 @@ the next steps of this work:
 A priori configuration is not treated as future data: the RINEX header
 position, ANTEX, ocean and atmospheric loading and DCB files are used in
 every mode, and so is `--eop-c04`, which only feeds the tide models.
+
+## Forward + backward: `gnss solve --combined`
+
+A post-processing RTK run that uses every later epoch: the filter runs
+forward, then a second, fresh filter runs the same epochs backward, and each
+epoch combines the two passes as RTKLIB's combined solution does:
+
+- **Better status wins** (FIX > FLOAT > DGPS > SPP). A FIX of the backward
+  pass fills, for example, the FLOAT epochs after an outage, before the
+  forward filter has fixed again.
+- **Same status: the covariance-weighted mean.** FLOAT epochs use the
+  filter's own covariance.
+- **Two FIXes more than `--combined-fix-tolerance` apart** (default 5 cm)
+  fixed different ambiguities: their mean is kept as FLOAT.
+- **A FIX the other pass has no FLOAT or FIX solution for** is reported as
+  FLOAT. On the runs below such FIXes were wrong one time in five, against 1
+  in 75 for a FIX the other pass solved FLOAT and 1 in 1500 for two agreeing
+  FIXes.
+
+The backward pass replays each epoch with the base epoch aligned to it on the
+forward pass, takes each loss-of-lock flag from the epoch after it (a slip
+lies between the two), and runs every in-loop guard. The guards after the
+loop (non-FIX drift, FLOAT bridge tail, kinematic post-filter) run on the
+combined solution. `--combined` cannot be used with `--realtime`,
+`--fix-recovery`, `--realtime-fix-integrity` or `--pos-fix-diagnostics`;
+per-epoch logs describe the forward pass. It keeps every epoch in memory:
+about twice the memory and 1.6 times the run time of a forward run.
+
+The six PPC Tokyo / Nagoya runs with the sign-off profile
+(`configs/benchmarks/ppc_sigma_demote_nis2_ratio4.toml`), against their
+reference trajectories:
+
+| Run | FIX | Wrong FIX (> 0.5 m, of FIX) | PPC official score |
+|---|---|---|---|
+| Tokyo run1 | 59.6 → 65.5 % | 1.75 → 1.72 % | 71.8 → 78.2 % |
+| Tokyo run2 | 62.3 → 73.1 % | 0.33 → 0.37 % | 83.7 → 87.3 % |
+| Tokyo run3 | 66.3 → 70.9 % | 0.47 → 0.55 % | 77.4 → 81.0 % |
+| Nagoya run1 | 64.5 → 73.0 % | 0.79 → 0.36 % | 51.5 → 59.8 % |
+| Nagoya run2 | 33.3 → 46.6 % | 0.22 → 0.61 % | 32.1 → 37.3 % |
+| Nagoya run3 | 30.0 → 36.8 % | 5.53 → 4.97 % | 43.0 → 45.8 % |
+| All six | 51.0 → 61.1 % of the reference epochs | 0.96 → 0.96 % | 67.5 → 72.3 % (distance-weighted) |
+
+More epochs are positioned (83-97 % → 93-99 %); the added ones are the hard
+ones, so P95 H grows on four runs.
+
+The default (forward) output does not change: the RTK filter now measures
+the time since an earlier epoch in either direction, which changes nothing
+when time only increases. Before that, the backward pass flagged a cycle slip
+on every satellite at every epoch (the Doppler prediction used a forward time
+step) and its jump gates, which grow with the elapsed time, rejected every
+epoch once the vehicle had moved.
+
+PPP has no backward pass yet.
