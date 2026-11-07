@@ -541,7 +541,10 @@ bool RINEXReader::open(const std::string& filename) {
         return false;
     }
     file_.open(filename);
+    filename_ = filename;
     current_line_ = 0;
+    malformed_epochs_ = 0;
+    malformed_values_ = 0;
     header_read_ = false;
     last_rinex4_epoch_was_event_ = false;
     last_rinex2_epoch_was_event_ = false;
@@ -595,8 +598,16 @@ bool RINEXReader::readHeader(RINEXHeader& header) {
             break;
         }
         
-        if (!parseHeaderLine(line, header)) {
-            continue; // Skip invalid lines
+        try {
+            if (!parseHeaderLine(line, header)) {
+                continue; // Skip invalid lines
+            }
+        } catch (const std::exception&) {
+            const std::string label = line.size() > 60 ? line.substr(60) : std::string();
+            std::cerr << "Error: " << filename_ << ":" << current_line_
+                      << ": unreadable RINEX header line"
+                      << (label.empty() ? std::string() : " (" + label + ")") << std::endl;
+            return false;
         }
     }
 
@@ -673,8 +684,12 @@ bool RINEXReader::readObservationEpoch(ObservationData& obs_data) {
             return true;
         } else if (isRinex4()) {
             if (!line.empty() && line[0] == '>') {
+                const int epoch_line = current_line_;
                 if (!parseObservationEpochV4(line, obs_data)) {
-                    return false;
+                    // Skip the epoch and read on from the next one.
+                    reportMalformedEpoch(epoch_line);
+                    obs_data.clear();
+                    continue;
                 }
                 // Event and cycle-slip records are consumed by the RINEX 4
                 // parser but are not ordinary ObservationData epochs.  Keep
@@ -687,7 +702,33 @@ bool RINEXReader::readObservationEpoch(ObservationData& obs_data) {
         } else if (header_.version >= 3.0 && header_.version < 4.0) {
             // RINEX 3.x format starts with '>'
             if (!line.empty() && line[0] == '>') {
-                return parseObservationEpochV3(line, obs_data);
+                const int epoch_line = current_line_;
+                // Epoch flags 2-5 (special events, followed by header records)
+                // and 6 (cycle slip records) are not observation epochs: skip
+                // the records that follow them.
+                if (line.size() > 31 && line[31] >= '2' && line[31] <= '6') {
+                    int records = 0;
+                    if (line.size() > 32) {
+                        const std::string count = line.substr(32, 3);
+                        for (const char c : count) {
+                            if (c >= '0' && c <= '9') {
+                                records = records * 10 + (c - '0');
+                            }
+                        }
+                    }
+                    std::string record;
+                    for (int r = 0; r < records && readLine(record); ++r) {
+                    }
+                    continue;
+                }
+                if (parseObservationEpochV3(line, obs_data)) {
+                    return true;
+                }
+                // Skip the epoch (its remaining rows do not start with '>')
+                // and read on from the next one.
+                reportMalformedEpoch(epoch_line);
+                obs_data.clear();
+                continue;
             }
         } else {
             std::cerr << "Unsupported RINEX version for observation data: "
@@ -1954,9 +1995,8 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
             return false;
         }
 
-    } catch (const std::exception& e) {
-        std::cerr << "RINEX 3 observation epoch parsing error: " << e.what() << std::endl;
-        return false;
+    } catch (const std::exception&) {
+        return false;  // reported by readObservationEpoch with its line
     }
 
     return true;
@@ -2044,14 +2084,22 @@ bool RINEXReader::parseObservationSatelliteRecord(
             try {
                 size_t consumed = 0;
                 const double value = std::stod(obs_str, &consumed);
-                if (strict && (consumed != obs_str.size() || !std::isfinite(value))) {
-                    return false;
+                if (consumed != obs_str.size() || !std::isfinite(value)) {
+                    if (strict) {
+                        return false;
+                    }
+                    // Not a number as a whole ("2197abc4.560"): missing, not
+                    // its numeric prefix.
+                    reportMalformedValue(obs_str);
+                    obs_values[i] = 0.0;
+                } else {
+                    obs_values[i] = value;
                 }
-                obs_values[i] = value;
             } catch (...) {
                 if (strict) {
                     return false;
                 }
+                reportMalformedValue(obs_str);
                 obs_values[i] = 0.0;
             }
         }
@@ -2615,6 +2663,35 @@ SatelliteId RINEXReader::parseSatelliteId(const std::string& sat_str, double ver
         }
     }
     return SatelliteId(system, 1);
+}
+
+void RINEXReader::reportMalformedEpoch(int line_number) {
+    constexpr std::size_t kReported = 5;
+    ++malformed_epochs_;
+    if (malformed_epochs_ <= kReported) {
+        std::cerr << "Warning: " << filename_ << ":" << line_number
+                  << ": unreadable observation epoch skipped" << std::endl;
+    }
+    if (malformed_epochs_ == kReported) {
+        std::cerr << "Warning: " << filename_
+                  << ": further unreadable epochs are skipped without a message" << std::endl;
+    }
+}
+
+void RINEXReader::reportMalformedValue(const std::string& value) {
+    constexpr std::size_t kReported = 5;
+    ++malformed_values_;
+    if (malformed_values_ <= kReported) {
+        std::cerr << "Warning: " << filename_ << ":" << current_line_
+                  << ": observation value \"" << value << "\" is not a number; read as missing"
+                  << std::endl;
+    }
+    if (malformed_values_ == kReported) {
+        std::cerr << "Warning: " << filename_
+                  << ": further non-numeric observation values are read as missing without a "
+                     "message"
+                  << std::endl;
+    }
 }
 
 bool RINEXReader::readLine(std::string& line) {
