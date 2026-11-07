@@ -3557,6 +3557,24 @@ struct PPPProcessorTestAccess {
         return p.madocaPostfitScoreRejectsEpoch(true, 8, score);
     }
 
+    // Runs applyPreciseCorrections() for observations seen from `receiver`
+    // (a minimal filter state holding only that position).
+    static void applyCorrections(PPPProcessor& p,
+                                 std::vector<Obs>& observations,
+                                 const NavigationData& nav,
+                                 const GNSSTime& time,
+                                 const Vector3d& receiver) {
+        auto& fs = p.filter_state_;
+        fs.pos_index = 0;
+        fs.clock_index = 6;
+        fs.trop_index = 8;
+        fs.total_states = 10;
+        fs.state = VectorXd::Zero(fs.total_states);
+        fs.state.segment(fs.pos_index, 3) = receiver;
+        fs.covariance = MatrixXd::Identity(fs.total_states, fs.total_states);
+        p.applyPreciseCorrections(observations, nav, time);
+    }
+
     // Runs predictState() on a minimal broadcast-model filter (position, clock,
     // troposphere states only) with a valid SPP seed.
     static void predictFromSeed(PPPProcessor& p,
@@ -4008,4 +4026,57 @@ TEST(PPPTest, SSRProductsHoldEndStopsTheLastSample) {
     }
     ASSERT_TRUE(products.interpolateCorrection(g05, t0 + 20.0, orbit, clock_m));
     EXPECT_NEAR(clock_m, 0.9, 1e-12);
+}
+
+TEST(PPPTest, RtcmSsrUraWeightsTheCodeOnly) {
+    // The same GPS 1060 correction with and without a 1061 URA of 0.22175 m
+    // (class 4, value 7): the URA adds URA^2 to the code variance and leaves
+    // the phase variance alone.
+    NavigationData nav_data;
+    const Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(eph);
+    const GNSSTime time(eph.toe.week, 345600.0);
+    Vector3d sat_position, sat_velocity;
+    double sat_clock = 0.0, sat_drift = 0.0;
+    ASSERT_TRUE(nav_data.calculateSatelliteState(eph.satellite, time, sat_position, sat_velocity,
+                                                 sat_clock, sat_drift));
+    // On the ground right below the satellite.
+    const Vector3d receiver = sat_position.normalized() * 6371000.0;
+
+    auto run = [&](bool with_ura, double& variance_pr, double& variance_cp) {
+        const auto rtcm_path = tempFilePath(with_ura ? "libgnss_ppp_ura_weight_with.rtcm3"
+                                                     : "libgnss_ppp_ura_weight_without.rtcm3");
+        std::vector<uint8_t> frames = buildGps1060CombinedFrame(1);
+        if (with_ura) {
+            const auto ura_frame = buildGps1061UraFrame(1, 39);
+            frames.insert(frames.end(), ura_frame.begin(), ura_frame.end());
+        }
+        writeBinaryFile(rtcm_path, frames);
+        PPPProcessor processor;
+        ASSERT_TRUE(processor.loadRTCMSSRProducts(rtcm_path.string(), nav_data, 1.0));
+        std::filesystem::remove(rtcm_path);
+
+        std::vector<PPPProcessorTestAccess::Obs> observations(1);
+        auto& obs = observations.front();
+        obs.satellite = eph.satellite;
+        obs.valid = true;
+        obs.has_carrier_phase = true;
+        obs.primary_signal = SignalType::GPS_L1CA;
+        obs.secondary_signal = SignalType::GPS_L2C;
+        obs.primary_frequency_hz = constants::GPS_L1_FREQ;
+        obs.secondary_frequency_hz = constants::GPS_L2_FREQ;
+        obs.pseudorange_if = (sat_position - receiver).norm();
+        obs.carrier_phase_if = obs.pseudorange_if;
+        obs.variance_pr = 1.0;
+        obs.variance_cp = 1.0e-4;
+        PPPProcessorTestAccess::applyCorrections(processor, observations, nav_data, time, receiver);
+        ASSERT_TRUE(obs.valid);
+        variance_pr = obs.variance_pr;
+        variance_cp = obs.variance_cp;
+    };
+    double pr_without = 0.0, cp_without = 0.0, pr_with = 0.0, cp_with = 0.0;
+    run(false, pr_without, cp_without);
+    run(true, pr_with, cp_with);
+    EXPECT_NEAR(pr_with - pr_without, 0.22175 * 0.22175, 1e-9);
+    EXPECT_NEAR(cp_with, cp_without, 1e-15);
 }

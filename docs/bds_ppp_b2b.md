@@ -58,7 +58,8 @@ What `gnss_ppp --b2b` does:
 - **Weights.** The URA of message type 2 is added to the code variance only.
   It describes an orbit / clock error that changes slowly, which the float
   ambiguities absorb, so it is not phase noise (cssrlib does not use it at
-  all).
+  all; the rule is shared with the other SSR sources, see
+  [SSR URA in the PPP weights](interfaces.md#ssr-ura-in-the-ppp-weights)).
 
 ## Validation
 
