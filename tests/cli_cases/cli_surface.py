@@ -80,6 +80,72 @@ class CLISurfaceCases:
             self.assertIn("<coordinates>", kml_text)
             self.assertIn("</coordinates>", kml_text)
 
+    def test_tools_fail_on_inputs_without_data(self) -> None:
+        # An input with nothing usable in it is an error, not an empty success.
+        with tempfile.TemporaryDirectory(prefix="gnss_no_data_") as temp_dir:
+            temp_root = Path(temp_dir)
+            fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+            nav = temp_root / "base.nav"
+            converted = self.run_gnss("convert", "--input", str(fixture / "base.rtcm"),
+                                      "--nav-out", str(nav), "--format", "rtcm",
+                                      "--gps-week", "2324", "--quiet")
+            self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            header_only = temp_root / "header_only.obs"
+            header_only.write_text(
+                format_rinex_header_line("     3.04           O                   M",
+                                         "RINEX VERSION / TYPE")
+                + format_rinex_header_line("", "END OF HEADER"),
+                encoding="ascii",
+            )
+            empty = temp_root / "empty.obs"
+            empty.write_bytes(b"")
+            junk = temp_root / "junk.bin"
+            junk.write_bytes(b"not GNSS data\n" * 8)
+            out = str(temp_root / "out.pos")
+            cases = [
+                (("spp", "--obs", str(header_only), "--nav", str(nav), "--out", out),
+                 f"no observation epochs were read from {header_only}"),
+                (("rinex-info", str(empty)), f"not a RINEX file (no RINEX VERSION / TYPE line): {empty}"),
+                (("rinex-info", str(junk)), "not a RINEX file"),
+                (("convert", "--input", str(junk), "--format", "rtcm",
+                  "--obs-out", str(temp_root / "c.obs")),
+                 f"no RTCM messages were decoded from {junk}"),
+                (("convert", "--input", str(junk), "--format", "ubx",
+                  "--obs-out", str(temp_root / "c.obs")),
+                 f"no UBX messages were decoded from {junk}"),
+                (("ubx-info", "--input", str(junk)), f"no UBX messages were found in {junk}"),
+            ]
+            for args, message in cases:
+                with self.subTest(args=args[:2]):
+                    result = self.run_gnss(*args)
+                    self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+                    self.assertIn(message, result.stderr)
+
+            # A header without epochs is still a RINEX file to inspect.
+            result = self.run_gnss("rinex-info", str(header_only))
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            # Epochs without a single position (no ephemeris for these
+            # satellites): the outputs are kept for diagnosis, the run fails.
+            obs_path, _, _, _ = build_synthetic_ppp_inputs(temp_root, epochs=4)
+            summary = temp_root / "spp_summary.json"
+            result = self.run_gnss("spp", "--obs", str(obs_path), "--nav", str(nav),
+                                   "--out", out, "--summary-json", str(summary), "--quiet")
+            self.assertEqual(result.returncode, 1, msg=result.stderr)
+            self.assertIn("SPP produced no valid solutions (4 epochs processed)", result.stderr)
+            self.assertEqual(json.loads(summary.read_text())["valid_solutions"], 0)
+
+            # A stream without observations (here SSR only) converted with
+            # --obs-out still succeeds, with a warning about the empty output.
+            ssr = temp_root / "ssr.rtcm3"
+            ssr.write_bytes(build_rtcm1060(3, 518400))
+            ssr_obs = temp_root / "ssr.obs"
+            result = self.run_gnss("convert", "--input", str(ssr), "--format", "rtcm",
+                                   "--gps-week", "2324", "--quiet", "--obs-out", str(ssr_obs))
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn(f"Warning: no observation epochs were written to {ssr_obs}",
+                          result.stderr)
+
     def test_odaiba_benchmark_help_is_available(self) -> None:
         result = self.run_gnss("odaiba-benchmark", "--help")
         self.assertEqual(result.returncode, 0, msg=result.stderr)

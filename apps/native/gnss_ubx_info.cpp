@@ -275,6 +275,10 @@ static int runTool(int argc, char** argv) {
               << " sfrbx=" << sfrbx_count
               << " rawx=" << rawx_count
               << " exported_obs_epochs=" << exported_obs_epochs << "\n";
+    if (stats.valid_messages == 0) {
+        std::cerr << "Error: no UBX messages were found in " << input_path << "\n";
+        return 1;
+    }
     return obs_file_ok ? 0 : 1;
 }
 

@@ -193,6 +193,11 @@ int main(int argc, char* argv[]) {
                 std::cerr << "Error: failed to read RINEX header: " << path << "\n";
                 return 1;
             }
+            if (header.version <= 0.0) {
+                std::cerr << "Error: not a RINEX file (no RINEX VERSION / TYPE line): " << path
+                          << "\n";
+                return 1;
+            }
 
             printHeaderSummary(path, header);
             if (options.count_records) {
