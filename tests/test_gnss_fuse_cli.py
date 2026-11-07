@@ -105,17 +105,24 @@ class GnssFuseCliTest(unittest.TestCase):
         self.assertIn("--help-advanced", result.stdout)
 
     def test_zupt_speed_threshold_rejects_non_finite_or_negative_values(self) -> None:
-        for invalid in ("-1", "nan"):
-            result = self.run_fuse(
-                "--imu", "missing-imu.csv",
-                "--gnss-pos", "missing-solution.pos",
-                "--zupt-gnss-speed-threshold-mps", invalid,
-            )
-            self.assertEqual(result.returncode, 1)
-            self.assertIn(
-                "--zupt-gnss-speed-threshold-mps must be finite and non-negative",
-                result.stderr,
-            )
+        result = self.run_fuse(
+            "--imu", "missing-imu.csv",
+            "--gnss-pos", "missing-solution.pos",
+            "--zupt-gnss-speed-threshold-mps", "-1",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(
+            "--zupt-gnss-speed-threshold-mps must be finite and non-negative",
+            result.stderr,
+        )
+        # Non-finite values are refused by the number parser itself.
+        result = self.run_fuse(
+            "--imu", "missing-imu.csv",
+            "--gnss-pos", "missing-solution.pos",
+            "--zupt-gnss-speed-threshold-mps", "nan",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("invalid number for --zupt-gnss-speed-threshold-mps: nan", result.stderr)
 
     def test_velocity_reanchor_options_reject_invalid_values(self) -> None:
         result = self.run_fuse(
@@ -129,17 +136,23 @@ class GnssFuseCliTest(unittest.TestCase):
             result.stderr,
         )
 
-        for invalid in ("-1", "nan"):
-            result = self.run_fuse(
-                "--imu", "missing-imu.csv",
-                "--gnss-pos", "missing-solution.pos",
-                "--max-gnss-velocity-reanchor-mps", invalid,
-            )
-            self.assertEqual(result.returncode, 1)
-            self.assertIn(
-                "--max-gnss-velocity-reanchor-mps must be finite and non-negative",
-                result.stderr,
-            )
+        result = self.run_fuse(
+            "--imu", "missing-imu.csv",
+            "--gnss-pos", "missing-solution.pos",
+            "--max-gnss-velocity-reanchor-mps", "-1",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(
+            "--max-gnss-velocity-reanchor-mps must be finite and non-negative",
+            result.stderr,
+        )
+        result = self.run_fuse(
+            "--imu", "missing-imu.csv",
+            "--gnss-pos", "missing-solution.pos",
+            "--max-gnss-velocity-reanchor-mps", "nan",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("invalid number for --max-gnss-velocity-reanchor-mps: nan", result.stderr)
 
     def test_rtk_hold_and_fix_satellite_options_mirror_gnss_solve(self) -> None:
         result = self.run_fuse("--help-advanced")

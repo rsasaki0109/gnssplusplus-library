@@ -1,3 +1,4 @@
+#include "cli_numbers.hpp"
 #include <libgnss++/io/observation_epoch_assembler.hpp>
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
@@ -160,13 +161,13 @@ ConvertConfig parseArguments(int argc, char** argv) {
                 throw std::invalid_argument("unsupported --format value: " + value);
             }
         } else if (arg == "--gps-week" && i + 1 < argc) {
-            config.gps_week = std::stoi(argv[++i]);
+            config.gps_week = libgnss_apps::optionInt(arg, argv[++i]);
             if (config.gps_week < 0) {
                 throw std::invalid_argument("--gps-week must be non-negative");
             }
             config.has_gps_week = true;
         } else if (arg == "--limit" && i + 1 < argc) {
-            config.limit = static_cast<size_t>(std::stoull(argv[++i]));
+            config.limit = static_cast<size_t>(libgnss_apps::optionUnsigned(arg, argv[++i]));
         } else if (arg == "--no-rtcm-epoch-assembly") {
             config.assemble_rtcm_epochs = false;
         } else if (arg == "--quiet") {

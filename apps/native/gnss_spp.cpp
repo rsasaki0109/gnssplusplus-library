@@ -1,3 +1,4 @@
+#include "cli_numbers.hpp"
 #include <cstdlib>
 #include <algorithm>
 #include <chrono>
@@ -315,65 +316,65 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--timing-csv") {
             options.timing_csv_path = requireValue(arg, i, argc, argv);
         } else if (arg == "--max-epochs") {
-            options.max_epochs = std::stoi(requireValue(arg, i, argc, argv));
+            options.max_epochs = libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--elevation-mask-deg" || arg == "--elevation-mask") {
-            options.elevation_mask_deg = std::stod(requireValue(arg, i, argc, argv));
+            options.elevation_mask_deg = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--snr-mask") {
-            options.snr_mask = std::stod(requireValue(arg, i, argc, argv));
+            options.snr_mask = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--disable-outlier-detection") {
             options.spp_config.enable_outlier_detection = false;
         } else if (arg == "--outlier-threshold-sigma") {
             options.spp_config.outlier_threshold_sigma =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--disable-raim-fde") {
             options.spp_config.enable_raim_fde = false;
         } else if (arg == "--raim-fde-min-improvement-ratio") {
             options.spp_config.raim_fde_min_rms_improvement_ratio =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--raim-fde-min-improvement-m") {
             options.spp_config.raim_fde_min_rms_improvement_m =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--max-gdop") {
-            options.spp_config.max_gdop = std::stod(requireValue(arg, i, argc, argv));
+            options.spp_config.max_gdop = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--max-residual-rms") {
             options.spp_config.max_residual_rms =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--max-chi-square-per-dof") {
             options.spp_config.max_chi_square_per_dof =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--disable-variance-model") {
             options.spp_config.use_variance_model = false;
         } else if (arg == "--snr-reference-dbhz") {
             options.spp_config.snr_reference_dbhz =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--robust-weighting") {
             options.spp_config.enable_robust_weighting = true;
         } else if (arg == "--robust-threshold-sigma") {
             options.spp_config.robust_weight_threshold_sigma =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--robust-min-weight") {
             options.spp_config.robust_weight_min_factor =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--adaptive-robust-weighting") {
             options.spp_config.enable_robust_weighting = true;
             options.spp_config.enable_adaptive_robust_weighting = true;
         } else if (arg == "--adaptive-robust-activation-threshold-sigma") {
             options.spp_config.adaptive_robust_activation_threshold_sigma =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--adaptive-robust-min-tail-measurements") {
             options.spp_config.adaptive_robust_min_tail_measurements =
-                std::stoi(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--adaptive-robust-min-tail-fraction") {
             options.spp_config.adaptive_robust_min_tail_fraction =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--max-position-jump-rate-mps") {
             options.spp_config.max_position_jump_rate_mps =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
             options.spp_config.enable_position_jump_gate =
                 options.spp_config.max_position_jump_rate_mps > 0.0;
         } else if (arg == "--max-position-jump-min-m") {
             options.spp_config.max_position_jump_min_m =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--ionosphere-free" || arg == "--iflc") {
             options.spp_config.use_ionosphere_free_combination = true;
         } else if (arg == "--sp3") {
@@ -399,30 +400,30 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--baro-height") {
             options.spp_config.baro.enabled = true;
         } else if (arg == "--baro-sigma-m") {
-            options.spp_config.baro.baro_sigma_m = std::stod(requireValue(arg, i, argc, argv));
+            options.spp_config.baro.baro_sigma_m = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--baro-bias-walk") {
             options.spp_config.baro.bias_walk_m_per_sqrt_s =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--baro-height-walk") {
             options.spp_config.baro.height_walk_m_per_sqrt_s =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--baro-gnss-sigma-scale") {
             options.spp_config.baro.gnss_sigma_scale =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--baro-gnss-sigma-floor-m") {
             options.spp_config.baro.gnss_sigma_floor_m =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--baro-init-max-gdop") {
-            options.spp_config.baro.init_max_gdop = std::stod(requireValue(arg, i, argc, argv));
+            options.spp_config.baro.init_max_gdop = libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--baro-init-min-satellites") {
             options.spp_config.baro.init_min_satellites =
-                std::stoi(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionInt(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--baro-innovation-gate-sigma") {
             options.spp_config.baro.innovation_gate_sigma =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--baro-sample-window-s") {
             options.spp_config.baro.sample_window_s =
-                std::stod(requireValue(arg, i, argc, argv));
+                libgnss_apps::optionDouble(arg, requireValue(arg, i, argc, argv));
         } else if (arg == "--baro-telemetry-csv") {
             options.baro_telemetry_csv_path = requireValue(arg, i, argc, argv);
         } else if (arg == "--quiet") {

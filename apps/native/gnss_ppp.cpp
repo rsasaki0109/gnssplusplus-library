@@ -1,3 +1,4 @@
+#include "cli_numbers.hpp"
 #include <algorithm>
 #include <chrono>
 #include <ctime>
@@ -432,7 +433,7 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--b2b" && i + 1 < argc) {
             options.b2b_path = argv[++i];
         } else if (arg == "--b2b-prn" && i + 1 < argc) {
-            options.b2b_prn = std::stoi(argv[++i]);
+            options.b2b_prn = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--madoca-l6" && i + 1 < argc) {
             options.madoca_l6_paths.push_back(argv[++i]);
         } else if (arg == "--madoca-l6d" && i + 1 < argc) {
@@ -466,19 +467,19 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--live-output") {
             options.live_output = true;
         } else if (arg == "--max-epochs" && i + 1 < argc) {
-            options.max_epochs = std::stoi(argv[++i]);
+            options.max_epochs = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--convergence-min-epochs" && i + 1 < argc) {
-            options.convergence_min_epochs = std::stoi(argv[++i]);
+            options.convergence_min_epochs = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--convergence-policy" && i + 1 < argc) {
             options.convergence_policy = argv[++i];
         } else if (arg == "--convergence-threshold-horizontal" && i + 1 < argc) {
-            options.convergence_threshold_horizontal = std::stod(argv[++i]);
+            options.convergence_threshold_horizontal = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--convergence-threshold-vertical" && i + 1 < argc) {
-            options.convergence_threshold_vertical = std::stod(argv[++i]);
+            options.convergence_threshold_vertical = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--ssr-step-seconds" && i + 1 < argc) {
-            options.ssr_step_seconds = std::stod(argv[++i]);
+            options.ssr_step_seconds = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--elevation-mask" && i + 1 < argc) {
-            options.elevation_mask_deg = std::stod(argv[++i]);
+            options.elevation_mask_deg = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--no-estimate-troposphere") {
             options.estimate_troposphere = false;
         } else if (arg == "--estimate-troposphere") {
@@ -506,7 +507,7 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--clas-atmos-selection" && i + 1 < argc) {
             options.clas_atmos_selection = argv[++i];
         } else if (arg == "--clas-atmos-stale-after-seconds" && i + 1 < argc) {
-            options.clas_atmos_stale_after_seconds = std::stod(argv[++i]);
+            options.clas_atmos_stale_after_seconds = libgnss_apps::optionDouble(arg, argv[++i]);
 #if GNSSPP_MADOCALIB_ORACLE_CLI
         } else if (arg == "--madocalib-bridge") {
             options.madocalib_bridge = true;
@@ -523,9 +524,9 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--madocalib-end" && i + 1 < argc) {
             options.madocalib_end_time = argv[++i];
         } else if (arg == "--madocalib-ti" && i + 1 < argc) {
-            options.madocalib_time_interval_seconds = std::stod(argv[++i]);
+            options.madocalib_time_interval_seconds = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--madocalib-trace" && i + 1 < argc) {
-            options.madocalib_trace_level = std::stoi(argv[++i]);
+            options.madocalib_trace_level = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--madocalib-trace-ar") {
             options.madocalib_trace_ar = true;
 #endif
@@ -550,9 +551,9 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--combined") {
             options.combined = true;
         } else if (arg == "--combined-fix-tolerance" && i + 1 < argc) {
-            options.combined_max_fix_difference_m = std::stod(argv[++i]);
+            options.combined_max_fix_difference_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--ssr-latency" && i + 1 < argc) {
-            options.ssr_latency_s = std::stod(argv[++i]);
+            options.ssr_latency_s = libgnss_apps::optionDouble(arg, argv[++i]);
             options.ssr_latency_set = true;
         } else if (arg == "--low-dynamics") {
             options.low_dynamics_mode = true;
@@ -567,15 +568,15 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--disable-ar") {
             options.enable_ar = false;
         } else if (arg == "--ar-ratio-threshold" && i + 1 < argc) {
-            options.ar_ratio_threshold = std::stod(argv[++i]);
+            options.ar_ratio_threshold = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--ar-method" && i + 1 < argc) {
             options.ar_method = argv[++i];
         } else if (arg == "--process-noise-accel-h" && i + 1 < argc) {
-            options.process_noise_accel_h = std::stod(argv[++i]);
+            options.process_noise_accel_h = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--process-noise-accel-v" && i + 1 < argc) {
-            options.process_noise_accel_v = std::stod(argv[++i]);
+            options.process_noise_accel_v = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--process-noise-iono" && i + 1 < argc) {
-            options.process_noise_iono = std::stod(argv[++i]);
+            options.process_noise_iono = libgnss_apps::optionDouble(arg, argv[++i]);
             options.process_noise_iono_set = true;
         } else if (arg == "--use-iers-solid-tide") {
             options.use_iers_solid_tide = true;
@@ -607,7 +608,7 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--progress") {
             options.progress_interval_s = 10.0;
         } else if (arg == "--progress-interval" && i + 1 < argc) {
-            options.progress_interval_s = std::stod(argv[++i]);
+            options.progress_interval_s = libgnss_apps::optionDouble(arg, argv[++i]);
             if (!(options.progress_interval_s > 0.0)) {
                 argumentError("--progress-interval must be positive", argv[0]);
             }

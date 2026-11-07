@@ -1,3 +1,4 @@
+#include "cli_numbers.hpp"
 #include <Eigen/Dense>
 
 #include <cmath>
@@ -325,7 +326,7 @@ ReplayConfig parseArguments(int argc, char** argv) {
         } else if (arg == "--mode" && i + 1 < argc) {
             config.mode = parseMode(argv[++i], argv[0]);
         } else if (arg == "--ratio" && i + 1 < argc) {
-            config.ratio_threshold = std::stod(argv[++i]);
+            config.ratio_threshold = libgnss_apps::optionDouble(arg, argv[++i]);
             config.ratio_threshold_set = true;
         } else if (arg == "--preset" && i + 1 < argc) {
             config.preset = parseRTKTuningPreset(argv[++i], argv[0]);
@@ -336,62 +337,62 @@ ReplayConfig parseArguments(int argc, char** argv) {
             config.enable_ar_filter = false;
             config.has_ar_filter_override = true;
         } else if (arg == "--arfilter-margin" && i + 1 < argc) {
-            config.ar_filter_margin = std::stod(argv[++i]);
+            config.ar_filter_margin = libgnss_apps::optionDouble(arg, argv[++i]);
             config.ar_filter_margin_set = true;
         } else if (arg == "--min-ar-sats" && i + 1 < argc) {
-            config.min_satellites_for_ar = std::stoi(argv[++i]);
+            config.min_satellites_for_ar = libgnss_apps::optionInt(arg, argv[++i]);
             config.min_satellites_for_ar_set = true;
         } else if (arg == "--min-hold-count" && i + 1 < argc) {
-            config.min_hold_count = std::stoi(argv[++i]);
+            config.min_hold_count = libgnss_apps::optionInt(arg, argv[++i]);
             config.min_hold_count_set = true;
         } else if (arg == "--hold-ratio-threshold" && i + 1 < argc) {
-            config.hold_ratio_threshold = std::stod(argv[++i]);
+            config.hold_ratio_threshold = libgnss_apps::optionDouble(arg, argv[++i]);
             config.hold_ratio_threshold_set = true;
         } else if (arg == "--hold-fix-unchanged-set") {
             config.hold_fix_unchanged_set = true;
         } else if (arg == "--hold-fix-min-matched-pairs" && i + 1 < argc) {
-            config.hold_fix_min_matched_pairs = std::stoi(argv[++i]);
+            config.hold_fix_min_matched_pairs = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--min-fix-satellites" && i + 1 < argc) {
-            config.min_fix_satellites = std::stoi(argv[++i]);
+            config.min_fix_satellites = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--min-full-ratio-for-subset-ar" && i + 1 < argc) {
-            config.min_full_ratio_for_subset_ar = std::stod(argv[++i]);
+            config.min_full_ratio_for_subset_ar = libgnss_apps::optionDouble(arg, argv[++i]);
             config.min_full_ratio_for_subset_ar_set = true;
         } else if (arg == "--max-fixed-anchor-age" && i + 1 < argc) {
-            config.max_fixed_anchor_age_s = std::stod(argv[++i]);
+            config.max_fixed_anchor_age_s = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_fixed_anchor_age_s_set = true;
         } else if (arg == "--max-fixed-doppler-consensus" && i + 1 < argc) {
-            config.max_fixed_doppler_consensus_m = std::stod(argv[++i]);
+            config.max_fixed_doppler_consensus_m = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_fixed_doppler_consensus_m_set = true;
         } else if (arg == "--max-fixed-doppler-consensus-age" && i + 1 < argc) {
-            config.max_fixed_doppler_consensus_age_s = std::stod(argv[++i]);
+            config.max_fixed_doppler_consensus_age_s = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_fixed_doppler_consensus_age_s_set = true;
         } else if (arg == "--low-ratio-guard-threshold" && i + 1 < argc) {
-            config.low_ratio_guard_threshold = std::stod(argv[++i]);
+            config.low_ratio_guard_threshold = libgnss_apps::optionDouble(arg, argv[++i]);
             config.low_ratio_guard_threshold_set = true;
         } else if (arg == "--low-ratio-min-fixed-ambiguities" && i + 1 < argc) {
-            config.low_ratio_min_fixed_ambiguities = std::stoi(argv[++i]);
+            config.low_ratio_min_fixed_ambiguities = libgnss_apps::optionInt(arg, argv[++i]);
             config.low_ratio_min_fixed_ambiguities_set = true;
         } else if (arg == "--fix-history-motion-compensation") {
             config.fix_history_motion_compensation = true;
         } else if (arg == "--max-position-jump-motion-compensation") {
             config.max_position_jump_motion_compensation = true;
         } else if (arg == "--max-pos-jump-min" && i + 1 < argc) {
-            config.max_position_jump_min_m = std::stod(argv[++i]);
+            config.max_position_jump_min_m = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_position_jump_min_m_set = true;
         } else if (arg == "--max-pos-jump-rate" && i + 1 < argc) {
-            config.max_position_jump_rate_mps = std::stod(argv[++i]);
+            config.max_position_jump_rate_mps = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_position_jump_rate_mps_set = true;
         } else if (arg == "--max-float-prefit-rms" && i + 1 < argc) {
-            config.max_float_prefit_residual_rms_m = std::stod(argv[++i]);
+            config.max_float_prefit_residual_rms_m = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_float_prefit_residual_rms_m_set = true;
         } else if (arg == "--max-float-prefit-max" && i + 1 < argc) {
-            config.max_float_prefit_residual_max_m = std::stod(argv[++i]);
+            config.max_float_prefit_residual_max_m = libgnss_apps::optionDouble(arg, argv[++i]);
             config.max_float_prefit_residual_max_m_set = true;
         } else if (arg == "--max-float-prefit-reset-streak" && i + 1 < argc) {
-            config.max_float_prefit_residual_reset_streak = std::stoi(argv[++i]);
+            config.max_float_prefit_residual_reset_streak = libgnss_apps::optionInt(arg, argv[++i]);
             config.max_float_prefit_residual_reset_streak_set = true;
         } else if (arg == "--elevation-mask-deg" && i + 1 < argc) {
-            config.elevation_mask_deg = std::stod(argv[++i]);
+            config.elevation_mask_deg = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--no-glonass") {
             config.enable_glonass = false;
         } else if (arg == "--no-beidou") {
@@ -399,18 +400,22 @@ ReplayConfig parseArguments(int argc, char** argv) {
         } else if (arg == "--glonass-ar" && i + 1 < argc) {
             config.glonass_ar = parseGlonassARChoice(argv[++i], argv[0]);
         } else if (arg == "--max-epochs" && i + 1 < argc) {
-            config.max_epochs = std::stoi(argv[++i]);
+            config.max_epochs = libgnss_apps::optionInt(arg, argv[++i]);
+            // -1 is the historical spelling of "no limit", like 0.
+            if (config.max_epochs < -1) {
+                argumentError("--max-epochs must be >= 0 (0: no limit)", argv[0]);
+            }
         } else if (arg == "--no-rtcm-epoch-assembly") {
             config.assemble_rtcm_epochs = false;
         } else if (arg == "--rtcm-message-limit" && i + 1 < argc) {
-            config.rtcm_message_limit = static_cast<size_t>(std::stoull(argv[++i]));
+            config.rtcm_message_limit = static_cast<size_t>(libgnss_apps::optionUnsigned(arg, argv[++i]));
         } else if (arg == "--base-ecef" && i + 3 < argc) {
             // Do not increment i multiple times in constructor arguments: C++
             // does not guarantee their evaluation order, and MSVC builds read
             // the supplied XYZ reversed.
-            const double base_x = std::stod(argv[++i]);
-            const double base_y = std::stod(argv[++i]);
-            const double base_z = std::stod(argv[++i]);
+            const double base_x = libgnss_apps::optionDouble(arg, argv[++i]);
+            const double base_y = libgnss_apps::optionDouble(arg, argv[++i]);
+            const double base_z = libgnss_apps::optionDouble(arg, argv[++i]);
             config.base_position_ecef = Eigen::Vector3d(base_x, base_y, base_z);
             config.base_position_override = true;
         } else if (arg == "--quiet") {

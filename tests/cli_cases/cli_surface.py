@@ -101,6 +101,34 @@ class CLISurfaceCases:
         self.assertIn("--madoca-l6d-shadow", result.stdout)
         self.assertIn("--madoca-materialization-dump", result.stdout)
         self.assertIn("--madoca-materialization-dump-only", result.stdout)
+    def test_numeric_options_refuse_malformed_values(self) -> None:
+        # A value must be a whole, finite number (a count has no sign); the
+        # error names the option instead of a bare "stod".
+        cases = [
+            (("solve", "--ratio", "abc"), "invalid number for --ratio: abc"),
+            (("ppp", "--obs", "x.obs", "--nav", "x.nav", "--out", "x.pos",
+              "--ssr-latency", "1x"), "invalid number for --ssr-latency: 1x"),
+            (("spp", "--obs", "x.obs", "--nav", "x.nav", "--out", "x.pos",
+              "--elevation-mask", "nan"), "invalid number for --elevation-mask: nan"),
+            (("fgo", "--max-epochs", "1e2"), "invalid integer for --max-epochs: 1e2"),
+            (("fuse", "--imu", "x.csv", "--gnss-pos", "x.pos", "--lever-arm", "0,0,inf"),
+             "invalid number for --lever-arm: inf"),
+            (("replay", "--max-epochs", "-2"), "--max-epochs must be >= 0"),
+            (("visibility", "--obs", "x.obs", "--nav", "x.nav", "--min-elevation-deg", "10deg"),
+             "invalid number for --min-elevation-deg: 10deg"),
+            (("convert", "--limit", "-5"), "invalid count for --limit: -5"),
+            (("live", "--ratio", "3.0.1"), "invalid number for --ratio: 3.0.1"),
+            (("stream", "--limit", "-3"), "invalid count for --limit: -3"),
+            (("ubx-info", "--limit", "1.5", "x.ubx"), "invalid count for --limit: 1.5"),
+            (("rtcm-encode", "--duration", "nan"), "invalid number for --duration: nan"),
+            (("nav-products", "--max-epochs", "zz"), "invalid integer for --max-epochs: zz"),
+        ]
+        for args, message in cases:
+            with self.subTest(args=args):
+                result = self.run_gnss(*args)
+                self.assertEqual(result.returncode, 1, msg=result.stderr)
+                self.assertIn(message, result.stderr)
+                self.assertNotIn("terminate called", result.stderr)
     def test_ppp_cli_rejects_madocalib_oracle_selector(self) -> None:
         result = self.run_gnss(
             "ppp",

@@ -92,6 +92,16 @@ function finite(value) {
   return n;
 }
 
+// Epoch / record counts and GPS weeks: the tools refuse anything but a whole,
+// non-negative number (apps/native/cli_numbers.hpp).
+function count(value, label) {
+  const n = finite(value);
+  if (n !== null && (!Number.isInteger(n) || n < 0)) {
+    throw new Error(`${label} must be a whole number >= 0: ${value}`);
+  }
+  return n;
+}
+
 /**
  * Small builder that keeps the wasm argv (absolute /in, /out paths) and the
  * display argv (bare file names) in step.
@@ -217,7 +227,7 @@ export function buildPostCommand(opts) {
   }
   const out = opts.out || defaultPosName(opts.rover, opts.mode, corrections);
   const elevation = finite(opts.elevationMask);
-  const maxEpochs = finite(opts.maxEpochs);
+  const maxEpochs = count(opts.maxEpochs, 'Max epochs');
   const cmd = new Command(mode.tool);
 
   if (mode.tool === 'gnss_spp') {
@@ -351,13 +361,13 @@ export function buildConvertCommand(opts) {
   const cmd = new Command('gnss_convert');
   cmd.input('--input', opts.input).flag('--format', opts.format);
   if (opts.format === 'rtcm') {
-    const week = finite(opts.gpsWeek);
+    const week = count(opts.gpsWeek, 'GPS week');
     if (week !== null) cmd.flag('--gps-week', week);
   }
   if (opts.obsOut) cmd.output('--obs-out', opts.obsOut);
   // UBX: decode RXM-SFRBX into multi-GNSS ephemerides; RTCM: 1019/1020/... messages.
   if (opts.navOut) cmd.output(opts.format === 'ubx' ? '--nav-rinex-out' : '--nav-out', opts.navOut);
-  const limit = finite(opts.limit);
+  const limit = count(opts.limit, 'Limit');
   if (limit) cmd.flag('--limit', limit);
   if (opts.quiet) cmd.flag('--quiet');
   cmd.extra(opts.extra, opts.workspaceNames);
@@ -384,7 +394,7 @@ export function buildVisibilityCommand(opts) {
   cmd.output('--csv', `${base}_vis.csv`).output('--summary-json', `${base}_vis_summary.json`);
   const minElevation = finite(opts.minElevation);
   if (minElevation !== null) cmd.flag('--min-elevation-deg', minElevation);
-  const maxEpochs = finite(opts.maxEpochs);
+  const maxEpochs = count(opts.maxEpochs, 'Max epochs');
   if (maxEpochs) cmd.flag('--max-epochs', maxEpochs);
   if (opts.receiverEcef) {
     const xyz = opts.receiverEcef.map(finite);

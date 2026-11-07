@@ -280,9 +280,9 @@ class JapanStaticSurveyTest(unittest.TestCase):
         source = (ROOT_DIR / "apps" / "native" / "gnss_solve.cpp").read_text(encoding="utf-8")
         # Multiple argv[++i] expressions in one Eigen constructor have an
         # unspecified evaluation order in C++; the real TSKB run caught this.
-        self.assertIn("const double base_x = std::stod(argv[++i]);", source)
-        self.assertIn("const double base_y = std::stod(argv[++i]);", source)
-        self.assertIn("const double base_z = std::stod(argv[++i]);", source)
+        self.assertIn("const double base_x = libgnss_apps::optionDouble(arg, argv[++i]);", source)
+        self.assertIn("const double base_y = libgnss_apps::optionDouble(arg, argv[++i]);", source)
+        self.assertIn("const double base_z = libgnss_apps::optionDouble(arg, argv[++i]);", source)
         self.assertIn("config.base_position_ecef = Eigen::Vector3d(base_x, base_y, base_z);", source)
 
 

@@ -1,3 +1,4 @@
+#include "cli_numbers.hpp"
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/doppler_contract.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
@@ -542,15 +543,15 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--imu" && i + 1 < argc) {
             options.imu_path = argv[++i];
         } else if (arg == "--imu-lever-arm" && i + 3 < argc) {
-            options.imu_lever_arm_x = std::stod(argv[++i]);
-            options.imu_lever_arm_y = std::stod(argv[++i]);
-            options.imu_lever_arm_z = std::stod(argv[++i]);
+            options.imu_lever_arm_x = libgnss_apps::optionDouble(arg, argv[++i]);
+            options.imu_lever_arm_y = libgnss_apps::optionDouble(arg, argv[++i]);
+            options.imu_lever_arm_z = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--imu-no-mounting") {
             options.imu_apply_mounting = false;
         } else if (arg == "--imu-fixed-lag" && i + 1 < argc) {
-            options.imu_fixed_lag_s = std::stod(argv[++i]);
+            options.imu_fixed_lag_s = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--imu-noise-scale" && i + 1 < argc) {
-            options.imu_noise_scale = std::stod(argv[++i]);
+            options.imu_noise_scale = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--imu-no-noise-calibrate") {
             options.imu_noise_calibrate = false;
         } else if (arg == "--fixed-lag-partial-ar") {
@@ -560,7 +561,7 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--ambiguity-hold") {
             options.use_ambiguity_hold = true;
         } else if (arg == "--ambiguity-hold-min-fixed" && i + 1 < argc) {
-            options.ambiguity_hold_min_fixed = std::stoi(argv[++i]);
+            options.ambiguity_hold_min_fixed = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--allow-partial-fix-and-hold") {
             options.allow_partial_fix_and_hold = true;
         } else if (arg == "--geometry-free-cycle-slip-reset") {
@@ -578,96 +579,96 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--zupt") {
             options.use_zupt = true;
         } else if (arg == "--ambiguity-hold-ratio" && i + 1 < argc) {
-            options.ambiguity_hold_ratio_threshold = std::stod(argv[++i]);
+            options.ambiguity_hold_ratio_threshold = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--preset" && i + 1 < argc) {
             ++i;
         } else if (arg == "--skip-epochs" && i + 1 < argc) {
-            options.skip_epochs = std::stoi(argv[++i]);
+            options.skip_epochs = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--max-epochs" && i + 1 < argc) {
-            options.max_epochs = std::stoi(argv[++i]);
+            options.max_epochs = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--max-iterations" && i + 1 < argc) {
-            options.max_iterations = std::stoi(argv[++i]);
+            options.max_iterations = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--relative-cost-threshold" && i + 1 < argc) {
-            options.relative_cost_convergence_threshold = std::stod(argv[++i]);
+            options.relative_cost_convergence_threshold = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--absolute-cost-threshold" && i + 1 < argc) {
-            options.absolute_cost_convergence_threshold = std::stod(argv[++i]);
+            options.absolute_cost_convergence_threshold = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--pseudorange-sigma" && i + 1 < argc) {
-            options.pseudorange_sigma_m = std::stod(argv[++i]);
+            options.pseudorange_sigma_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--pseudorange-elevation-power" && i + 1 < argc) {
-            options.pseudorange_elevation_sigma_power = std::stod(argv[++i]);
+            options.pseudorange_elevation_sigma_power = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--motion-sigma" && i + 1 < argc) {
-            options.motion_sigma_m = std::stod(argv[++i]);
+            options.motion_sigma_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--clock-motion-sigma" && i + 1 < argc) {
-            options.clock_motion_sigma_m = std::stod(argv[++i]);
+            options.clock_motion_sigma_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--velocity-prior-sigma" && i + 1 < argc) {
-            options.velocity_prior_sigma_mps = std::stod(argv[++i]);
+            options.velocity_prior_sigma_mps = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--velocity-motion-sigma" && i + 1 < argc) {
-            options.velocity_motion_sigma_m = std::stod(argv[++i]);
+            options.velocity_motion_sigma_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--ambiguity-between-sigma" && i + 1 < argc) {
-            options.ambiguity_between_sigma_cycles = std::stod(argv[++i]);
+            options.ambiguity_between_sigma_cycles = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--position-prior-sigma" && i + 1 < argc) {
-            options.position_prior_sigma_m = std::stod(argv[++i]);
+            options.position_prior_sigma_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--clock-prior-sigma" && i + 1 < argc) {
-            options.clock_prior_sigma_m = std::stod(argv[++i]);
+            options.clock_prior_sigma_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--tdcp-sigma" && i + 1 < argc) {
-            options.tdcp_sigma_m = std::stod(argv[++i]);
+            options.tdcp_sigma_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--carrier-phase-sigma" && i + 1 < argc) {
-            options.carrier_phase_sigma_m = std::stod(argv[++i]);
+            options.carrier_phase_sigma_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--undifferenced-doppler-sigma" && i + 1 < argc) {
-            options.undifferenced_doppler_sigma_mps = std::stod(argv[++i]);
+            options.undifferenced_doppler_sigma_mps = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--dd-pseudorange-sigma" && i + 1 < argc) {
-            options.double_difference_pseudorange_sigma_m = std::stod(argv[++i]);
+            options.double_difference_pseudorange_sigma_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--dd-carrier-sigma" && i + 1 < argc) {
-            options.double_difference_carrier_sigma_m = std::stod(argv[++i]);
+            options.double_difference_carrier_sigma_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--ambiguity-prior-sigma" && i + 1 < argc) {
-            options.ambiguity_prior_sigma_m = std::stod(argv[++i]);
+            options.ambiguity_prior_sigma_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--pseudorange-huber-threshold" && i + 1 < argc) {
-            options.pseudorange_huber_threshold_sigma = std::stod(argv[++i]);
+            options.pseudorange_huber_threshold_sigma = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--carrier-phase-huber-threshold" && i + 1 < argc) {
-            options.carrier_phase_huber_threshold_sigma = std::stod(argv[++i]);
+            options.carrier_phase_huber_threshold_sigma = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--tdcp-huber-threshold" && i + 1 < argc) {
-            options.tdcp_huber_threshold_sigma = std::stod(argv[++i]);
+            options.tdcp_huber_threshold_sigma = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--fixed-ambiguity-sigma" && i + 1 < argc) {
-            options.fixed_ambiguity_sigma_m = std::stod(argv[++i]);
+            options.fixed_ambiguity_sigma_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--ambiguity-fix-threshold" && i + 1 < argc) {
-            options.ambiguity_fix_threshold_cycles = std::stod(argv[++i]);
+            options.ambiguity_fix_threshold_cycles = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--min-fixed-ambiguities" && i + 1 < argc) {
-            options.min_fixed_ambiguities = std::stoi(argv[++i]);
+            options.min_fixed_ambiguities = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--lambda-ratio-threshold" && i + 1 < argc) {
-            options.lambda_ratio_threshold = std::stod(argv[++i]);
+            options.lambda_ratio_threshold = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--max-lambda-ambiguities" && i + 1 < argc) {
-            options.max_lambda_ambiguities = std::stoi(argv[++i]);
+            options.max_lambda_ambiguities = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--max-tdcp-gap" && i + 1 < argc) {
-            options.max_tdcp_gap_s = std::stod(argv[++i]);
+            options.max_tdcp_gap_s = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--base-match-tolerance" && i + 1 < argc) {
-            options.base_match_tolerance_s = std::stod(argv[++i]);
+            options.base_match_tolerance_s = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--base-interpolation-max-gap" && i + 1 < argc) {
-            options.base_interpolation_max_gap_s = std::stod(argv[++i]);
+            options.base_interpolation_max_gap_s = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--seed-match-tolerance" && i + 1 < argc) {
-            options.seed_match_tolerance_s = std::stod(argv[++i]);
+            options.seed_match_tolerance_s = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--seed-interpolation-max-gap" && i + 1 < argc) {
-            options.seed_interpolation_max_gap_s = std::stod(argv[++i]);
+            options.seed_interpolation_max_gap_s = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--tdcp-slip-threshold" && i + 1 < argc) {
-            options.tdcp_slip_threshold_m = std::stod(argv[++i]);
+            options.tdcp_slip_threshold_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--min-elevation" && i + 1 < argc) {
-            options.min_elevation_deg = std::stod(argv[++i]);
+            options.min_elevation_deg = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--min-snr" && i + 1 < argc) {
-            options.min_snr_dbhz = std::stod(argv[++i]);
+            options.min_snr_dbhz = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--min-satellites-per-epoch" && i + 1 < argc) {
-            options.min_satellites_per_epoch = std::stoi(argv[++i]);
+            options.min_satellites_per_epoch = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--min-output-dd-carrier-factors-per-epoch" &&
                    i + 1 < argc) {
             options.min_output_dd_carrier_factors_per_epoch =
-                std::stoi(argv[++i]);
+                libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--max-float-seed-divergence" && i + 1 < argc) {
             options.max_float_seed_position_divergence_m =
-                std::stod(argv[++i]);
+                libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--max-float-position-jump" && i + 1 < argc) {
-            options.max_float_position_jump_m = std::stod(argv[++i]);
+            options.max_float_position_jump_m = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--dd-reference-min-snr" && i + 1 < argc) {
-            options.double_difference_reference_min_snr_dbhz = std::stod(argv[++i]);
+            options.double_difference_reference_min_snr_dbhz = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--dd-base-min-snr" && i + 1 < argc) {
-            options.double_difference_base_min_snr_dbhz = std::stod(argv[++i]);
+            options.double_difference_base_min_snr_dbhz = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--carrier-phase-factors") {
             options.use_carrier_phase_factors = true;
         } else if (arg == "--fix-ambiguities") {
@@ -687,11 +688,11 @@ Options parseArguments(int argc, char* argv[]) {
         } else if (arg == "--integer-constrained-reoptimization") {
             options.use_integer_constrained_reoptimization = true;
         } else if (arg == "--integer-constrained-prior-sigma" && i + 1 < argc) {
-            options.integer_constrained_prior_sigma_cycles = std::stod(argv[++i]);
+            options.integer_constrained_prior_sigma_cycles = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--integer-constrained-cost-tolerance" && i + 1 < argc) {
-            options.integer_constrained_cost_abs_tolerance = std::stod(argv[++i]);
+            options.integer_constrained_cost_abs_tolerance = libgnss_apps::optionDouble(arg, argv[++i]);
         } else if (arg == "--integer-constrained-max-iterations" && i + 1 < argc) {
-            options.integer_constrained_max_iterations = std::stoi(argv[++i]);
+            options.integer_constrained_max_iterations = libgnss_apps::optionInt(arg, argv[++i]);
         } else if (arg == "--no-partial-lambda-ambiguity-fix") {
             options.use_partial_lambda_ambiguity_fix = false;
         } else if (arg == "--no-pseudorange-factors") {
