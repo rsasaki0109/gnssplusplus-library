@@ -37,9 +37,10 @@ data from after its epoch (`PPPConfig::causal`, `SPPConfig::causal`,
     page or message that completes it. On the Kamakura hours that is 1 to 4 s
     after the reference epoch for HAS (median 1 s), 6 to 29 s for B2b
     (median 7 s). Updates apply in the order they are received.
-  - RTCM SSR (`--ssr-rtcm`) and MADOCA L6E / L6D (`--madoca-l6`,
-    `--madoca-l6d`): the files hold no reception time. `--ssr-latency <s>`
-    applies each update *s* seconds after its reference epoch (default 0).
+  - RTCM SSR (`--ssr-rtcm`) and MADOCA L6E (`--madoca-l6`, together with
+    its `--madoca-l6d` ionosphere): the files hold no reception time.
+    `--ssr-latency <s>` applies each update *s* seconds after its reference
+    epoch (default 0); it needs `--ssr-rtcm` or `--madoca-l6`.
     In an L6 log the corrections all sit at the same offset from the
     one-per-second L6 message that completes them, so the log does not give
     the latency either.
@@ -47,8 +48,10 @@ data from after its epoch (`PPPConfig::causal`, `SPPConfig::causal`,
     before it are SPP. Starting on broadcast orbits and switching every
     satellite to its correction a few seconds later jumps the filter (HAS
     IDD with a 5 s latency: H 1.9 m at 2 min, converged after 20 min instead
-    of 5.6). Satellites the stream never corrects stay on their broadcast
-    orbit, as in post-processing.
+    of 5.6). The start is the stream's first update: a satellite whose
+    first correction comes later runs on its broadcast orbit until then.
+    Satellites the stream never corrects stay on their broadcast orbit, as
+    in post-processing.
 - **Broadcast ephemerides.** Only records already broadcast at the epoch
   are candidates (`NavigationData::setCausal`). A record is available from
   its transmission time, which the RINEX reader now keeps for GPS, Galileo,
@@ -231,13 +234,20 @@ epoch combines the two passes as RTKLIB's combined solution does:
 
 The backward pass replays each epoch with the base epoch aligned to it on the
 forward pass, takes each loss-of-lock flag from the epoch after it (a slip
-lies between the two), and runs every in-loop guard. The guards after the
-loop (non-FIX drift, FLOAT bridge tail, kinematic post-filter) run on the
-combined solution. `--combined` cannot be used with `--realtime`,
-`--fix-recovery`, `--realtime-fix-integrity` or `--pos-fix-diagnostics`;
-per-epoch logs describe the forward pass. The backward pass reads the epochs
-from the files again (the forward pass records where each one starts): about
-10 % more memory and twice the run time of a forward run.
+lies between the two; a signal missing there takes it at its next earlier
+observation), and runs the in-loop guards. The guards after the loop
+(non-FIX drift, FLOAT bridge tail, kinematic post-filter and the others that
+look at neighbouring epochs) run on the combined solution. `--combined`
+cannot be used with `--realtime`, `--fix-recovery`,
+`--realtime-fix-integrity` or `--pos-fix-diagnostics`, nor with the options
+that carry a position or trust state from the previous epoch and assume time
+increases: `--safe-availability-fallback`, `--safe-float-continuity`,
+`--rtk-canyon-carrier-prior`, `--low-count-rescue-ratio` and a
+`--float-trust-policy` other than `legacy`. Per-epoch logs describe the
+forward pass; the guard counters of the run summary add up both passes. The
+backward pass reads the epochs from the files again (the forward pass records
+where each one starts), so the observation files cannot be pipes: about 10 %
+more memory and twice the run time of a forward run.
 
 The six PPC Tokyo / Nagoya runs with the sign-off profile
 (`configs/benchmarks/ppc_sigma_demote_nis2_ratio4.toml`), against their
@@ -306,4 +316,6 @@ then kinematic ones, H at 10 / 30 min and the time after which H stays below
   handling only run forward. Nor with `--realtime`, `--live-output` or
   `--madocalib-bridge`.
 - The summary JSON records `"combined"`; the convergence and AR telemetry
-  describe the forward pass.
+  and the per-epoch counters describe the forward pass. The copy holds all
+  loaded products: on a Kamakura HAS SIS hour the peak memory grows from 212 to
+  338 MB.

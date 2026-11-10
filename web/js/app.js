@@ -500,13 +500,24 @@ function postGroup() {
   return mode.startsWith('ppp') ? 'ppp' : 'rtk';
 }
 
-function updatePostVisibility() {
+// Whether a [data-show] element applies to the current mode (and PPP corrections).
+function postShown(el) {
   const group = postGroup();
   const corrections = postForm.elements.pppCorr.value;
-  for (const el of $$('[data-show]', postForm)) {
-    el.hidden = !el.dataset.show.split(/\s+/).includes(group)
-      || (group === 'ppp' && el.dataset.showCorr !== undefined && !el.dataset.showCorr.split(/\s+/).includes(corrections));
-  }
+  return el.dataset.show.split(/\s+/).includes(group)
+    && !(group === 'ppp' && el.dataset.showCorr !== undefined && !el.dataset.showCorr.split(/\s+/).includes(corrections));
+}
+
+// A checkbox hidden for this mode keeps its state but is not passed on.
+function postChecked(name) {
+  const input = postForm.elements[name];
+  const holder = input.closest('[data-show]');
+  return input.checked && (!holder || postShown(holder));
+}
+
+function updatePostVisibility() {
+  const group = postGroup();
+  for (const el of $$('[data-show]', postForm)) el.hidden = !postShown(el);
   const ecef = postForm.elements.basePos.value === 'ecef';
   for (const el of $$('[data-show-base]', postForm)) el.hidden = !ecef || !['rtk', 'imu'].includes(group);
 }
@@ -549,8 +560,8 @@ function postOptions() {
     verbose: v.verbose,
     ionoFree: v.ionoFree,
     enableAr: v.enableAr,
-    realtime: v.realtime,
-    combined: (group === 'rtk' || group === 'ppp') && v.combined,
+    realtime: postChecked('realtime'),
+    combined: postChecked('combined'),
     extra: v.extra,
     workspaceNames: workspace.names(),
   };

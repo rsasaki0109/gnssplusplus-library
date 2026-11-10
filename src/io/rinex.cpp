@@ -28,6 +28,37 @@ namespace io {
 
 namespace {
 
+// A fixed-width epoch field: the whole field (blanks aside) must be the
+// number, so "0x" or "1.5x" is an unreadable epoch, not a wrong date.
+std::string trimmedField(const std::string& field) {
+    const auto first = field.find_first_not_of(' ');
+    if (first == std::string::npos) {
+        throw std::invalid_argument("empty epoch field");
+    }
+    const auto last = field.find_last_not_of(' ');
+    return field.substr(first, last - first + 1);
+}
+
+int strictEpochInt(const std::string& field, int lowest, int highest) {
+    const std::string text = trimmedField(field);
+    std::size_t consumed = 0;
+    const int value = std::stoi(text, &consumed);
+    if (consumed != text.size() || value < lowest || value > highest) {
+        throw std::invalid_argument("epoch field out of range: " + text);
+    }
+    return value;
+}
+
+double strictEpochSeconds(const std::string& field) {
+    const std::string text = trimmedField(field);
+    std::size_t consumed = 0;
+    const double value = std::stod(text, &consumed);
+    if (consumed != text.size() || !(value >= 0.0 && value < 61.0)) {
+        throw std::invalid_argument("epoch seconds out of range: " + text);
+    }
+    return value;
+}
+
 GNSSSystem systemFromRinexChar(char sys_char) {
     switch (sys_char) {
         case 'G': return GNSSSystem::GPS;
@@ -563,6 +594,15 @@ std::streampos RINEXReader::tell() {
 bool RINEXReader::seekTo(std::streampos position) {
     if (!file_.is_open() || position == std::streampos(-1)) {
         return false;
+    }
+    if (!replaying_ || replay_end_ != std::streampos(-1)) {
+        // Where reading had got to: the end of what has been read (and
+        // reported) so far, or the whole file once it failed at its end.
+        const std::streampos reached = file_.good() ? file_.tellg() : std::streampos(-1);
+        if (!replaying_ || reached == std::streampos(-1) || reached > replay_end_) {
+            replay_end_ = reached;
+        }
+        replaying_ = true;
     }
     file_.clear();
     file_.seekg(position);
@@ -1954,12 +1994,12 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
     if (epoch_line.length() < 35 || epoch_line[0] != '>') return false;
 
     try {
-        int year = std::stoi(epoch_line.substr(2, 4));
-        int month = std::stoi(epoch_line.substr(7, 2));
-        int day = std::stoi(epoch_line.substr(10, 2));
-        int hour = std::stoi(epoch_line.substr(13, 2));
-        int minute = std::stoi(epoch_line.substr(16, 2));
-        double second = std::stod(epoch_line.substr(18, 13));
+        int year = strictEpochInt(epoch_line.substr(2, 4), 1980, 2200);
+        int month = strictEpochInt(epoch_line.substr(7, 2), 1, 12);
+        int day = strictEpochInt(epoch_line.substr(10, 2), 1, 31);
+        int hour = strictEpochInt(epoch_line.substr(13, 2), 0, 23);
+        int minute = strictEpochInt(epoch_line.substr(16, 2), 0, 59);
+        double second = strictEpochSeconds(epoch_line.substr(18, 13));
 
         // Convert to GPS time
         auto days_from_civil = [](int y, unsigned m, unsigned d) -> int {
@@ -1987,9 +2027,7 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
 
         // Epoch record is (A1,1X,I4,4(1X,I2.2),F11.7,2X,I1,I3): the satellite
         // count is the I3 at columns 32-34, so counts of 100 or more parse.
-        std::string num_sats_str = epoch_line.substr(32, 3);
-        num_sats_str.erase(0, num_sats_str.find_first_not_of(' '));
-        int num_sats = num_sats_str.empty() ? 0 : std::stoi(num_sats_str);
+        int num_sats = strictEpochInt(epoch_line.substr(32, 3), 0, 999);
 
         if (!parseObservationRows(num_sats, obs_data, false)) {
             return false;
@@ -2665,7 +2703,26 @@ SatelliteId RINEXReader::parseSatelliteId(const std::string& sat_str, double ver
     return SatelliteId(system, 1);
 }
 
+bool RINEXReader::isReplaying() {
+    if (!replaying_) {
+        return false;
+    }
+    if (replay_end_ == std::streampos(-1)) {
+        return true;
+    }
+    const std::streampos now = file_.tellg();
+    if (now == std::streampos(-1) || now > replay_end_) {
+        replaying_ = false;
+        replay_end_ = std::streampos(-1);
+        return false;
+    }
+    return true;
+}
+
 void RINEXReader::reportMalformedEpoch(int line_number) {
+    if (isReplaying()) {
+        return;
+    }
     constexpr std::size_t kReported = 5;
     ++malformed_epochs_;
     if (malformed_epochs_ <= kReported) {
@@ -2679,6 +2736,9 @@ void RINEXReader::reportMalformedEpoch(int line_number) {
 }
 
 void RINEXReader::reportMalformedValue(const std::string& value) {
+    if (isReplaying()) {
+        return;
+    }
     constexpr std::size_t kReported = 5;
     ++malformed_values_;
     if (malformed_values_ <= kReported) {

@@ -23,7 +23,7 @@ inline std::string openFailureReason(const std::string& path) {
     if (std::filesystem::is_directory(status)) {
         return "is a directory";
     }
-    return "not readable";
+    return "could not be opened";
 }
 
 inline std::string cannotOpenMessage(const std::string& what, const std::string& path) {

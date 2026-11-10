@@ -427,3 +427,46 @@ TEST(RinexCrlfTest, AnUnreadableHeaderLineFailsTheHeader) {
     const std::string text = replaceOnce(rinex3ObsBody(' ', ' '), "G    4 C1C", "G    x C1C");
     EXPECT_FALSE(readObsCounting(text, "r3_bad_header").header_ok);
 }
+
+TEST(RinexCrlfTest, APartlyNumericEpochDateIsSkipped) {
+    // "0x" used to be read as month 0: the epoch was kept with a wrong time.
+    const std::string text =
+        replaceOnce(rinex3ObsBody(' ', ' '), epochHeader(30, 2), "> 2024 0x 01 00 00 30.0000000  0  2\n");
+    const auto result = readObsCounting(text, "r3_bad_month");
+    ASSERT_TRUE(result.header_ok);
+    ASSERT_EQ(result.epochs.size(), 2U);
+    EXPECT_DOUBLE_EQ(result.epochs[1].time.tow - result.epochs[0].time.tow, 60.0);
+    EXPECT_EQ(result.malformed_epochs, 1U);
+}
+
+TEST(RinexCrlfTest, ReadingBackAgainDoesNotReportAnEpochTwice) {
+    // --combined reads the epochs again from their positions: a bad epoch
+    // was reported (and counted) when first read.
+    const std::string text =
+        replaceOnce(rinex3ObsBody(' ', ' '), epochHeader(30, 2), "> 2024 01 01 00 00 30.0000000  0 x2\n");
+    const auto path = writeTemp(text, "seek_bad.obs");
+    io::RINEXReader reader;
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.open(path.string()));
+    ASSERT_TRUE(reader.readHeader(header));
+    std::vector<std::streampos> positions;
+    while (true) {
+        const std::streampos position = reader.tell();
+        ObservationData epoch;
+        if (!reader.readObservationEpoch(epoch)) {
+            break;
+        }
+        positions.push_back(position);
+    }
+    ASSERT_EQ(positions.size(), 2U);
+    EXPECT_EQ(reader.malformedEpochCount(), 1U);
+    for (auto it = positions.rbegin(); it != positions.rend(); ++it) {
+        ObservationData epoch;
+        ASSERT_TRUE(reader.seekTo(*it));
+        ASSERT_TRUE(reader.readObservationEpoch(epoch));
+    }
+    EXPECT_EQ(reader.malformedEpochCount(), 1U);
+    reader.close();
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}

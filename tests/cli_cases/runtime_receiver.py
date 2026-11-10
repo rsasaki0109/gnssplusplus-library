@@ -712,6 +712,18 @@ class RuntimeReceiverCases:
                 (("--combined", "--fix-recovery"), "--combined cannot use --fix-recovery"),
                 (("--combined", "--combined-fix-tolerance", "-1"),
                  "--combined-fix-tolerance must be >= 0"),
+                (("--combined-fix-tolerance", "0.1"), "--combined-fix-tolerance requires --combined"),
+                # Options that carry state from the previous epoch forward in time.
+                (("--combined", "--safe-availability-fallback"),
+                 "--combined cannot use --safe-availability-fallback"),
+                (("--combined", "--safe-float-continuity"),
+                 "--combined cannot use --safe-float-continuity"),
+                (("--combined", "--rtk-canyon-carrier-prior"),
+                 "--combined cannot use --rtk-canyon-carrier-prior"),
+                (("--combined", "--low-count-rescue-ratio", "2.0"),
+                 "--combined cannot use --low-count-rescue-ratio"),
+                (("--combined", "--float-trust-policy", "scaled-reset"),
+                 "--combined cannot use a --float-trust-policy other than legacy"),
             ):
                 with self.subTest(extra=extra):
                     refused = self.run_gnss("solve", *inputs, *extra)

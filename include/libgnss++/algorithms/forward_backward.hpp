@@ -41,8 +41,8 @@ struct CombineStats {
     std::size_t backward_only = 0;
     std::size_t both = 0;
     std::size_t averaged = 0;
-    /// Better status from the backward pass, e.g. FIX where the forward pass
-    /// had FLOAT (status upgrades by pass).
+    /// Epochs of both passes taken from one pass for its better status
+    /// (e.g. FIX from the backward pass where the forward pass had FLOAT).
     std::size_t from_forward = 0;
     std::size_t from_backward = 0;
     std::size_t fix_upgrades = 0;           ///< FIX where the forward pass was not
@@ -65,7 +65,9 @@ struct Pass {
  * An LLI flag (bit 0) marks a slip since the previous epoch. Going backward
  * that slip lies before the next epoch processed, so each epoch takes the
  * flag of the epoch after it in time, processed just before it (as RTKLIB
- * does). Call apply() on the epochs in the backward (decreasing time) order.
+ * does); a signal missing from that epoch takes the flag at its next earlier
+ * observation. Call apply() on the epochs in the backward (decreasing time)
+ * order.
  */
 class BackwardLossOfLock {
 public:

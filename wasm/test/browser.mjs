@@ -135,6 +135,15 @@ try {
   };
   const mode = (m) => page.selectOption('#post-form select[name="mode"]', m);
 
+  // A checkbox ticked in one mode and hidden in the next is not passed on.
+  await page.click('button[data-tool="post"]');
+  await mode('kinematic');
+  await page.check('#post-form input[name="realtime"]');
+  assert.match(await text('#tool-post [data-cmd]'), /--realtime/);
+  await mode('rtk-imu');
+  assert.doesNotMatch(await text('#tool-post [data-cmd]'), /real-time|--realtime/);
+  await mode('kinematic');
+  await page.uncheck('#post-form input[name="realtime"]');
   await post('RTK + IMU', async () => {
     await mode('rtk-imu');
     await page.selectOption('#post-form select[name="imu"]', 'imu.csv');
