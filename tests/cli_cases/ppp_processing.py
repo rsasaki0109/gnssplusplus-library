@@ -658,6 +658,7 @@ class PPPProcessingCases:
                 (["--combined", "--clas-osr", "--ssr", str(ssr)], "--combined cannot use --clas-osr"),
                 (["--combined", "--combined-fix-tolerance", "-1"],
                  "--combined-fix-tolerance must be >= 0"),
+                (["--combined-fix-tolerance", "0.1"], "--combined-fix-tolerance requires --combined"),
             ):
                 with self.subTest(args=args):
                     refused = self.run_gnss("ppp", "--obs", obs, "--nav", nav, "--out", str(out), *args)

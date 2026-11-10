@@ -140,3 +140,47 @@ TEST(ForwardBackwardTest, AFixOverAnSppSolutionIsReportedAsFloat) {
     EXPECT_EQ(stats.from_forward, 1U);
     EXPECT_EQ(stats.fix_unconfirmed, 1U);
 }
+
+namespace {
+
+ObservationData epochWith(const std::vector<std::pair<SignalType, bool>>& signals) {
+    ObservationData epoch;
+    for (const auto& [signal, slip] : signals) {
+        Observation observation;
+        observation.satellite = SatelliteId(GNSSSystem::GPS, 5);
+        observation.signal = signal;
+        observation.lli = slip ? 0x01 : 0x00;
+        epoch.observations.push_back(observation);
+    }
+    return epoch;
+}
+
+bool slipOf(const ObservationData& epoch, SignalType signal) {
+    for (const auto& observation : epoch.observations) {
+        if (observation.signal == signal) {
+            return observation.loss_of_lock && (observation.lli & 0x01) != 0;
+        }
+    }
+    ADD_FAILURE() << "signal not in the epoch";
+    return false;
+}
+
+}  // namespace
+
+TEST(ForwardBackwardTest, BackwardLossOfLockMovesEachSlipToTheEarlierEpoch) {
+    // Times t0 < t1 < t2, applied backward: t2, t1, t0. L1 slips at t2 (since
+    // t1): going backward the slip lies before t1.
+    auto t2 = epochWith({{SignalType::GPS_L1CA, true}, {SignalType::GPS_L2C, true}});
+    auto t1 = epochWith({{SignalType::GPS_L1CA, false}});  // no L2 at t1
+    auto t0 = epochWith({{SignalType::GPS_L1CA, false}, {SignalType::GPS_L2C, false}});
+    forward_backward::BackwardLossOfLock lol;
+    lol.apply(t2);
+    lol.apply(t1);
+    lol.apply(t0);
+    EXPECT_FALSE(slipOf(t2, SignalType::GPS_L1CA));  // nothing after t2
+    EXPECT_FALSE(slipOf(t2, SignalType::GPS_L2C));
+    EXPECT_TRUE(slipOf(t1, SignalType::GPS_L1CA));
+    EXPECT_FALSE(slipOf(t0, SignalType::GPS_L1CA));
+    // L2 was missing at t1: its slip is kept for its next earlier epoch.
+    EXPECT_TRUE(slipOf(t0, SignalType::GPS_L2C));
+}

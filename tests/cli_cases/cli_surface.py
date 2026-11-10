@@ -195,6 +195,12 @@ class CLISurfaceCases:
                 self.assertEqual(result.returncode, 1, msg=result.stderr)
                 self.assertIn(message, result.stderr)
                 self.assertNotIn("terminate called", result.stderr)
+        # Blanks around a value are not part of it ("0.1 ,0.2,0.3", " 5").
+        for args in (("fuse", "--imu", "x.csv", "--gnss-pos", "x.pos", "--lever-arm", "0.1 ,0.2, 0.3"),
+                     ("convert", "--input", "x.rtcm", "--format", "rtcm", "--limit", " 5")):
+            with self.subTest(args=args):
+                result = self.run_gnss(*args)
+                self.assertNotIn("invalid", result.stderr)
     def test_ppp_cli_rejects_madocalib_oracle_selector(self) -> None:
         result = self.run_gnss(
             "ppp",

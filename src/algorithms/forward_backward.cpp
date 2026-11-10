@@ -89,6 +89,13 @@ void BackwardLossOfLock::apply(ObservationData& epoch) {
         observation.lli = static_cast<uint8_t>((observation.lli & ~0x01) | (slip ? 0x01 : 0x00));
         observation.loss_of_lock = slip;
     }
+    // A slip of a signal this epoch does not have lies before its next
+    // (earlier) observation: keep it until then.
+    for (const auto& [key, slip] : later_slips_) {
+        if (slip && own.find(key) == own.end()) {
+            own[key] = true;
+        }
+    }
     later_slips_ = std::move(own);
 }
 
