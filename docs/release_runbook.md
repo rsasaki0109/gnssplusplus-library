@@ -1,6 +1,6 @@
 # Maintainer release runbook
 
-This runbook covers the tag-driven v0.5.0 release. Release automation is
+This runbook covers the tag-driven v0.6.0 release. Release automation is
 intentionally started only by an annotated `vMAJOR.MINOR.PATCH` tag pushed to
 the repository.
 
@@ -18,7 +18,7 @@ not automate posting or change repository publication state.
 
    ```bash
    python3 scripts/release/validate_version.py \
-     --tag v0.5.0 --cmake-file CMakeLists.txt
+     --tag v0.6.0 --cmake-file CMakeLists.txt
    ```
 
 ## Start the release
@@ -26,12 +26,12 @@ not automate posting or change repository publication state.
 From the validated `develop` merge commit, create and push the annotated tag:
 
 ```bash
-git tag -a v0.5.0 -m "libgnss++ v0.5.0"
-git push origin v0.5.0
+git tag -a v0.6.0 -m "libgnss++ v0.6.0"
+git push origin v0.6.0
 ```
 
 The release workflow checks out the event commit, then refuses to proceed
-unless the local `v0.5.0` ref is an annotated tag that peels exactly to that
+unless the local `v0.6.0` ref is an annotated tag that peels exactly to that
 commit and matches CMake. It builds repeatable tag-driven packages for Ubuntu
 24.04 amd64 and verifies the tag with `gh release create --verify-tag`; the
 workflow never creates a Git tag.
@@ -47,12 +47,12 @@ workflow never creates a Git tag.
   fresh Ubuntu 24.04 amd64 container before running the offline demo.
 - Treat the binaries and packages as Ubuntu 24.04 amd64 release artifacts;
   the TGZ is not a universal portability promise.
-- Confirm the GitHub Release for `v0.5.0` contains those assets and generated
-  notes plus `docs/releases/v0.5.0.md` when that file is present. Its relative
+- Confirm the GitHub Release for `v0.6.0` contains those assets and generated
+  notes plus `docs/releases/v0.6.0.md` when that file is present. Its relative
   docs links are published as links to the docs site
   (`scripts/release/release_notes.py`), which fails the release on a link to
   a missing file.
-- Confirm GHCR has `v0.5.0`, `0.5.0`, and `0.5` aliases, together with the
+- Confirm GHCR has `v0.6.0`, `0.6.0`, and `0.6` aliases, together with the
   normal branch/ref, short-SHA, and `latest` tags.
 
 If a rerun finds an existing release, it uploads the freshly checked assets
