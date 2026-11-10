@@ -224,7 +224,9 @@ libgnss::Solution solvePppFile(const std::string& obs_path,
 
     libgnss::PPPProcessor processor(ppp_config);
     if (!processor.initialize(config)) {
-        throw std::runtime_error("failed to initialize PPP processor");
+        throw std::runtime_error(processor.initializeError().empty()
+                                     ? std::string("failed to initialize PPP processor")
+                                     : processor.initializeError());
     }
 
     libgnss::Solution solution;

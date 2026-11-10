@@ -660,6 +660,13 @@ Options parseArguments(int argc, char* argv[]) {
             argumentError("--realtime cannot use --madocalib-bridge", argv[0]);
         }
     }
+    if (!options.combined) {
+        for (int k = 1; k < argc; ++k) {
+            if (std::string(argv[k]) == "--combined-fix-tolerance") {
+                argumentError("--combined-fix-tolerance requires --combined", argv[0]);
+            }
+        }
+    }
     if (options.combined) {
         // The backward pass uses every later epoch. CLAS keeps state across
         // epochs that only runs forward (SIS continuity, atmosphere banks).
@@ -1790,6 +1797,11 @@ int main(int argc, char* argv[]) {
         // starts in the observation file to read it again.
         std::optional<libgnss::PPPProcessor> backward_processor;
         if (options.combined) {
+            if (obs_reader.tell() == std::streampos(-1)) {
+                std::cerr << "Error: --combined needs an observation file that can be read "
+                             "again (not a pipe)\n";
+                return 1;
+            }
             backward_processor.emplace(processor);
         }
         struct CombinedEpoch {

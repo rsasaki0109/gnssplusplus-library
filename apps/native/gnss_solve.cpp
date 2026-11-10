@@ -3271,6 +3271,13 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         config.enable_nonfix_drift_guard = false;
         config.enable_float_bridge_tail_guard = false;
     }
+    if (!config.combined) {
+        for (int k = 1; k < argc; ++k) {
+            if (std::string(argv[k]) == "--combined-fix-tolerance") {
+                argumentError("--combined-fix-tolerance requires --combined", argv[0]);
+            }
+        }
+    }
     if (config.combined) {
         // The backward pass uses every later epoch; per-epoch gates that
         // keep their own time-ordered state run forward only.
@@ -3285,6 +3292,24 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (config.pos_fix_diagnostics) {
             argumentError("--combined cannot use --pos-fix-diagnostics", argv[0]);
+        }
+        // These carry a position or a trust state from the previous epoch
+        // and assume time increases; the backward pass would extrapolate
+        // the wrong way (or never engage them).
+        if (config.enable_safe_availability_fallback) {
+            argumentError("--combined cannot use --safe-availability-fallback", argv[0]);
+        }
+        if (config.enable_safe_float_continuity) {
+            argumentError("--combined cannot use --safe-float-continuity", argv[0]);
+        }
+        if (config.enable_canyon_carrier_prior) {
+            argumentError("--combined cannot use --rtk-canyon-carrier-prior", argv[0]);
+        }
+        if (config.low_count_rescue_ratio_threshold > 0.0) {
+            argumentError("--combined cannot use --low-count-rescue-ratio", argv[0]);
+        }
+        if (config.float_trust_policy != libgnss::float_trust_policy::FloatTrustPolicy::LEGACY) {
+            argumentError("--combined cannot use a --float-trust-policy other than legacy", argv[0]);
         }
         if (!std::isfinite(config.combined_max_fix_difference_m) ||
             config.combined_max_fix_difference_m < 0.0) {
@@ -3490,7 +3515,6 @@ int main(int argc, char* argv[]) {
                  config.diagnostics_csv_path,
                  config.fix_recovery_log_path,
                  config.integrity_log_path,
-                 config.integrity_shadow_csv_path,
                  config.rtk_covariance_log_path,
                  config.timing_csv_path});
         if (!output_error.empty()) {
@@ -3953,6 +3977,14 @@ int main(int argc, char* argv[]) {
             return config.combined ? reader.tell() : std::streampos(-1);
         };
         std::streampos rover_offset = position_of(rover_reader);
+        if (config.combined &&
+            (rover_offset == std::streampos(-1) || base_reader.tell() == std::streampos(-1))) {
+            // The backward pass reads the epochs again from their offsets.
+            std::cerr << "Error: --combined needs rover and base observation files that can be "
+                         "read again (not a pipe)"
+                      << std::endl;
+            return 1;
+        }
         bool rover_ok = rover_reader.readObservationEpoch(rover_obs);
         std::streampos base_offset = position_of(base_reader);
         bool base_ok = base_reader.readObservationEpoch(base_obs);

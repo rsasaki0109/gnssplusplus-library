@@ -223,6 +223,11 @@ private:
     int current_line_ = 0;
     std::size_t malformed_epochs_ = 0;
     std::size_t malformed_values_ = 0;
+    // seekTo() back over epochs already read (the --combined backward pass):
+    // their problems were reported (and counted) when first read.
+    bool replaying_ = false;
+    std::streampos replay_end_ = std::streampos(-1);  // -1: the whole file was read
+    bool isReplaying();
     void reportMalformedEpoch(int line_number);
     void reportMalformedValue(const std::string& value);
     bool header_read_ = false;
