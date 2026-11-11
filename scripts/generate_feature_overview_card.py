@@ -21,7 +21,7 @@ ACCENT_3 = "#18794e"
 def wrap_lines(lines: list[str], width: int) -> list[str]:
     wrapped: list[str] = []
     for line in lines:
-        parts = textwrap.wrap(line, width=width)
+        parts = textwrap.wrap(line, width=width, break_on_hyphens=False)
         if not parts:
             wrapped.append("•")
             continue
@@ -45,7 +45,7 @@ def add_panel(ax, x: float, y: float, w: float, h: float, title: str, lines: lis
     )
     ax.add_patch(patch)
     ax.text(x + 0.04 * w, y + h - 0.14 * h, title, fontsize=15, color=TEXT, weight="bold", va="center")
-    wrapped = wrap_lines(lines, 34 if w >= 0.4 else 26)
+    wrapped = wrap_lines(lines, 58 if w >= 0.4 else 38)
     line_step = 0.10 * h
     start_y = y + h - 0.34 * h
     for index, line in enumerate(wrapped):
@@ -83,13 +83,13 @@ def main() -> None:
     ax.text(
         0.05,
         0.86,
-        "A native non-GUI GNSS stack for positioning, protocols, automation, and deployment.",
+        "A native GNSS stack: command-line tools, a browser GUI, and a C++ library.",
         fontsize=14,
         color=MUTED,
     )
 
     ax.text(0.05, 0.78, "No RTKLIB runtime dependency", fontsize=14, color=ACCENT, weight="bold")
-    ax.text(0.34, 0.78, "C++17 core + CLI + Python + ROS2", fontsize=14, color=ACCENT_2, weight="bold")
+    ax.text(0.34, 0.78, "C++20 core + CLI + browser GUI + Python", fontsize=14, color=ACCENT_2, weight="bold")
     ax.text(0.64, 0.78, "Benchmarks and sign-off scripts included", fontsize=14, color=ACCENT_3, weight="bold")
 
     add_panel(
@@ -100,9 +100,9 @@ def main() -> None:
         0.29,
         "Positioning Engines",
         [
-            "SPP, RTK, PPP, CLAS-style PPP",
-            "Dual-frequency workflows",
-            "Sign-off scripts and open-data regressions",
+            "SPP, RTK, PPP / PPP-AR, RTK + IMU, FGO",
+            "MADOCA, CLAS, Galileo HAS, BeiDou PPP-B2b, RTCM SSR",
+            "Real-time equivalent (--realtime) and forward + backward (--combined)",
         ],
         ACCENT,
     )
@@ -114,7 +114,8 @@ def main() -> None:
         0.29,
         "Protocols and Raw Ingest",
         [
-            "RINEX, RTCM, UBX, direct QZSS L6",
+            "RINEX 2 / 3 / 4 (incl. CNAV, B-CNAV), RTCM 3, UBX",
+            "QZSS L6, HAS E6-B pages, PPP-B2b messages",
             "NMEA, NovAtel, SBP, SBF, Trimble, BINEX",
             "File, NTRIP, TCP, and serial paths",
         ],
@@ -128,9 +129,9 @@ def main() -> None:
         0.29,
         "Tooling",
         [
-            "gnss spp, solve, ppp, stream",
-            "convert, replay, live, rcv",
-            "Benchmark and README asset generators",
+            "gnss spp, solve, ppp, fuse, fgo",
+            "convert, replay, live, stream, rinex-info",
+            "gnss reproduce lanes, benchmarks and sign-off scripts",
         ],
         ACCENT_3,
     )
@@ -140,11 +141,11 @@ def main() -> None:
         0.10,
         0.42,
         0.26,
-        "Developer Interfaces",
+        "Browser GUI (WebAssembly)",
         [
-            "Native C++ API for integration",
-            "Python bindings for solve and inspection",
-            "ROS2 playback for POS telemetry",
+            "The CLI tools compiled unchanged, on GitHub Pages",
+            "Post-process, convert, observations, plot on a map",
+            "Files stay in the browser; each run shows its gnss command",
         ],
         ACCENT_2,
     )
@@ -154,11 +155,11 @@ def main() -> None:
         0.10,
         0.42,
         0.26,
-        "Packaging and Ops",
+        "Interfaces and Packaging",
         [
-            "CMake install/export, pkg-config, cpack",
-            "Installed-prefix dogfooding and CLI regressions",
-            "Odaiba cards, 2D plots, scorecards, summary JSON",
+            "Native C++ API, Python bindings, ROS 2 node",
+            "CMake install/export, pkg-config, DEB / TGZ packages",
+            "Versioned Docker image with the CLI and Python tools",
         ],
         ACCENT,
     )
@@ -166,7 +167,7 @@ def main() -> None:
     ax.text(
         0.05,
         0.035,
-        "See README for Odaiba 2D comparison, benchmark snapshots, and exact command examples.",
+        "See README for the browser GUI, benchmark snapshots, and exact command examples.",
         fontsize=11.8,
         color=MUTED,
     )
