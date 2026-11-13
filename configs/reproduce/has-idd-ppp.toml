@@ -114,14 +114,14 @@ gate = false
 abs_tol = 0.03
 readme = "docs/galileo_has.md table"
 foreach = [
-  { t = "10min", field = "h_m", expected = 0.063 },
-  { t = "10min", field = "up_m", expected = -0.099 },
-  { t = "20min", field = "h_m", expected = 0.192 },
-  { t = "20min", field = "up_m", expected = -0.157 },
-  { t = "30min", field = "h_m", expected = 0.123 },
-  { t = "30min", field = "up_m", expected = 0.036 },
-  { t = "60min", field = "h_m", expected = 0.116 },
-  { t = "60min", field = "up_m", expected = 0.002 },
+  { t = "10min", field = "h_m", expected = 0.100 },
+  { t = "10min", field = "up_m", expected = -0.167 },
+  { t = "20min", field = "h_m", expected = 0.184 },
+  { t = "20min", field = "up_m", expected = -0.102 },
+  { t = "30min", field = "h_m", expected = 0.156 },
+  { t = "30min", field = "up_m", expected = -0.112 },
+  { t = "60min", field = "h_m", expected = 0.176 },
+  { t = "60min", field = "up_m", expected = -0.039 },
 ]
 
 [[metrics]]
@@ -133,7 +133,7 @@ abs_tol = 1.5
 readme = "docs/galileo_has.md table"
 foreach = [
   { field = "convergence_h_below_0p20_min", expected = 5.75 },
-  { field = "convergence_abs_up_below_0p40_min", expected = 0.0 },
+  { field = "convergence_abs_up_below_0p40_min", expected = 1.13 },
 ]
 
 # Kinematic float PPP (white-noise position re-seeded from SPP each epoch,
@@ -168,14 +168,14 @@ gate = false
 abs_tol = 0.05
 readme = "docs/galileo_has.md table"
 foreach = [
-  { t = "10min", field = "h_m", expected = 0.127 },
-  { t = "10min", field = "up_m", expected = -0.282 },
-  { t = "20min", field = "h_m", expected = 0.240 },
-  { t = "20min", field = "up_m", expected = -0.248 },
-  { t = "30min", field = "h_m", expected = 0.205 },
-  { t = "30min", field = "up_m", expected = -0.177 },
-  { t = "60min", field = "h_m", expected = 0.305 },
-  { t = "60min", field = "up_m", expected = -0.236 },
+  { t = "10min", field = "h_m", expected = 0.155 },
+  { t = "10min", field = "up_m", expected = -0.320 },
+  { t = "20min", field = "h_m", expected = 0.236 },
+  { t = "20min", field = "up_m", expected = -0.188 },
+  { t = "30min", field = "h_m", expected = 0.203 },
+  { t = "30min", field = "up_m", expected = -0.159 },
+  { t = "60min", field = "h_m", expected = 0.306 },
+  { t = "60min", field = "up_m", expected = -0.221 },
 ]
 
 # The same stream through the legacy RTCM SSR conversion (no IODE match,

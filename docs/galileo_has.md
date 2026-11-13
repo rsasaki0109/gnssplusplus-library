@@ -171,7 +171,7 @@ convergence as in the IDD table below:
 | 2025-08-21 07h, cssrlib SIS, static (15 deg, L1 C/A + L2 W) | 0.381 / -1.214 m | 0.117 / -0.629 m | 0.139 / -0.607 m | 0.084 / +0.563 m | 18.4 min | never |
 | 2025-08-21 07h, libgnss++ JPL GDGPS RTCM SSR, GPS + Galileo | 0.507 / +0.689 m | 0.214 / +0.002 m | 0.251 / +0.054 m | 0.057 / -0.254 m | 42.1 min | 17.8 min |
 | 2025-08-21 07h, libgnss++ broadcast only, GPS + Galileo | 0.874 / +0.774 m | 0.710 / +0.069 m | 0.699 / +0.067 m | 0.651 / -0.246 m | never | 17.8 min |
-| For reference: OBE4 (Germany) HAS IDD, static (table below) | 0.063 / -0.099 m | 0.192 / -0.157 m | 0.123 / +0.036 m | 0.116 / +0.002 m | 5.8 min | 0.0 min |
+| For reference: OBE4 (Germany) HAS IDD, static (table below) | 0.100 / -0.167 m | 0.184 / -0.102 m | 0.156 / -0.112 m | 0.176 / -0.039 m | 5.8 min | 1.1 min |
 
 The lane gates the 2025-02-15 static run (H <= 0.20 m and |U| <= 0.40 m at
 30 and 60 min) and the decoder (all 432 MT1 messages of each hour, no CRC
@@ -330,11 +330,12 @@ historical rows keep the values of their time):
 
 | Run | H / U at 10 min | 20 min | 30 min | 60 min | Converged H < 0.20 m | Converged \|U\| < 0.40 m |
 |---|---|---|---|---|---:|---:|
-| `has-idd`, static | 0.063 / -0.099 m | 0.192 / -0.157 m | 0.123 / +0.036 m | **0.116 / +0.002 m** | **5.8 min** | **0.0 min** |
+| `has-idd`, static | 0.100 / -0.167 m | 0.184 / -0.102 m | 0.156 / -0.112 m | **0.176 / -0.039 m** | **5.8 min** | **1.1 min** |
+| `has-idd`, static, while satellites without a correction ran on the broadcast orbit and clock (2026-11-13) | 0.063 / -0.099 m | 0.192 / -0.157 m | 0.123 / +0.036 m | 0.116 / +0.002 m | 5.8 min | 0.0 min |
 | `has-idd`, static, before the Galileo receiver clock (2026-10-01) | 0.056 / -0.147 m | 0.067 / -0.170 m | 0.092 / +0.049 m | 0.014 / +0.050 m | 0.8 min | 5.8 min |
 | `has-idd`, static, before the one-update fix | 0.018 / -0.503 m | 0.057 / -0.432 m | 0.072 / -0.090 m | 0.097 / -0.136 m | 4.2 min | 21.5 min |
 | `legacy` conversion of the same stream, static | 0.452 / +0.119 m | 0.201 / +0.126 m | 0.056 / +0.549 m | 0.095 / +0.233 m | 20.1 min | 58.1 min |
-| `has-idd`, kinematic | 0.127 / -0.282 m | 0.240 / -0.248 m | 0.205 / -0.177 m | **0.305 / -0.236 m** | never | 0.0 min |
+| `has-idd`, kinematic | 0.155 / -0.320 m | 0.236 / -0.188 m | 0.203 / -0.159 m | **0.306 / -0.221 m** | never | 1.1 min |
 | `has-idd`, kinematic, before the Galileo receiver clock (2026-10-01) | 0.033 / -0.201 m | 0.064 / -0.128 m | 0.057 / +0.018 m | 0.114 / +0.077 m | 59.6 min | 6.1 min |
 | `has-idd`, kinematic, before the residual screening | 0.035 / -0.195 m | 0.064 / -0.127 m | 0.136 / +0.058 m | 0.018 / -0.390 m | 45.0 min | never (-0.44 m at the last epoch) |
 | `has-idd`, kinematic, before the one-update fix | 3.03 / -5.95 m | 2.47 / -5.13 m | 2.20 / -5.71 m | 1.87 / -5.61 m | never | never |

@@ -1133,11 +1133,11 @@ sources' terms, so the three input files are not redistributed; download them
 into the `--has-data-root` directory.
 
 Local result (Linux gcc Release, 2026-11-07, 17 s): every metric passes. The
-static run is at 0.116 m horizontal / +0.002 m vertical after one hour and
+static run is at 0.176 m horizontal / -0.039 m vertical after one hour and
 converges below 0.20 m horizontal after 5.8 min and below 0.40 m vertical
-from the first epoch; the gates are H <= 0.20 m and |U| <= 0.40 m at 60 min,
+after 1.1 min; the gates are H <= 0.20 m and |U| <= 0.40 m at 60 min,
 and convergence within 10 min (H) and 30 min (U). The kinematic run is at
-0.205 / -0.177 m after 30 min and 0.305 / -0.236 m after one hour, gated at
+0.203 / -0.159 m after 30 min and 0.306 / -0.221 m after one hour, gated at
 H <= 0.40 m and |U| <= 0.60 m at 30 and 60 min. Until Galileo got a receiver
 clock of its own with SSR corrections and C2W the L2 P code bias
 (2026-11-07) the static run ended at 0.014 / +0.050 m (0.8 / 5.8 min) and
