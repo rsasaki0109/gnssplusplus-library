@@ -299,9 +299,22 @@ then kinematic ones, H at 10 / 30 min and the time after which H stays below
 | JPL GDGPS, Kamakura 2024-02-12 | 0.274 / 0.332 m, 38.6 min | 0.172 / 0.112 m, 0 min | 0.198 / 0.215 m | 0.045 / 0.043 m |
 | HAS IDD, OBE4 2023-08-17 | 0.063 / 0.123 m, 5.8 min | 0.122 / 0.250 m, 41.2 min | 0.127 / 0.205 m | 0.223 / 0.240 m |
 
-- **OBE4 gets worse.** Its E1 / E5a drift (see [Galileo HAS
-  support](galileo_has.md)) gives the two passes different height biases,
-  and their mean is further from the reference in the middle of the hour.
+- **OBE4 gets worse.** On this hour the kinematic solution drifts west
+  whatever it is made of: after one hour GPS alone is 0.24 m west of the
+  coordinate, Galileo E1 / E5b alone 0.18 m, Galileo E1 / E5a alone 0.53 m
+  (see [Galileo HAS support](galileo_has.md)). The error changes with time
+  and is common to both constellations, so the backward pass, which
+  converges on the later part of the hour, carries it differently from the
+  forward pass, and the mean of the two positions cannot cancel it.
+  - With the E5a observations removed the hour is better (static 0.116 →
+    0.076 m after 60 min, kinematic 0.305 → 0.199 m) but `--combined` is
+    still worse in the middle (H at 30 min: 0.108 m forward, 0.206 m
+    combined).
+  - E5b is not better in general: on the Kamakura HAS SIS hours it gives
+    0.151 and 0.125 m static after 60 min against 0.118 m with E5a, and on
+    the JPL GDGPS hour of 2025-08-21 0.047 against 0.057 m. The signal choice
+    is left as it is.
+  - The source of the common drift is not identified (2026-11-13).
 - **MADOCA PPP-AR** (MIZU sample with L6D, kinematic, 118 epochs), against
   a 24 h static PPP of MIZU with the IGS final orbits and clocks:
 
