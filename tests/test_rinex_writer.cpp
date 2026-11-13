@@ -548,6 +548,62 @@ TEST(RINEXReaderTest, RejectsTruncatedRinex4ObservationEpoch) {
     std::filesystem::remove(temp_path);
 }
 
+TEST(RINEXReaderTest, ReadsRinex4RecordsWithTrailingBlanksRemoved) {
+    // Writers often end a record after its last observation: the trailing
+    // blank fields, and the LLI / SSI columns of the last value, are not
+    // written. Such an epoch used to be rejected as a whole.
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex4_trimmed_rows.obs";
+    std::filesystem::remove(temp_path);
+    {
+        std::ofstream file(temp_path);
+        ASSERT_TRUE(file.is_open());
+        file << rinexHeaderLine(
+            "     4.02           OBSERVATION DATA    M", "RINEX VERSION / TYPE");
+        file << rinexHeaderLine("G    4 C1C L1C C2W L2W", "SYS / # / OBS TYPES");
+        file << rinexHeaderLine("", "END OF HEADER");
+        file << "> 2024 08 03 09 51 23.0000000  0  2\n";
+        // Two of four fields, the second without its LLI / SSI columns.
+        std::string trimmed = "G04" + rinexObsField("22011162.552") + rinexObsField("115669443.467");
+        trimmed.erase(trimmed.find_last_not_of(' ') + 1);
+        file << trimmed << "\n";
+        file << "G07" << rinexObsField("21011162.552")
+             << rinexObsField("110669443.467")
+             << rinexObsField("21022262.423")
+             << rinexObsField("118222443.467") << "\n";
+    }
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    ObservationData epoch;
+    ASSERT_TRUE(reader.readObservationEpoch(epoch));
+    const SatelliteId g04(GNSSSystem::GPS, 4);
+    const SatelliteId g07(GNSSSystem::GPS, 7);
+    bool g04_l1 = false;
+    int g04_signals = 0;
+    int g07_signals = 0;
+    for (const auto& observation : epoch.observations) {
+        if (observation.satellite == g04) {
+            ++g04_signals;
+            if (observation.has_pseudorange &&
+                std::abs(observation.pseudorange - 22011162.552) < 1e-3 &&
+                observation.has_carrier_phase &&
+                std::abs(observation.carrier_phase - 115669443.467) < 1e-3) {
+                g04_l1 = true;
+            }
+        } else if (observation.satellite == g07) {
+            ++g07_signals;
+        }
+    }
+    EXPECT_TRUE(g04_l1);
+    EXPECT_EQ(g04_signals, 1);
+    EXPECT_EQ(g07_signals, 2);
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
 TEST(RINEXReaderTest, RejectsMalformedRinex4EpochTokenWidthsAndCounts) {
     io::rinex4::ObservationEpochHeader epoch;
     EXPECT_FALSE(io::rinex4::parseObservationEpochHeader(

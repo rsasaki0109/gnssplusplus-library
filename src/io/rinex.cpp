@@ -2105,14 +2105,11 @@ bool RINEXReader::parseObservationSatelliteRecord(
     for (int i = 0; i < num_obs_types; ++i) {
         const size_t col_start = 3 + static_cast<size_t>(i) * 16;
         const std::string& row = sat_line;
+        // A record may end after its last observation: trailing blank
+        // fields, and the LLI / SSI columns of the last value, are often
+        // not written (RINEX 4 files as well).
         if (col_start + 14 > row.length()) {
-            if (strict) {
-                return false;
-            }
             continue;
-        }
-        if (strict && col_start + 16 > row.length()) {
-            return false;
         }
 
         std::string obs_str = row.substr(col_start, 14);
