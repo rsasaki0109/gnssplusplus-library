@@ -3448,6 +3448,53 @@ TEST(PPPMultifrequencyTest, UsesMadocalibHeaderFrequencySlotWithoutFallback) {
         nullptr);
 }
 
+TEST(PPPMultifrequencyTest, TakesGpsC1wRangeForPreciseClocks) {
+    namespace identity = algorithms::ppp_bias_identity;
+    ObservationData epoch;
+    const SatelliteId satellite(GNSSSystem::GPS, 27);
+
+    Observation ca;
+    ca.satellite = satellite;
+    ca.signal = SignalType::GPS_L1CA;
+    ca.pseudorange_observation_type = "C1C";
+    ca.carrier_phase_observation_type = "L1C";
+    ca.has_pseudorange = true;
+    ca.pseudorange = 20200000.0;
+    ca.has_carrier_phase = true;
+    ca.carrier_phase = 106000000.0;
+
+    // No C1W in the epoch: C1C stays.
+    Observation selected;
+    EXPECT_FALSE(identity::gpsL1PCodeForPreciseClocks(epoch, ca, selected));
+
+    Observation p = ca;
+    p.pseudorange_observation_type = "C1W";
+    p.carrier_phase_observation_type = "L1W";
+    p.pseudorange = 20200000.45;
+    p.carrier_phase = 106000000.25;
+    epoch.addRinexTrackingObservation("1W", p);
+
+    ASSERT_TRUE(identity::gpsL1PCodeForPreciseClocks(epoch, ca, selected));
+    EXPECT_EQ(selected.pseudorange_observation_type, "C1W");
+    EXPECT_DOUBLE_EQ(selected.pseudorange, 20200000.45);
+    // The carrier phase stays on L1 C/A.
+    EXPECT_EQ(selected.carrier_phase_observation_type, "L1C");
+    EXPECT_DOUBLE_EQ(selected.carrier_phase, 106000000.0);
+
+    // A missing C1W range, another primary code, another system: unchanged.
+    Observation empty_p = p;
+    empty_p.has_pseudorange = false;
+    epoch.addRinexTrackingObservation("1W", empty_p);
+    EXPECT_FALSE(identity::gpsL1PCodeForPreciseClocks(epoch, ca, selected));
+    epoch.addRinexTrackingObservation("1W", p);
+    Observation l1c = ca;
+    l1c.pseudorange_observation_type = "C1L";
+    EXPECT_FALSE(identity::gpsL1PCodeForPreciseClocks(epoch, l1c, selected));
+    Observation qzss = ca;
+    qzss.satellite = SatelliteId(GNSSSystem::QZSS, 27);
+    EXPECT_FALSE(identity::gpsL1PCodeForPreciseClocks(epoch, qzss, selected));
+}
+
 TEST(PPPMultifrequencyTest, SeparatesMadocalibBeiDouGenerationsForDoubleDifferences) {
     const auto bds2 = ppp_ar::ambiguityDdGroup(
         SatelliteId(GNSSSystem::BeiDou, 18));
