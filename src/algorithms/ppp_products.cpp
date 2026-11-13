@@ -628,6 +628,12 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
     require_coherent_ssr_ = false;
     ssr_products_loaded_ = false;
     ssr_held_samples_ = true;
+    // A satellite the stream does not correct at an epoch (another
+    // constellation, or a gap in its corrections) must not fall back to the
+    // broadcast orbit and clock: on the OBE4 HAS IDD hour G26 has no
+    // correction for 29 minutes and its broadcast clock is 0.3 m off the
+    // corrected ones. As for HAS SIS and PPP-B2b, and as cssrlib does.
+    require_ssr_orbit_correction_ = true;
     // The biases are keyed by signal (rtcmCodeBiasesToInternal): give a GPS
     // L2 P(Y) / Z-tracked code (C2W, C2P, ...) the L2 P bias and an L2C code
     // the L2C one, as the HAS SIS path does. HAS sends both L2 CL and L2 P;
