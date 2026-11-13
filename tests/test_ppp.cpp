@@ -4343,6 +4343,16 @@ TEST(PPPTest, RealtimeRtcmSsrSatelliteWaitsForItsOwnFirstUpdate) {
     ASSERT_TRUE(post_processing.loadRTCMSSRProducts(
         rtcm_path.string(), nav_data, 1.0, PPPProcessor::RTCMSSRProfile::Standard));
     EXPECT_FALSE(post_processing.waitsForFirstSsrUpdate(g02, at(345600.0)));
+
+    // A satellite the stream does not correct is left out, not used on its
+    // broadcast orbit and clock (G03 here; a gap in a satellite's corrections
+    // on real streams). The legacy conversion keeps its behavior.
+    EXPECT_TRUE(post_processing.requiresSsrOrbitCorrection());
+    EXPECT_TRUE(realtime.requiresSsrOrbitCorrection());
+    PPPProcessor legacy;
+    ASSERT_TRUE(legacy.loadRTCMSSRProducts(
+        rtcm_path.string(), nav_data, 1.0, PPPProcessor::RTCMSSRProfile::Legacy));
+    EXPECT_FALSE(legacy.requiresSsrOrbitCorrection());
     std::filesystem::remove(rtcm_path);
 }
 

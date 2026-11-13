@@ -207,13 +207,13 @@ export async function runSmoke(factoryFor, log = console.log, options = {}) {
     };
 
     // Galileo HAS, 30 min static each. Native gnss ppp: final positions below
-    // (IDD: H 0.12 m from the OBE4 coordinate; E6-B: H 0.07 m from Kamakura's).
+    // (IDD: H 0.16 m from the OBE4 coordinate; E6-B: H 0.07 m from Kamakura's).
     await run(buildPostCommand({
       mode: 'ppp-static', rover: 'OBE42023229c.obs', nav: 'OBE42023229c.nav', corrections: 'has-idd',
       hasIdd: 'idd2023229c.rtc', maxEpochs: '1800', out: 'has_idd.pos',
     }));
     const hasIdd = parseSolution('has_idd.pos', text('has_idd.pos'));
-    const hasIddDelta = ecefDistance(hasIdd, [4186704.168220, 834903.725084, 4723665.039235]);
+    const hasIddDelta = ecefDistance(hasIdd, [4186704.083854, 834903.638673, 4723664.930961]);
     log(`HAS IDD: ${hasIdd.n} epochs, H ${horizontalError(hasIdd, [4186704.2262, 834903.7677, 4723664.9337]).toFixed(3)} m, `
       + `final ${(hasIddDelta * 1000).toFixed(2)} mm from native`);
     assert.equal(hasIdd.n, 1800);

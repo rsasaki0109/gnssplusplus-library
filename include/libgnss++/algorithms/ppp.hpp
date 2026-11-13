@@ -310,6 +310,9 @@ public:
     /**
      * @brief Interpolate a loaded SSR correction for inspection/debugging.
      */
+    /// True when a satellite without an SSR orbit correction at an epoch is
+    /// left out instead of being used on its broadcast orbit and clock.
+    bool requiresSsrOrbitCorrection() const { return require_ssr_orbit_correction_; }
     /// --realtime with RTCM SSR: true while the stream corrects this satellite
     /// but its first update is not in hand yet at `time`. It is not used
     /// until then (a satellite the stream never corrects is not affected).
