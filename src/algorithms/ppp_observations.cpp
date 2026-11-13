@@ -101,6 +101,16 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             continue;
         }
 
+        // SSR and --dcb products correct C1C with their own biases, so only
+        // the precise-clock run without either takes the C1W range.
+        Observation p_code_primary;
+        if (precise_products_loaded_ && !ssr_products_loaded_ &&
+            !dcb_products_loaded_ &&
+            algorithms::ppp_bias_identity::gpsL1PCodeForPreciseClocks(
+                obs, *primary, p_code_primary)) {
+            primary = &p_code_primary;
+        }
+
         // BeiDou GEO satellites (C01-C05, C59-C63) need the special geostationary
         // orbit propagation the broadcast model does not yet implement; their
         // computed ranges are off by hundreds of metres to tens of kilometres

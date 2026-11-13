@@ -26,6 +26,31 @@ inline const Observation* madocaFrequencySlotObservation(
     return observations.getRinexTrackingObservation(satellite, *slot);
 }
 
+// Precise GPS clocks (SP3 / CLK) refer to the P(Y) codes. For a GPS L1 C/A
+// observation whose receiver also reports C1W, this returns true and sets
+// `with_p_code` to the observation with the C1W range (the carrier phase
+// stays on L1 C/A). C1C differs from C1W by the satellite's P1-C1 bias: up
+// to about 0.6 m, times 2.5 in the ionosphere-free combination.
+inline bool gpsL1PCodeForPreciseClocks(const ObservationData& observations,
+                                       const Observation& primary,
+                                       Observation& with_p_code) {
+    if (primary.satellite.system != GNSSSystem::GPS ||
+        primary.pseudorange_observation_type != "C1C") {
+        return false;
+    }
+    const Observation* p_code =
+        observations.getRinexTrackingObservation(primary.satellite, "1W");
+    if (p_code == nullptr || !p_code->has_pseudorange ||
+        !std::isfinite(p_code->pseudorange) || p_code->pseudorange == 0.0) {
+        return false;
+    }
+    with_p_code = primary;
+    with_p_code.pseudorange = p_code->pseudorange;
+    with_p_code.pseudorange_observation_type =
+        p_code->pseudorange_observation_type;
+    return true;
+}
+
 struct ObservationCodeMapEntry {
     std::string_view observation_type;
     int rtklib_code;
