@@ -222,6 +222,9 @@ input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accen
 .run .meta { color: var(--muted); font-size: 0.82rem; display: flex; gap: 12px; flex-wrap: wrap; }
 .run .meta .bad { color: var(--danger); font-weight: 700; }
 .run .meta .good { color: var(--q-fix); font-weight: 700; }
+.run .meta .warned { color: var(--danger); }
+.run .reason { border-left: 3px solid var(--danger); background: var(--paper); border-radius: 0 8px 8px 0; padding: 6px 10px; color: var(--danger); font-size: 0.9rem; font-weight: 600; word-break: break-word; }
+.run .reason[hidden] { display: none; }
 .log { margin: 0; background: var(--log-bg); color: var(--log-ink); border-radius: 8px; padding: 8px 10px; font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace; height: 340px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .log .err { color: var(--log-err); }
 .outputs { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }

@@ -369,3 +369,23 @@ export function parseVisibilityCsv(name, text) {
   if (n === 0) throw new Error(`${name}: no visibility rows`);
   return out;
 }
+
+/**
+ * What a finished run said went wrong, from its log lines ([stream, text]):
+ * the tools end a failed run with one "Error: ..." (or "Argument error: ...")
+ * line, and report recoverable problems as "Warning: ..." lines.
+ * Returns { errors: [text, ...] (latest last, prefix removed), warnings: n }.
+ */
+export function runProblems(lines) {
+  const errors = [];
+  let warnings = 0;
+  for (const [, text] of lines) {
+    const error = /^\s*(?:Argument error|Error)(?:\s*\([^)]*\))?:\s*(.+)$/.exec(text);
+    if (error) {
+      if (!errors.includes(error[1])) errors.push(error[1]);
+    } else if (/^\s*Warning:/.test(text)) {
+      warnings += 1;
+    }
+  }
+  return { errors, warnings };
+}

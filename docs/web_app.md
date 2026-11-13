@@ -59,6 +59,9 @@ be repeated natively, for example on a larger dataset or in a script.
    it) and the error at 10, 30 and 60 minutes, for solution 1 and 2 side by
    side. On the OBE4 HAS IDD sample it reads H < 0.2 m after 5.8 min and
    |U| < 0.4 m after 0.0 min, as the lane's table.
+   When a run fails, its error message is shown above the log (the same
+   `Error: …` line the command prints), and the number of warnings in the
+   log is shown next to the result.
 4. **Observations** shows the data before you solve: a skyplot, one tracking
    row per satellite coloured by SNR (or system) with loss-of-lock (LLI)
    slip ticks, SNR against elevation, the satellite count and a per-satellite

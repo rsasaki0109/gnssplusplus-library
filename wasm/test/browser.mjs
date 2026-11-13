@@ -296,6 +296,24 @@ try {
     await shot('web_app_convergence.png', page.locator('#plot-grid'));
   }
 
+  // A failed run shows its error line above the log, not only in it.
+  await page.setInputFiles('#file-input', {
+    name: 'empty.nav',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(`${'     3.04           N: GNSS NAV DATA    M'.padEnd(60)}RINEX VERSION / TYPE\n${''.padEnd(60)}END OF HEADER\n`),
+  });
+  await page.waitForFunction(() => [...document.querySelectorAll('#file-list .name')].some((e) => e.textContent.includes('empty.nav')), null, { timeout: 30000 });
+  await page.click('button[data-tool="post"]');
+  await mode('single');
+  await page.selectOption('#post-form select[name="nav"]', 'empty.nav');
+  await page.dispatchEvent('#post-form select[name="nav"]', 'change');
+  await page.click('#post-form button[type="submit"]');
+  await page.waitForFunction(() => /Done|Exit code|Failed|Error/.test(document.querySelector('#tool-post [data-meta]').textContent), null, { timeout: 120000 });
+  assert.match(await text('#tool-post [data-meta]'), /^Exit code 1/);
+  assert.ok(await page.isVisible('#tool-post [data-reason]'), 'the reason of a failed run is shown');
+  assert.match(await text('#tool-post [data-reason]'), /failed to read navigation data/);
+  log(`failed run: ${await text('#tool-post [data-reason]')}`);
+
   assert.deepEqual(external, [], `requests to other sites: ${external.join(', ')}`);
   assert.deepEqual(problems, []);
   log('browser test passed');
