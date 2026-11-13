@@ -673,8 +673,10 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
 
         const auto query_time =
             algorithms::madoca_core::madocaGtimeFromGpsTime(madocaL6dQueryTime(time));
-        const auto* snapshot =
-            madoca_iono_products_.latestAtOrBefore(query_time, 300.0);
+        const double latency_s = madocaL6dLatencySeconds();
+        const auto* snapshot = latency_s < 300.0
+            ? madoca_iono_products_.latestAtOrBefore(query_time, 300.0 - latency_s)
+            : nullptr;
         if (position_gate_passes && snapshot != nullptr) {
             std::vector<MadocaIonoConstraintInput> inputs;
             inputs.reserve(observations.size());
@@ -705,7 +707,7 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 const double age_s =
                     static_cast<double>(
                         query_time.time - correction_time.time) +
-                    query_time.sec - correction_time.sec;
+                    query_time.sec - correction_time.sec + latency_s;
                 if (env_overrides_.pfdump) {
                     std::cerr << "[PFL6D-STEC-IN] "
                               << observation.satellite.toString()

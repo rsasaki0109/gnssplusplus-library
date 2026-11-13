@@ -185,9 +185,14 @@ public:
     // MADOCA L6D snapshots in hand at time: with --realtime --ssr-latency, those
     // decoded at least the latency before it.
     GNSSTime madocaL6dQueryTime(const GNSSTime& time) const {
+        return time - madocaL6dLatencySeconds();
+    }
+    // The age of a snapshot is counted to the epoch it is applied at, so it
+    // includes this latency (and the age limits leave room for it).
+    double madocaL6dLatencySeconds() const {
         return ppp_config_.causal && ppp_config_.ssr_latency_s > 0.0
-                   ? time - ppp_config_.ssr_latency_s
-                   : time;
+                   ? ppp_config_.ssr_latency_s
+                   : 0.0;
     }
     MadocaL6dShadowStatus inspectMadocaL6dShadow(
         const std::vector<SatelliteId>& satellites,
@@ -305,6 +310,11 @@ public:
     /**
      * @brief Interpolate a loaded SSR correction for inspection/debugging.
      */
+    /// --realtime with RTCM SSR: true while the stream corrects this satellite
+    /// but its first update is not in hand yet at `time`. It is not used
+    /// until then (a satellite the stream never corrects is not affected).
+    bool waitsForFirstSsrUpdate(const SatelliteId& satellite, const GNSSTime& time) const;
+
     bool interpolateLoadedSSRCorrection(const SatelliteId& sat,
                                         const GNSSTime& time,
                                         Vector3d& orbit_correction_ecef,
@@ -425,6 +435,9 @@ private:
     /// in hand (week 0: no such limit). Satellites the stream never corrects
     /// stay on their broadcast orbit, as in post-processing.
     GNSSTime ssr_first_available_;
+    // --realtime, RTCM SSR: when each corrected satellite's first update is
+    // in hand; it is not used on its broadcast orbit before that.
+    std::map<SatelliteId, GNSSTime> ssr_satellite_first_available_;
     /// Select GPS L2 SSR code biases by the tracked RINEX code (C2W -> L2 P,
     /// C2L -> L2C) instead of the coarse signal (Galileo HAS SIS).
     bool ssr_code_bias_tracking_identity_ = false;

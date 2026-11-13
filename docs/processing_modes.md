@@ -40,7 +40,9 @@ data from after its epoch (`PPPConfig::causal`, `SPPConfig::causal`,
   - RTCM SSR (`--ssr-rtcm`) and MADOCA L6E (`--madoca-l6`, together with
     its `--madoca-l6d` ionosphere): the files hold no reception time.
     `--ssr-latency <s>` applies each update *s* seconds after its reference
-    epoch (default 0); it needs `--ssr-rtcm` or `--madoca-l6`.
+    epoch (default 0); it needs `--ssr-rtcm` or `--madoca-l6`. The age of an L6D
+    ionosphere snapshot counts to the epoch it is applied at, latency
+    included.
     In an L6 log the corrections all sit at the same offset from the
     one-per-second L6 message that completes them, so the log does not give
     the latency either.
@@ -48,8 +50,8 @@ data from after its epoch (`PPPConfig::causal`, `SPPConfig::causal`,
     before it are SPP. Starting on broadcast orbits and switching every
     satellite to its correction a few seconds later jumps the filter (HAS
     IDD with a 5 s latency: H 1.9 m at 2 min, converged after 20 min instead
-    of 5.6). The start is the stream's first update: a satellite whose
-    first correction comes later runs on its broadcast orbit until then.
+    of 5.6). A satellite whose first correction comes later than the
+    stream's waits for it in the same way.
     Satellites the stream never corrects stay on their broadcast orbit, as
     in post-processing.
 - **Broadcast ephemerides.** Only records already broadcast at the epoch

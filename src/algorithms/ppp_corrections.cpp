@@ -50,14 +50,17 @@ MadocaL6dShadowStatus PPPProcessor::inspectMadocaL6dShadow(
     if (causal == nullptr) {
         return status;
     }
-    const auto* snapshot = madoca_iono_products_.latestAtOrBefore(query_time, max_age_s);
+    const double latency_s = madocaL6dLatencySeconds();
+    const auto* snapshot = max_age_s > latency_s
+        ? madoca_iono_products_.latestAtOrBefore(query_time, max_age_s - latency_s)
+        : nullptr;
     if (snapshot == nullptr) {
         status.stale = true;
         return status;
     }
     status.snapshot_available = true;
     status.age_s = static_cast<double>(query_time.time - snapshot->decode_time.time) +
-        query_time.sec - snapshot->decode_time.sec;
+        query_time.sec - snapshot->decode_time.sec + latency_s;
     status.region_id = snapshot->correction.rid;
     status.area_number = snapshot->correction.anum;
     for (const auto& satellite : satellites) {
@@ -922,6 +925,10 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             }
             if (ssr_products_loaded_ && ssr_first_available_.week > 0 &&
                 time < ssr_first_available_) {
+                observation.valid = false;
+                continue;
+            }
+            if (ssr_products_loaded_ && waitsForFirstSsrUpdate(observation.satellite, time)) {
                 observation.valid = false;
                 continue;
             }

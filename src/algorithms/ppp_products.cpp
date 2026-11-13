@@ -634,6 +634,7 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
     // C2W took the L2 CL one, 0.5-0.9 m off ionosphere-free on the OBE4 hour.
     ssr_code_bias_tracking_identity_ = true;
     ssr_first_available_ = GNSSTime();
+    ssr_satellite_first_available_.clear();
     if (rtcm_file.empty() || sample_step_seconds <= 0.0) {
         return false;
     }
@@ -715,18 +716,30 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
         // A real-time receiver starts SSR PPP once it has a correction:
         // solving the first epochs on broadcast orbits and then switching
         // every satellite to its correction would jump the filter.
+        // The same holds for a satellite whose first correction comes later
+        // than the stream's: it waits for it.
         for (const auto& [satellite, satellite_updates] : updates) {
-            (void)satellite;
             for (const auto& update : satellite_updates) {
                 const GNSSTime available =
                     update.correction.time + update.availability_delay_s;
                 if (ssr_first_available_.week == 0 || available < ssr_first_available_) {
                     ssr_first_available_ = available;
                 }
+                const auto [it, inserted] =
+                    ssr_satellite_first_available_.emplace(satellite, available);
+                if (!inserted && available < it->second) {
+                    it->second = available;
+                }
             }
         }
     }
     return ssr_products_loaded_;
+}
+
+bool PPPProcessor::waitsForFirstSsrUpdate(const SatelliteId& satellite,
+                                          const GNSSTime& time) const {
+    const auto it = ssr_satellite_first_available_.find(satellite);
+    return it != ssr_satellite_first_available_.end() && time < it->second;
 }
 
 bool PPPProcessor::loadGalileoHasSisProducts(const std::vector<io::HasSsrUpdate>& has_updates,
