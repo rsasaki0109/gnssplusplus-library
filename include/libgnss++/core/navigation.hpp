@@ -1012,6 +1012,9 @@ struct DCBEntry {
     double bias = 0.0;
     double sigma = 0.0;
     bool valid = false;
+    /// Validity interval of the row; a zero week means open on that side.
+    GNSSTime valid_from;
+    GNSSTime valid_until;
 };
 
 /**
@@ -1029,6 +1032,14 @@ public:
                  const std::string& observation_2,
                  double& bias,
                  double* sigma = nullptr) const;
+
+    /// The observable-specific (OSB) row of a satellite's code or phase
+    /// observable (e.g. "C1C") for `time`: the row whose validity interval
+    /// holds `time`, or else the row nearest to it in time (a product of the
+    /// day before still applies). nullptr when the satellite has none.
+    const DCBEntry* findObservableBias(const SatelliteId& sat,
+                                       const std::string& observation,
+                                       const GNSSTime& time) const;
 
     void clear();
 };

@@ -2229,6 +2229,64 @@ TEST(PPPTest, DCBProductsLoadObservableSpecificRowsWithOneObservable) {
     std::filesystem::remove(dcb_path);
 }
 
+TEST(PPPTest, DCBProductsKeepReceiverRowsOutAndPickTheRowOfTheDay) {
+    // Rows of a multi-GNSS product: a GLONASS receiver bias names a satellite
+    // and a station (not a satellite bias), and a file may hold several days.
+    const auto dcb_path = tempFilePath("libgnss_ppp_osb_validity_test.bia");
+    std::filesystem::remove(dcb_path);
+    const std::string dcb_text =
+        "+BIAS/SOLUTION\n"
+        "*BIAS SVN_ PRN STATION__ OBS1 OBS2 BIAS_START____ BIAS_END______ UNIT __ESTIMATED_VALUE____ _STD_DEV___\n"
+        " OSB  R730 R01 ADIS      C1C       2022:328:00000 2022:329:00000 ns                  5.2519      0.1238\n"
+        " OSB  R730 R01           C1C       2022:328:00000 2022:329:00000 ns                 -2.0000      0.0100\n"
+        " OSB  G063 G01           C1C       2022:328:00000 2022:329:00000 ns                 -1.5000      0.0067\n"
+        " OSB  G063 G01           C1C       2022:329:00000 2022:330:00000 ns                 -1.6000      0.0067\n"
+        " OSB  G063 G01           C1W       0000:000:00000 0000:000:00000 ns                  0.2500      0.0000\n"
+        "-BIAS/SOLUTION\n";
+    writeTextFile(dcb_path, dcb_text);
+
+    DCBProducts dcb_products;
+    ASSERT_TRUE(dcb_products.loadFile(dcb_path.string()));
+    ASSERT_EQ(dcb_products.entries.size(), 4U);
+
+    // 2022 day 328 00:00:00 is GPS week 2237, day 4 (Thursday).
+    const GNSSTime day_328(2237, 4 * 86400.0 + 3600.0);
+    const GNSSTime day_329(2237, 5 * 86400.0 + 3600.0);
+    const GNSSTime day_335(2238, 4 * 86400.0 + 3600.0);
+    const GNSSTime day_320(2236, 3 * 86400.0);
+    const SatelliteId g01(GNSSSystem::GPS, 1);
+    EXPECT_EQ(dcb_products.entries[1].valid_from.week, 2237);
+    EXPECT_DOUBLE_EQ(dcb_products.entries[1].valid_from.tow, 4 * 86400.0);
+
+    const DCBEntry* entry = dcb_products.findObservableBias(g01, "C1C", day_328);
+    ASSERT_NE(entry, nullptr);
+    EXPECT_DOUBLE_EQ(entry->bias, -1.5);
+    entry = dcb_products.findObservableBias(g01, "C1C", day_329);
+    ASSERT_NE(entry, nullptr);
+    EXPECT_DOUBLE_EQ(entry->bias, -1.6);
+    // Outside every interval: the nearest row, so a product of another day
+    // still applies.
+    entry = dcb_products.findObservableBias(g01, "C1C", day_335);
+    ASSERT_NE(entry, nullptr);
+    EXPECT_DOUBLE_EQ(entry->bias, -1.6);
+    entry = dcb_products.findObservableBias(g01, "C1C", day_320);
+    ASSERT_NE(entry, nullptr);
+    EXPECT_DOUBLE_EQ(entry->bias, -1.5);
+    // An open interval holds any time.
+    entry = dcb_products.findObservableBias(g01, "C1W", day_335);
+    ASSERT_NE(entry, nullptr);
+    EXPECT_DOUBLE_EQ(entry->bias, 0.25);
+    EXPECT_EQ(dcb_products.findObservableBias(g01, "C2L", day_328), nullptr);
+
+    // R01 takes its satellite row, never the ADIS receiver row before it.
+    entry = dcb_products.findObservableBias(
+        SatelliteId(GNSSSystem::GLONASS, 1), "C1C", day_328);
+    ASSERT_NE(entry, nullptr);
+    EXPECT_DOUBLE_EQ(entry->bias, -2.0);
+
+    std::filesystem::remove(dcb_path);
+}
+
 TEST(PPPTest, IONEXProductsLoadFullWidthDataLines) {
     // Real CODE / IGS final IONEX packs 16 TEC values per 80-char
     // line (each value 5 chars wide). The previous parser truncated
