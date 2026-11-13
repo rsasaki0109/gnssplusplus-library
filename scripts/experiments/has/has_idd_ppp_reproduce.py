@@ -21,7 +21,8 @@ import math
 from pathlib import Path
 from typing import Sequence
 
-CHECKPOINT_MINUTES = (10, 20, 30, 60)
+CHECKPOINT_MINUTES = (10, 20, 30, 60, 120, 360)
+RMS_AFTER_MINUTES = 60
 HORIZONTAL_THRESHOLD_M = 0.20
 VERTICAL_THRESHOLD_M = 0.40
 WGS84_A = 6378137.0
@@ -102,6 +103,19 @@ def score_run(path: Path, reference: Sequence[float]) -> dict:
             "east_m": round(enu[index][0], 4),
             "north_m": round(enu[index][1], 4),
         }
+    # RMS of every epoch after the first hour (None for a run of one hour).
+    late = [index for index, t in enumerate(times) if t > RMS_AFTER_MINUTES * 60.0 + 5.0]
+    rms_late = None
+    if late:
+        def rms(values: list[float]) -> float:
+            return round(math.sqrt(sum(values[index] ** 2 for index in late) / len(late)), 4)
+        rms_late = {
+            "epochs": len(late),
+            "east_m": rms([e for e, _, _ in enu]),
+            "north_m": rms([n for _, n, _ in enu]),
+            "h_m": rms(horizontal),
+            "up_m": rms(vertical),
+        }
     conv_h = convergence_seconds(times, [h < HORIZONTAL_THRESHOLD_M for h in horizontal])
     conv_v = convergence_seconds(times, [abs(u) < VERTICAL_THRESHOLD_M for u in vertical])
     return {
@@ -109,7 +123,9 @@ def score_run(path: Path, reference: Sequence[float]) -> dict:
         "epochs": len(rows),
         "span_s": times[-1],
         "checkpoints": checkpoints,
-        "final": {"h_m": round(horizontal[-1], 4), "up_m": round(vertical[-1], 4)},
+        "final": {"h_m": round(horizontal[-1], 4), "up_m": round(vertical[-1], 4),
+                  "abs_up_m": round(abs(vertical[-1]), 4)},
+        "rms_after_60min": rms_late,
         "convergence_h_below_0p20_min": None if conv_h is None else round(conv_h / 60.0, 2),
         "convergence_abs_up_below_0p40_min": None if conv_v is None else round(conv_v / 60.0, 2),
     }

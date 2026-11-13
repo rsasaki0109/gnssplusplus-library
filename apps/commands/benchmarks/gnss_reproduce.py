@@ -41,12 +41,14 @@ DATASET_ENV = {
     "ppc_goal_inputs": "GNSSPP_PPC_GOAL_INPUTS",
     "has": "GNSSPP_HAS_DATA_ROOT",
     "has_sis": "GNSSPP_HAS_SIS_DATA_ROOT",
+    "mgex": "GNSSPP_MGEX_DATA_ROOT",
 }
 # CLI option that sets each dataset root (default: --<name>-root).
 DATASET_OPTION = {
     "ppc_goal_inputs": "--ppc-goal-inputs",
     "has": "--has-data-root",
     "has_sis": "--has-sis-data-root",
+    "mgex": "--mgex-data-root",
 }
 # A dataset root that is set neither by option nor by environment variable
 # falls back to another dataset's root (GSDC ground truth usually ships inside
@@ -541,6 +543,7 @@ DEFAULT_DATA_SUBDIRS = {
     "ppc_goal_inputs": Path("data") / "ppc_goal_inputs",
     "has": Path("data") / "galileo_has" / "doy2023-229",
     "has_sis": Path("data") / "galileo_has" / "cssrlib-data",
+    "mgex": Path("data") / "mgex" / "obe4-2022-328",
 }
 
 
@@ -667,6 +670,11 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
                              "doy2025-046/ and doy2025-233/ with the E6-B page logs, RINEX observations and "
                              "the IGS BRDC navigation files (default: $GNSSPP_HAS_SIS_DATA_ROOT or "
                              "<data-root>/galileo_has/cssrlib-data).")
+    parser.add_argument("--mgex-data-root", dest="mgex_root", type=Path, default=None,
+                        help="Directory for the mgex-ppp lane: the OBE4 daily observations of 2022-11-24, "
+                             "the IGS merged broadcast navigation file, CODE MGEX orbits, clocks and biases "
+                             "of that day and igs14_2233.atx (default: $GNSSPP_MGEX_DATA_ROOT or "
+                             "<data-root>/mgex/obe4-2022-328).")
     parser.add_argument("--build-dir", type=Path, default=os.environ.get("GNSSPP_BUILD_DIR"),
                         help="CMake build directory holding apps/gnss_* binaries (default: $GNSSPP_BUILD_DIR or <repo>/build*).")
     parser.add_argument("--rtklib-bin", type=Path, default=None,
