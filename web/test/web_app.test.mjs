@@ -8,7 +8,7 @@ import {
   buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultPosName, splitArgs,
 } from '../js/commands.js';
 import {
-  l6Service, parseSolution, parseVisibilityCsv, pointSolution, Q, rinexFirstEpoch, rinexObsTimeSpan, sniffKind,
+  l6Service, parseSolution, parseVisibilityCsv, pointSolution, Q, rinexFirstEpoch, rinexObsTimeSpan, runProblems, sniffKind,
 } from '../js/formats.js';
 import { exportOptionsToml, extraArgsToEntries, importOptionsToml, parseFlatToml } from '../js/options.js';
 import {
@@ -789,4 +789,25 @@ test('PPP convergence vs a fixed reference point', () => {
   const gaps = { e: Float64Array.from(err.e), n: err.n, u: err.u };
   gaps.e[60] = NaN;
   assert.equal(convergenceTime(sol.t, (i) => (Number.isFinite(gaps.e[i]) ? Math.hypot(gaps.e[i], gaps.n[i]) < 0.2 : null)), 15 * 60);
+});
+
+test('run problems: the error lines and the warning count of a log', () => {
+  const lines = [
+    ['out', 'libgnss++ post-process solver'],
+    ['err', 'Warning: rover.obs:14: unreadable observation epoch skipped'],
+    ['err', 'Warning: rover.obs:98: unreadable observation epoch skipped'],
+    ['err', 'Error: cannot open navigation file: base.nav (no such file)'],
+    ['err', 'Error: cannot open navigation file: base.nav (no such file)'],
+    ['out', 'Usage: gnss_solve --rover <file>'],
+  ];
+  assert.deepEqual(runProblems(lines), {
+    errors: ['cannot open navigation file: base.nav (no such file)'], warnings: 2,
+  });
+  assert.deepEqual(runProblems([['err', 'Argument error: --max-epochs must be >= 0 (0: no limit)']]).errors,
+    ['--max-epochs must be >= 0 (0: no limit)']);
+  assert.deepEqual(runProblems([['err', 'Error (invalid_argument): invalid number for --ratio: abc']]).errors,
+    ['invalid number for --ratio: abc']);
+  // Words inside a line are not a status line.
+  assert.deepEqual(runProblems([['out', 'SPP QC: outliers=0 Error budget ok'], ['out', 'Done']]),
+    { errors: [], warnings: 0 });
 });

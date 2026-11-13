@@ -5,7 +5,7 @@ import {
   buildConvertCommand, buildInfoCommand, buildPostCommand, buildVisibilityCommand, defaultConvertNames, defaultPosName, DISPATCH_NAMES, HAS_PAGE_FORMATS, POST_MODES,
 } from './commands.js';
 import {
-  parseSolution, parseVisibilityCsv, pointSolution, Q_LABELS, rinexFirstEpoch, rinexObsTimeSpan, SYSTEMS,
+  parseSolution, parseVisibilityCsv, pointSolution, Q_LABELS, rinexFirstEpoch, rinexObsTimeSpan, runProblems, SYSTEMS,
 } from './formats.js';
 import {
   chooseOrigin, convergenceSummary, errorClasses, errorClassLabels, errorSummary, isFixQuality, nearestIndex, parsePoint,
@@ -308,11 +308,13 @@ class RunView {
       <div class="cmd"><pre data-cmd></pre><button type="button" class="btn small" data-copy>Copy</button></div>
       <div class="progress" data-progress hidden><div></div></div>
       <div class="meta" data-meta></div>
+      <div class="reason" data-reason role="alert" hidden></div>
       <pre class="log" data-log></pre>
       <ul class="outputs" data-outputs></ul>`;
     this.cmd = $('[data-cmd]', root);
     this.bar = $('[data-progress]', root);
     this.meta = $('[data-meta]', root);
+    this.reason = $('[data-reason]', root);
     this.logEl = $('[data-log]', root);
     this.outputs = $('[data-outputs]', root);
     this.lines = [];
@@ -334,6 +336,7 @@ class RunView {
     this.bar.hidden = false;
     this.progress(null);
     this.meta.textContent = 'Running…';
+    this.reason.hidden = true;
     this.renderLog();
     clearInterval(this.timer);
     this.timer = setInterval(() => {
@@ -381,6 +384,23 @@ class RunView {
     logLink.textContent = 'Download log';
     logLink.onclick = () => download('run.log', new Blob([this.lines.map((l) => l[1]).join('\n') + '\n']));
     this.meta.append(status, time, logLink);
+    // The reason of a failed run is one "Error: ..." line in a long log:
+    // show it (and how many warnings there were) next to the status.
+    const problems = runProblems(this.lines);
+    if (problems.warnings > 0) {
+      const warned = document.createElement('span');
+      warned.className = 'warned';
+      warned.textContent = `${problems.warnings} warning${problems.warnings === 1 ? '' : 's'} (see the log)`;
+      this.meta.append(warned);
+    }
+    this.reason.replaceChildren();
+    const failed = !result.aborted && result.exitCode !== 0;
+    this.reason.hidden = !(failed && problems.errors.length);
+    for (const text of failed ? problems.errors.slice(-3) : []) {
+      const line = document.createElement('div');
+      line.textContent = text;
+      this.reason.append(line);
+    }
     for (const out of result.outputs || []) {
       const li = document.createElement('li');
       const name = document.createElement('span');
@@ -410,6 +430,8 @@ class RunView {
     this.log('err', String(error.message || error));
     this.renderLog();
     this.meta.innerHTML = '<span class="bad">Failed</span>';
+    this.reason.replaceChildren(String(error.message || error));
+    this.reason.hidden = false;
   }
 }
 
