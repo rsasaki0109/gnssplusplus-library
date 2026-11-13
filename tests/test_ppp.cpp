@@ -2185,6 +2185,50 @@ TEST(PPPTest, DCBProductsLoadBiasSinexWithSvnAndStationColumns) {
     std::filesystem::remove(dcb_path);
 }
 
+TEST(PPPTest, DCBProductsLoadObservableSpecificRowsWithOneObservable) {
+    // An OSB row of a real Bias-SINEX file (CODE, CAS, ...) names one
+    // observable and leaves OBS2 blank. Those rows were dropped for having
+    // too few columns, so a real OSB file loaded nothing.
+    const auto dcb_path = tempFilePath("libgnss_ppp_osb_single_obs_test.bia");
+    std::filesystem::remove(dcb_path);
+
+    const std::string dcb_text =
+        "%=BIA 1.00 COD 2022:331:13573 IGS 2022:328:00000 2022:329:00000 A 00006641\n"
+        "+BIAS/SOLUTION\n"
+        "*BIAS SVN_ PRN STATION__ OBS1 OBS2 BIAS_START____ BIAS_END______ UNIT __ESTIMATED_VALUE____ _STD_DEV___\n"
+        " OSB  G063 G01           C1C       2022:328:00000 2022:329:00000 ns                 -1.5036      0.0067\n"
+        " OSB  G063 G01           C1W       2022:328:00000 2022:329:00000 ns                  0.0000      0.0000\n"
+        " OSB  G063 G01           C2L       2022:328:00000 2022:329:00000 ns                 -1.3256      0.0186\n"
+        " OSB       G02           C1C       2022:328:00000 2022:329:00000 ns                  1.7000      0.0100\n"
+        " OSB       G    ABMF      C1C       2022:328:00000 2022:329:00000 ns                 12.3456      0.1000\n"
+        " DSB  G063 G01           C1W  C2W  2022:328:00000 2022:329:00000 ns                  7.0000      0.0500\n"
+        "-BIAS/SOLUTION\n";
+    writeTextFile(dcb_path, dcb_text);
+
+    DCBProducts dcb_products;
+    ASSERT_TRUE(dcb_products.loadFile(dcb_path.string()));
+    // The receiver row (no PRN) is not a satellite bias.
+    ASSERT_EQ(dcb_products.entries.size(), 5U);
+
+    double bias = 0.0;
+    double sigma = 0.0;
+    const SatelliteId g01(GNSSSystem::GPS, 1);
+    ASSERT_TRUE(dcb_products.getBias(g01, "OSB", "C1C", "", bias, &sigma));
+    EXPECT_NEAR(bias, -1.5036, 1e-12);
+    EXPECT_NEAR(sigma, 0.0067, 1e-12);
+    EXPECT_EQ(dcb_products.entries[0].observation_2, "");
+    EXPECT_EQ(dcb_products.entries[0].unit, "ns");
+    ASSERT_TRUE(dcb_products.getBias(g01, "OSB", "C2L", "", bias, &sigma));
+    EXPECT_NEAR(bias, -1.3256, 1e-12);
+    ASSERT_TRUE(dcb_products.getBias(
+        SatelliteId(GNSSSystem::GPS, 2), "OSB", "C1C", "", bias, &sigma));
+    EXPECT_NEAR(bias, 1.7, 1e-12);
+    ASSERT_TRUE(dcb_products.getBias(g01, "DSB", "C1W", "C2W", bias, &sigma));
+    EXPECT_NEAR(bias, 7.0, 1e-12);
+
+    std::filesystem::remove(dcb_path);
+}
+
 TEST(PPPTest, IONEXProductsLoadFullWidthDataLines) {
     // Real CODE / IGS final IONEX packs 16 TEC values per 80-char
     // line (each value 5 chars wide). The previous parser truncated

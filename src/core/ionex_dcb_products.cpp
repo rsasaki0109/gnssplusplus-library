@@ -297,7 +297,7 @@ bool DCBProducts::loadFile(const std::string& filename) {
             while (stream >> token) {
                 fields.push_back(token);
             }
-            if (fields.size() < 9U) {
+            if (fields.size() < 8U) {
                 continue;
             }
 
@@ -323,9 +323,18 @@ bool DCBProducts::loadFile(const std::string& filename) {
             } else {
                 continue;
             }
-            // Required columns (relative to obs_offset): OBS1,
-            // OBS2, START, END, UNIT, VALUE, STDEV — 7 more.
-            if (fields.size() < obs_offset + 7U) {
+            // Columns from obs_offset: OBS1, [OBS2], START, END, UNIT,
+            // VALUE, STDEV. An OSB row has one observable and leaves OBS2
+            // blank, so the token after OBS1 is then the start epoch
+            // (YYYY:DDD:SSSSS).
+            if (fields.size() < obs_offset + 6U) {
+                continue;
+            }
+            const bool has_second_observable =
+                fields[obs_offset + 1].find(':') == std::string::npos;
+            const std::size_t time_offset =
+                obs_offset + (has_second_observable ? 2U : 1U);
+            if (fields.size() < time_offset + 5U) {
                 continue;
             }
 
@@ -334,10 +343,12 @@ bool DCBProducts::loadFile(const std::string& filename) {
                 entry.bias_type = fields[0];
                 entry.satellite = satellite;
                 entry.observation_1 = fields[obs_offset];
-                entry.observation_2 = fields[obs_offset + 1];
-                entry.unit = fields[obs_offset + 4];
-                entry.bias = std::stod(fields[obs_offset + 5]);
-                entry.sigma = std::stod(fields[obs_offset + 6]);
+                if (has_second_observable) {
+                    entry.observation_2 = fields[obs_offset + 1];
+                }
+                entry.unit = fields[time_offset + 2];
+                entry.bias = std::stod(fields[time_offset + 3]);
+                entry.sigma = std::stod(fields[time_offset + 4]);
                 entry.valid = std::isfinite(entry.bias);
                 entries.push_back(entry);
                 loaded_any = true;

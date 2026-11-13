@@ -531,8 +531,14 @@ double observationDcbBiasMeters(const DCBProducts& dcb_products,
                                 SignalType secondary_signal,
                                 bool use_ionosphere_free,
                                 double coeff_primary,
-                                double coeff_secondary) {
-    const std::string primary_code = biasObservationCode(primary_signal);
+                                double coeff_secondary,
+                                const std::string& primary_observation_type,
+                                const std::string& secondary_observation_type) {
+    // A bias belongs to one tracking mode (C1C and C1W differ by the P1-C1
+    // bias, C2W and C2L likewise), so the observation's own RINEX code names
+    // it; the signal's usual code is the fallback for inputs without one.
+    const std::string primary_code = !primary_observation_type.empty()
+        ? primary_observation_type : biasObservationCode(primary_signal);
     if (primary_code.empty()) {
         return 0.0;
     }
@@ -543,7 +549,8 @@ double observationDcbBiasMeters(const DCBProducts& dcb_products,
         return have_primary ? primary_bias_m : 0.0;
     }
 
-    const std::string secondary_code = biasObservationCode(secondary_signal);
+    const std::string secondary_code = !secondary_observation_type.empty()
+        ? secondary_observation_type : biasObservationCode(secondary_signal);
     if (secondary_code.empty()) {
         return have_primary ? coeff_primary * primary_bias_m : 0.0;
     }
@@ -1489,7 +1496,9 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 observation.secondary_signal,
                 ppp_config_.use_ionosphere_free,
                 observation.primary_code_bias_coeff,
-                observation.secondary_code_bias_coeff);
+                observation.secondary_code_bias_coeff,
+                observation.primary_pseudorange_observation_type,
+                observation.secondary_pseudorange_observation_type);
             if (std::isfinite(dcb_bias_m) && std::abs(dcb_bias_m) > 0.0) {
                 observation.pseudorange_if +=
                     algorithms::ppp_correction_contract::measurementCorrectionSign(false, false) *
