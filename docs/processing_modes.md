@@ -243,7 +243,8 @@ cannot be used with `--realtime`, `--fix-recovery`,
 that carry a position or trust state from the previous epoch and assume time
 increases: `--safe-availability-fallback`, `--safe-float-continuity`,
 `--rtk-canyon-carrier-prior`, `--low-count-rescue-ratio` and a
-`--float-trust-policy` other than `legacy`. Per-epoch logs describe the
+`--float-trust-policy` other than `legacy`. `--demote-fixed-status-min-satellites` applies to the combined solution, not
+to each pass, so it changes no position. Per-epoch logs describe the
 forward pass; the guard counters of the run summary add up both passes. The
 backward pass reads the epochs from the files again (the forward pass records
 where each one starts), so the observation files cannot be pipes: about 10 %

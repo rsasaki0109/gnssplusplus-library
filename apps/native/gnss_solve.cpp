@@ -388,14 +388,22 @@ struct SolveConfig {
 using libgnss_apps::timeDiffSeconds;
 using libgnss_apps::interpolateBaseEpoch;
 
+bool belowDemotionMinSatellites(const SolveConfig& config,
+                                const libgnss::PositionSolution& solution) {
+    return solution.isFixed() && config.demote_fixed_status_min_satellites > 0 &&
+           solution.num_satellites < config.demote_fixed_status_min_satellites;
+}
+
 bool shouldDemoteFixedStatus(const SolveConfig& config,
                              const libgnss::PositionSolution& solution) {
     if (!solution.isFixed()) {
         return false;
     }
 
-    if (config.demote_fixed_status_min_satellites > 0 &&
-        solution.num_satellites < config.demote_fixed_status_min_satellites) {
+    // --combined applies the satellite-count demotion to the combined
+    // solution: demoting a pass first makes the combination take the other
+    // pass's FLOAT position for an epoch whose FIX position was right.
+    if (!config.combined && belowDemotionMinSatellites(config, solution)) {
         return true;
     }
 
@@ -4909,6 +4917,11 @@ int main(int argc, char* argv[]) {
             combine_config.max_fix_difference_m = config.combined_max_fix_difference_m;
             solution.solutions = libgnss::forward_backward::combine(
                 forward_pass, backward, combine_config, &combine_stats);
+            for (auto& combined_solution : solution.solutions) {
+                if (belowDemotionMinSatellites(config, combined_solution)) {
+                    combined_solution.status = libgnss::SolutionStatus::FLOAT;
+                }
+            }
             combined_epochs.clear();
         }
         const std::vector<libgnss::PositionSolution>

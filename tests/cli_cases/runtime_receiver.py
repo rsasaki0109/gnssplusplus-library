@@ -707,6 +707,22 @@ class RuntimeReceiverCases:
             epochs = [row for row in out.read_text().splitlines() if row and not row.startswith("%")]
             self.assertEqual(len(epochs), 201)
 
+            # The satellite-count demotion applies to the combined solution:
+            # every FIX becomes FLOAT and no position changes (demoting each
+            # pass first would change which pass an epoch is taken from).
+            combined = self.read_pos_records(out)
+            self.assertTrue(any(record["status"] == 4 for record in combined))
+            demoted_out = temp_root / "combined_demoted.pos"
+            result = self.run_gnss("solve", *inputs[:-1], str(demoted_out), "--combined",
+                                   "--demote-fixed-status-min-satellites", "99")
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            demoted = self.read_pos_records(demoted_out)
+            self.assertEqual(len(demoted), len(combined))
+            for before, after in zip(combined, demoted):
+                self.assertEqual((after["x"], after["y"], after["z"]),
+                                 (before["x"], before["y"], before["z"]))
+                self.assertEqual(after["status"], 3 if before["status"] == 4 else before["status"])
+
             for extra, message in (
                 (("--combined", "--realtime"), "--combined cannot be used with --realtime"),
                 (("--combined", "--fix-recovery"), "--combined cannot use --fix-recovery"),
