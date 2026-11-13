@@ -3001,6 +3001,24 @@ TEST(PPPTest, MadocaL6dShadowSelectsFreshCausalSatelliteCorrections) {
         {SatelliteId(GNSSSystem::GPS, 1)}, epoch - 1.0, 10.0);
     EXPECT_FALSE(before.snapshot_available);
     EXPECT_FALSE(before.stale);
+
+    // --realtime --ssr-latency 4: the snapshot is in hand 4 s after its
+    // decode time, and its age still counts from the decode time, so the
+    // 10 s limit ends at the same epoch as without a latency.
+    PPPProcessor::PPPConfig config;
+    config.causal = true;
+    config.ssr_latency_s = 4.0;
+    PPPProcessor realtime(config);
+    realtime.setMadocaIonoProductsForShadow(products);
+    const std::vector<SatelliteId> g01 = {SatelliteId(GNSSSystem::GPS, 1)};
+    EXPECT_FALSE(realtime.inspectMadocaL6dShadow(g01, epoch + 3.0, 10.0).snapshot_available);
+    const auto in_hand = realtime.inspectMadocaL6dShadow(g01, epoch + 5.0, 10.0);
+    EXPECT_TRUE(in_hand.snapshot_available);
+    EXPECT_DOUBLE_EQ(in_hand.age_s, 5.0);
+    EXPECT_TRUE(realtime.inspectMadocaL6dShadow(g01, epoch + 10.0, 10.0).snapshot_available);
+    const auto too_old = realtime.inspectMadocaL6dShadow(g01, epoch + 11.0, 10.0);
+    EXPECT_FALSE(too_old.snapshot_available);
+    EXPECT_TRUE(too_old.stale);
 }
 
 TEST(PPPTest, ProcessorProducesConvergedFloatSolutionWithSyntheticPreciseProducts) {
@@ -4195,6 +4213,45 @@ TEST(PPPTest, RealtimeRtcmSsrUpdatesApplyAfterTheirLatency) {
     double clock_m = 0.0;
     ASSERT_TRUE(clock_at(ignored, 345630.0, clock_m));
     EXPECT_NEAR(clock_m, second_clock, 1e-9);
+    std::filesystem::remove(rtcm_path);
+}
+
+TEST(PPPTest, RealtimeRtcmSsrSatelliteWaitsForItsOwnFirstUpdate) {
+    // G01 is corrected from the start of the stream, G02 from 30 s later:
+    // with --realtime G02 is not used on its broadcast orbit in between. G03
+    // is never corrected and is not held back.
+    const auto rtcm_path = tempFilePath("libgnss_ppp_realtime_ssr_first_update.rtcm3");
+    NavigationData nav_data;
+    const Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(eph);
+    nav_data.addEphemeris(makeBroadcastGpsEphemeris(2));
+    std::vector<uint8_t> frames = buildGps1060CombinedFrame(1, 345600, 77, 1200);
+    const auto later = buildGps1060CombinedFrame(2, 345630, 77, 1200);
+    frames.insert(frames.end(), later.begin(), later.end());
+    writeBinaryFile(rtcm_path, frames);
+    const SatelliteId g01(GNSSSystem::GPS, 1);
+    const SatelliteId g02(GNSSSystem::GPS, 2);
+    const SatelliteId g03(GNSSSystem::GPS, 3);
+    const auto at = [&](double tow) { return GNSSTime(eph.toe.week, tow); };
+
+    PPPProcessor::PPPConfig config;
+    config.causal = true;
+    config.ssr_latency_s = 5.0;
+    PPPProcessor realtime(config);
+    ASSERT_TRUE(realtime.loadRTCMSSRProducts(
+        rtcm_path.string(), nav_data, 1.0, PPPProcessor::RTCMSSRProfile::Standard));
+    EXPECT_TRUE(realtime.waitsForFirstSsrUpdate(g01, at(345604.0)));
+    EXPECT_FALSE(realtime.waitsForFirstSsrUpdate(g01, at(345605.0)));
+    EXPECT_TRUE(realtime.waitsForFirstSsrUpdate(g02, at(345620.0)));
+    EXPECT_TRUE(realtime.waitsForFirstSsrUpdate(g02, at(345634.0)));
+    EXPECT_FALSE(realtime.waitsForFirstSsrUpdate(g02, at(345635.0)));
+    EXPECT_FALSE(realtime.waitsForFirstSsrUpdate(g03, at(345600.0)));
+
+    // Post-processing holds no satellite back.
+    PPPProcessor post_processing;
+    ASSERT_TRUE(post_processing.loadRTCMSSRProducts(
+        rtcm_path.string(), nav_data, 1.0, PPPProcessor::RTCMSSRProfile::Standard));
+    EXPECT_FALSE(post_processing.waitsForFirstSsrUpdate(g02, at(345600.0)));
     std::filesystem::remove(rtcm_path);
 }
 
