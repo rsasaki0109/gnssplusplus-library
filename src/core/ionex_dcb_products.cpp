@@ -262,6 +262,140 @@ void IONEXProducts::clear() {
     rms_maps.clear();
 }
 
+namespace {
+
+// "YYYY:DDD:SSSSS" (or "YY:DDD:SSSSS") of a Bias-SINEX row. A zero epoch
+// ("0000:000:00000") leaves `time` at week 0: open on that side.
+bool parseBiasSinexEpoch(const std::string& text, GNSSTime& time) {
+    time = GNSSTime();
+    int year = 0;
+    int day_of_year = 0;
+    int seconds = 0;
+    char colon_1 = 0;
+    char colon_2 = 0;
+    std::istringstream stream(text);
+    if (!(stream >> year >> colon_1 >> day_of_year >> colon_2 >> seconds) ||
+        colon_1 != ':' || colon_2 != ':' || !(stream >> std::ws).eof()) {
+        return false;
+    }
+    if (year == 0 && day_of_year == 0) {
+        return true;
+    }
+    if (year < 100) {
+        year += year < 80 ? 2000 : 1900;
+    }
+    if (year < 1980 || day_of_year < 1 || day_of_year > 366 || seconds < 0) {
+        return false;
+    }
+    long long days = 0;  // since 1980-01-06, the GPS epoch
+    for (int y = 1980; y < year; ++y) {
+        days += ((y % 4 == 0 && y % 100 != 0) || y % 400 == 0) ? 366 : 365;
+    }
+    days += day_of_year - 1 - 5;
+    const long long total_seconds = days * 86400LL + seconds;
+    if (total_seconds < 0) {
+        return false;
+    }
+    time = GNSSTime(static_cast<int>(total_seconds / 604800LL),
+                    static_cast<double>(total_seconds % 604800LL));
+    return true;
+}
+
+// One row of +BIAS/SOLUTION:
+//   BIAS SVN_ PRN STATION__ OBS1 OBS2 BIAS_START____ BIAS_END______ UNIT VALUE STD
+// in the fixed columns of Bias-SINEX 1.00. A satellite row leaves STATION
+// blank; an OSB row leaves OBS2 blank; some products leave out SVN. Rows with
+// a station are receiver biases (GLONASS ones also name a satellite) and are
+// not satellite biases. Rows that are not in the fixed columns (hand-written
+// ones) are read by their tokens.
+bool parseBiasSolutionRow(const std::string& line, DCBEntry& entry) {
+    const std::string trimmed = trimCopy(line);
+    if (trimmed.empty() || trimmed[0] == '*') {
+        return false;
+    }
+    std::string type;
+    std::string prn;
+    std::string observation_1;
+    std::string observation_2;
+    std::string start;
+    std::string end;
+    std::string rest;
+    const bool fixed_columns =
+        line.size() >= 69U && line[0] == ' ' && line[39] == ':' && line[43] == ':' &&
+        line[54] == ':' && line[58] == ':';
+    if (fixed_columns) {
+        if (!trimCopy(line.substr(15, 9)).empty()) {
+            return false;
+        }
+        type = trimCopy(line.substr(1, 4));
+        prn = trimCopy(line.substr(11, 3));
+        observation_1 = trimCopy(line.substr(25, 4));
+        observation_2 = trimCopy(line.substr(30, 4));
+        start = trimCopy(line.substr(35, 14));
+        end = trimCopy(line.substr(50, 14));
+        rest = line.substr(65);
+    } else {
+        std::vector<std::string> fields;
+        std::istringstream stream(trimmed);
+        std::string token;
+        while (stream >> token) {
+            fields.push_back(token);
+        }
+        // The PRN is the first 3-character satellite token after the type
+        // (an SVN has 4 characters).
+        std::size_t index = 1;
+        if (fields.size() > 2U && fields[1].size() == 4U) {
+            index = 2;
+        }
+        if (fields.size() < index + 6U) {
+            return false;
+        }
+        type = fields[0];
+        prn = fields[index++];
+        observation_1 = fields[index++];
+        if (fields[index].find(':') == std::string::npos) {
+            observation_2 = fields[index++];
+        }
+        if (fields.size() < index + 5U) {
+            return false;
+        }
+        start = fields[index++];
+        end = fields[index++];
+        for (; index < fields.size(); ++index) {
+            rest += fields[index] + ' ';
+        }
+    }
+
+    SatelliteId satellite;
+    if (prn.size() != 3U || !parseSatelliteToken(prn, satellite) || observation_1.empty()) {
+        return false;
+    }
+    std::istringstream values(rest);
+    std::string unit;
+    double bias = 0.0;
+    double sigma = 0.0;
+    if (!(values >> unit >> bias)) {
+        return false;
+    }
+    if (!(values >> sigma)) {
+        sigma = 0.0;
+    }
+    entry = DCBEntry();
+    entry.bias_type = type;
+    entry.satellite = satellite;
+    entry.observation_1 = observation_1;
+    entry.observation_2 = observation_2;
+    entry.unit = unit;
+    entry.bias = bias;
+    entry.sigma = sigma;
+    entry.valid = std::isfinite(bias);
+    parseBiasSinexEpoch(start, entry.valid_from);
+    parseBiasSinexEpoch(end, entry.valid_until);
+    return true;
+}
+
+}  // namespace
+
 bool DCBProducts::loadFile(const std::string& filename) {
     clear();
 
@@ -291,68 +425,10 @@ bool DCBProducts::loadFile(const std::string& filename) {
             if (trimmed[0] == '*') {
                 continue;
             }
-            std::vector<std::string> fields;
-            std::istringstream stream(trimmed);
-            std::string token;
-            while (stream >> token) {
-                fields.push_back(token);
-            }
-            if (fields.size() < 8U) {
-                continue;
-            }
-
-            // Bias-SINEX rows are `BIAS SVN PRN [STATION] OBS1 OBS2
-            // START END UNIT VALUE STDEV`. Some emitters omit the
-            // optional STATION column entirely; some include it as
-            // a 9-char field that whitespace-tokenization collapses
-            // away. After collapsing, the PRN column may therefore
-            // land at fields[1] (no SVN, e.g. CAS) or fields[2]
-            // (BSX with SVN, e.g. GFZ/GBM). Pick whichever parses
-            // as a valid PRN (3-char `<sys><digit><digit>`); SVNs
-            // are 4 chars (`<sys><digit><digit><digit>`) so
-            // length disambiguates without needing brittle field-
-            // count heuristics.
-            SatelliteId satellite;
-            std::size_t obs_offset = 0;
-            if (fields[1].size() == 3U &&
-                parseSatelliteToken(fields[1], satellite)) {
-                obs_offset = 2;
-            } else if (fields[2].size() == 3U &&
-                       parseSatelliteToken(fields[2], satellite)) {
-                obs_offset = 3;
-            } else {
-                continue;
-            }
-            // Columns from obs_offset: OBS1, [OBS2], START, END, UNIT,
-            // VALUE, STDEV. An OSB row has one observable and leaves OBS2
-            // blank, so the token after OBS1 is then the start epoch
-            // (YYYY:DDD:SSSSS).
-            if (fields.size() < obs_offset + 6U) {
-                continue;
-            }
-            const bool has_second_observable =
-                fields[obs_offset + 1].find(':') == std::string::npos;
-            const std::size_t time_offset =
-                obs_offset + (has_second_observable ? 2U : 1U);
-            if (fields.size() < time_offset + 5U) {
-                continue;
-            }
-
-            try {
-                DCBEntry entry;
-                entry.bias_type = fields[0];
-                entry.satellite = satellite;
-                entry.observation_1 = fields[obs_offset];
-                if (has_second_observable) {
-                    entry.observation_2 = fields[obs_offset + 1];
-                }
-                entry.unit = fields[time_offset + 2];
-                entry.bias = std::stod(fields[time_offset + 3]);
-                entry.sigma = std::stod(fields[time_offset + 4]);
-                entry.valid = std::isfinite(entry.bias);
+            DCBEntry entry;
+            if (parseBiasSolutionRow(line, entry)) {
                 entries.push_back(entry);
                 loaded_any = true;
-            } catch (const std::exception&) {
             }
             continue;
         }
@@ -413,6 +489,37 @@ bool DCBProducts::getBias(const SatelliteId& sat,
         return true;
     }
     return false;
+}
+
+const DCBEntry* DCBProducts::findObservableBias(const SatelliteId& sat,
+                                                const std::string& observation,
+                                                const GNSSTime& time) const {
+    const DCBEntry* nearest = nullptr;
+    double nearest_distance_s = std::numeric_limits<double>::infinity();
+    for (const auto& entry : entries) {
+        if (!entry.valid || !(entry.satellite == sat) || entry.bias_type != "OSB") {
+            continue;
+        }
+        if (entry.observation_1 != observation && entry.observation_2 != observation) {
+            continue;
+        }
+        double distance_s = 0.0;
+        if (time.week != 0) {
+            if (entry.valid_from.week != 0 && time < entry.valid_from) {
+                distance_s = entry.valid_from - time;
+            } else if (entry.valid_until.week != 0 && entry.valid_until < time) {
+                distance_s = time - entry.valid_until;
+            }
+        }
+        if (distance_s <= 0.0) {
+            return &entry;
+        }
+        if (distance_s < nearest_distance_s) {
+            nearest_distance_s = distance_s;
+            nearest = &entry;
+        }
+    }
+    return nearest;
 }
 
 void DCBProducts::clear() {

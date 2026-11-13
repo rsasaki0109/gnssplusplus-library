@@ -507,25 +507,23 @@ double dcbEntryBiasMeters(const DCBEntry& entry) {
 bool findOsbBiasMeters(const DCBProducts& dcb_products,
                        const SatelliteId& satellite,
                        const std::string& observation_code,
+                       const GNSSTime& time,
                        double& bias_m) {
-    for (const auto& entry : dcb_products.entries) {
-        if (!entry.valid || !(entry.satellite == satellite) || entry.bias_type != "OSB") {
-            continue;
-        }
-        if (entry.observation_1 != observation_code && entry.observation_2 != observation_code) {
-            continue;
-        }
-        const double converted = dcbEntryBiasMeters(entry);
-        if (!std::isfinite(converted)) {
-            continue;
-        }
-        bias_m = converted;
-        return true;
+    const DCBEntry* entry =
+        dcb_products.findObservableBias(satellite, observation_code, time);
+    if (entry == nullptr) {
+        return false;
     }
-    return false;
+    const double converted = dcbEntryBiasMeters(*entry);
+    if (!std::isfinite(converted)) {
+        return false;
+    }
+    bias_m = converted;
+    return true;
 }
 
 double observationDcbBiasMeters(const DCBProducts& dcb_products,
+                                const GNSSTime& time,
                                 const SatelliteId& satellite,
                                 SignalType primary_signal,
                                 SignalType secondary_signal,
@@ -544,7 +542,7 @@ double observationDcbBiasMeters(const DCBProducts& dcb_products,
     }
 
     double primary_bias_m = 0.0;
-    const bool have_primary = findOsbBiasMeters(dcb_products, satellite, primary_code, primary_bias_m);
+    const bool have_primary = findOsbBiasMeters(dcb_products, satellite, primary_code, time, primary_bias_m);
     if (!use_ionosphere_free || secondary_signal == SignalType::SIGNAL_TYPE_COUNT) {
         return have_primary ? primary_bias_m : 0.0;
     }
@@ -557,7 +555,7 @@ double observationDcbBiasMeters(const DCBProducts& dcb_products,
 
     double secondary_bias_m = 0.0;
     const bool have_secondary =
-        findOsbBiasMeters(dcb_products, satellite, secondary_code, secondary_bias_m);
+        findOsbBiasMeters(dcb_products, satellite, secondary_code, time, secondary_bias_m);
     if (!have_primary && !have_secondary) {
         return 0.0;
     }
@@ -1491,6 +1489,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         if (!applied_ssr_code_bias && dcb_products_loaded_) {
             const double dcb_bias_m = observationDcbBiasMeters(
                 dcb_products_,
+                time,
                 observation.satellite,
                 observation.primary_signal,
                 observation.secondary_signal,
