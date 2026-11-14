@@ -116,6 +116,10 @@ argv = [
   "--summary-json", "{work_dir}/summary_obe4.json",
 ]
 
+# The OBE4 receiver reports C1W next to C1C; since 2026-11-13 the C1W range is
+# used with precise clocks (the P1-C1 bias of C1C had left this hour 0.14 m
+# off after 60 min, and RTKLIB at 0.28 m), and its gates went from 0.30 m to
+# 0.10 m horizontal and 0.15 m vertical. The Kamakura receiver has no C1W.
 # Gates (reproduced 2026-10-01, MSVC Release). Before the precise-product fix
 # (missing -2 r.v/c^2 clock term, broadcast-clock fallback for satellites
 # absent from the SP3, no satellite PCO) these runs ended 1.4-1.6 m off
@@ -140,14 +144,14 @@ foreach = [{ hour = "046r" }, { hour = "233h" }]
 name = "igs obe4 static H at 60 min (m)"
 source = "{work_dir}/summary_obe4.json"
 path = "runs.igs_obe4_static.checkpoints.60min.h_m"
-max = 0.30
+max = 0.10
 readme = "docs/reproduce.md"
 
 [[metrics]]
 name = "igs obe4 static |U| at 60 min (m)"
 source = "{work_dir}/summary_obe4.json"
 path = "runs.igs_obe4_static.checkpoints.60min.abs_up_m"
-max = 0.30
+max = 0.15
 readme = "docs/reproduce.md"
 
 # docs/reproduce.md table values; reported, not gated.
@@ -181,10 +185,10 @@ gate = false
 abs_tol = 0.05
 readme = "docs/reproduce.md table"
 foreach = [
-  { run = "igs_obe4_static", t = "10min", field = "h_m", expected = 0.172 },
-  { run = "igs_obe4_static", t = "10min", field = "up_m", expected = -0.192 },
-  { run = "igs_obe4_static", t = "30min", field = "h_m", expected = 0.172 },
-  { run = "igs_obe4_static", t = "30min", field = "up_m", expected = -0.126 },
-  { run = "igs_obe4_static", t = "60min", field = "h_m", expected = 0.135 },
-  { run = "igs_obe4_static", t = "60min", field = "up_m", expected = -0.053 },
+  { run = "igs_obe4_static", t = "10min", field = "h_m", expected = 0.162 },
+  { run = "igs_obe4_static", t = "10min", field = "up_m", expected = 0.026 },
+  { run = "igs_obe4_static", t = "30min", field = "h_m", expected = 0.032 },
+  { run = "igs_obe4_static", t = "30min", field = "up_m", expected = -0.102 },
+  { run = "igs_obe4_static", t = "60min", field = "h_m", expected = 0.031 },
+  { run = "igs_obe4_static", t = "60min", field = "up_m", expected = -0.044 },
 ]

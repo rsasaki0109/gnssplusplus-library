@@ -306,7 +306,9 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
 
         if (secondary == nullptr &&
             dropSingleFrequencyPreciseProductSatellite(
-                precise_products_loaded_, ssr_products_loaded_)) {
+                precise_products_loaded_, ssr_products_loaded_,
+                ppp_config_.estimate_ionosphere || ionex_products_loaded_ ||
+                    ppp_config_.use_clas_osr_filter)) {
             continue;
         }
         if (secondary == nullptr) {

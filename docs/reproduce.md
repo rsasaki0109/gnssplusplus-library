@@ -36,7 +36,8 @@ samples, final products). Real-time equivalent numbers come from runs with
 | (docs, not a README row) Galileo HAS float PPP via IDD | `has-idd-ppp` | ready | ~1 min | **Pass.** Static and kinematic OBE4 hour; see [has-idd-ppp](#has-idd-ppp-galileo-has-float-ppp-2026-11-07) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) Galileo HAS float PPP via SIS (E6-B pages) | `has-sis-ppp` | ready | ~1 min | **Pass.** Decoder (432 MT1 messages per hour, no CRC failure) and static Kamakura 2025-02-15 hour; indicative only (outside the HAS service area); see [has-sis-ppp](#has-sis-ppp-galileo-has-sis-float-ppp-2026-11-07) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) BeiDou PPP-B2b float PPP | `bds-b2b-ppp` | ready | ~30 s | **Pass.** Decoder (3600 C59 messages per hour, no CRC failure or IOD mismatch) and static Kamakura 2025-02-15 / 2025-08-21 hours: horizontal below 0.2 m from 16 / 18 min, within 0.08 m horizontal / 0.32 m vertical after one hour; see [bds-b2b-ppp](#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07) and [BeiDou PPP-B2b support](bds_ppp_b2b.md) |
-| (docs, not a README row) Precise-product PPP with IGS final SP3/CLK | `igs-final-ppp` | ready | ~2 min | **Pass.** Static Kamakura 2025-02-15 / 2025-08-21 hours and OBE4 2023-08-17 hour within 0.32 m horizontal / 0.27 m vertical after one hour, level with RTKLIB demo5 on the same inputs; see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01) |
+| (docs, not a README row) Precise-product PPP with IGS final SP3/CLK | `igs-final-ppp` | ready | ~2 min | **Pass.** Static Kamakura 2025-02-15 / 2025-08-21 hours and OBE4 2023-08-17 hour hours within 0.16 m horizontal / 0.23 m vertical after one hour (OBE4 0.03 / 0.04 m), level with or better than RTKLIB demo5 on the same inputs; see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01) |
+| (docs, not a README row) Precise-product PPP, multi-GNSS station-day | `mgex-ppp` | ready | ~2 min | **Pass.** OBE4 2022-11-24 with CODE MGEX products: static 0.018 m horizontal / 0.025 m vertical after 24 h, kinematic RMS 0.029 / 0.019 m after the first hour, against the EPN daily coordinate; see [mgex-ppp](#mgex-ppp-multi-gnss-station-day-2026-11-14) |
 
 Runtimes were measured on a 12-thread Windows 11 workstation with an MSVC
 Release build. Lanes that run in parallel slow each other down.
@@ -54,6 +55,7 @@ Release build. Lanes that run in parallel slow each other down.
 | Galileo HAS SIS samples ([hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data) `data/doy2025-046`, `data/doy2025-233`) plus IGS BRDC navigation | `has-sis-ppp` | Download `046r_rnx.obs`, `046r_gale6.txt`, `233h_rnx.obs`, `233h_gale6.txt` from those directories and the IGS merged navigation files `BRDC00WRD_S_2025{046,233}0000_01D_MN.rnx.gz` from `https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2025/{046,233}/` (gunzip next to them). cssrlib-data's LICENSE leaves the sample data to their sources' terms, so nothing is redistributed | `<has-sis-data-root>/doy2025-046/{046r_rnx.obs,046r_gale6.txt,BRDC00WRD_S_20250460000_01D_MN.rnx}`, same for `doy2025-233/233h_*` |
 | BeiDou PPP-B2b samples ([hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data) ec1dfa2c, `data/doy2025-046`, `data/doy2025-233`) plus `igs20_2353.atx` | `bds-b2b-ppp` | Download `046r_rnx.obs`, `046r_rnx.nav`, `046r_bdsb2b.txt`, `233h_rnx.obs`, `233h_rnx.nav`, `233h_bdsb2b.txt` from those directories (the `*_rnx.nav` files are the receiver's RINEX 4 NAV with the B-CNAV1 records) and the immutable IGS archive copy `https://files.igs.org/pub/station/general/pcv_archive/igs20_2353.atx` (SHA-256 `485720bd...`). Nothing from cssrlib-data is redistributed | `<has-sis-data-root>/igs20_2353.atx`, `<has-sis-data-root>/doy2025-046/{046r_rnx.obs,046r_rnx.nav,046r_bdsb2b.txt}`, same for `doy2025-233/233h_*` |
 | IGS final orbits/clocks and `igs20.atx` (public, IGS) on top of the two cssrlib-data sets above | `igs-final-ppp` | `IGS0OPSFIN_{20250460000,20252330000,20232290000}_01D_{15M_ORB.SP3,30S_CLK.CLK}.gz` from `https://igs.bkg.bund.de/root_ftp/IGS/products/{2353,2380,2275}/` (gunzip next to the observations of that day) and `igs20.atx` from the immutable IGS archive copy `https://files.igs.org/pub/station/general/pcv_archive/igs20_2425.atx.gz` (gunzip; SHA-256 `8715268e...`) | `<has-sis-data-root>/igs20.atx`, `<has-sis-data-root>/doy2025-{046,233}/IGS0OPSFIN_2025{046,233}0000_01D_*` next to `{046r,233h}_rnx.obs`, and `<has-data-root>/IGS0OPSFIN_20232290000_01D_*` next to `OBE42023229c.obs` |
+| OBE4 daily observations, IGS merged navigation and CODE MGEX products of 2022-11-24 (public, IGS) | `mgex-ppp` | `OBE400DEU_R_20223280000_01D_30S_MO.crx.gz` from `https://igs.bkg.bund.de/root_ftp/IGS/obs/2022/328/` (gunzip, then `crx2rnx`), `BRDC00IGS_R_20223280000_01D_MN.rnx.gz` from `.../IGS/BRDC/2022/328/`, `com22374.{eph,clk,bia}.Z` from `.../IGS/products/mgex/2237/` (uncompress) and `igs14_2233.atx` from `https://files.igs.org/pub/station/general/pcv_archive/` | `<mgex-data-root>/` holding `OBE400DEU_R_20223280000_01D_30S_MO.rnx`, `BRDC00IGS_R_20223280000_01D_MN.rnx`, `com22374.eph`, `com22374.clk`, `com22374.bia`, `igs14_2233.atx` |
 | QZSS L6 CLAS archive | `clas-ppc` | Downloaded automatically from `https://sys.qzss.go.jp/archives/l6` | Cached under `<work-dir>/inputs/l6_cache` (about 1.7 GB of expanded SSR CSV per run) |
 
 Dataset roots are resolved in this order:
@@ -159,6 +161,9 @@ python3 apps/gnss.py reproduce has-sis-ppp --has-sis-data-root /datasets/cssrlib
 # Static float PPP with IGS final orbits/clocks on the same hours (docs lane)
 python3 apps/gnss.py reproduce igs-final-ppp --has-sis-data-root /datasets/cssrlib-data/data \
   --has-data-root /datasets/cssrlib-data/data/doy2023-229 --check
+
+# Multi-GNSS float PPP of one station-day with CODE MGEX products (docs lane)
+python3 apps/gnss.py reproduce mgex-ppp --mgex-data-root /datasets/mgex/obe4-2022-328 --check
 
 # BeiDou PPP-B2b float PPP on the same hours (docs lane)
 python3 apps/gnss.py reproduce bds-b2b-ppp --has-sis-data-root /datasets/cssrlib-data/data --check
@@ -1255,13 +1260,19 @@ tides):
 |---|---|---|---|---|
 | Kamakura 2025-08-21 07h | 0.455 / -0.630, 0.182 / -0.241, **0.099 / -0.223** | 0.434 / -0.488, 0.154 / -0.179, 0.099 / -0.212 | 0.490 / -0.646, 0.168 / -0.222, 0.120 / -0.265 | 1.391 / +0.870, 1.453 / +1.384, 1.502 / +0.889 |
 | Kamakura 2025-02-15 17h | 0.576 / -0.164, 0.297 / -0.204, **0.151 / -0.007** | 0.717 / -0.147, 0.418 / -0.202, 0.267 / -0.017 | 0.611 / -0.007, 0.454 / -0.205, 0.315 / +0.027 | 1.459 / +0.502, 1.226 / +1.164, 1.466 / +0.747 |
-| OBE4 2023-08-17 02h | 0.172 / -0.192, 0.172 / -0.126, **0.135 / -0.053** | 0.426 / -0.245, 0.315 / -0.127, 0.280 / -0.054 | 0.171 / -0.341, 0.209 / -0.165, 0.199 / -0.057 | 2.773 / -2.974, 2.353 / -0.779, 1.561 / -0.623 |
+| OBE4 2023-08-17 02h | 0.162 / +0.026, 0.032 / -0.102, **0.031 / -0.044** | 0.426 / -0.245, 0.315 / -0.127, 0.280 / -0.054 | 0.171 / -0.341, 0.209 / -0.165, 0.199 / -0.057 | 2.773 / -2.974, 2.353 / -0.779, 1.561 / -0.623 |
 
 Convergence (H < 0.20 m / |U| < 0.40 m, staying there): Kamakura 08-21
-29.1 / 21.0 min, 02-15 51.4 / 7.7 min, OBE4 28.2 / 0.8 min.
+29.1 / 21.0 min, 02-15 51.4 / 7.7 min, OBE4 9.1 / 3.9 min.
+
+The OBE4 row is from 2026-11-13. Its receiver reports `C1W` next to `C1C`,
+and precise GPS clocks refer to the P(Y) codes: until then the `C1C` range
+was used, which carries the satellite's P1-C1 bias, and the hour read
+0.172 / -0.192, 0.172 / -0.126, 0.135 / -0.053 m (RTKLIB, which also takes
+`C1C` here, is at 0.280 m after 60 min). The Kamakura receiver has no `C1W`.
 
 The gates are H <= 0.40 m and |U| <= 0.40 m at 60 min for the Kamakura hours
-and 0.30 m for OBE4. Before the fix, precise-product PPP omitted the periodic
+and 0.10 m / 0.15 m for OBE4 (0.30 m until 2026-11-13). Before the fix, precise-product PPP omitted the periodic
 relativistic satellite clock term (-2 r.v/c^2, which IGS SP3/CLK clocks
 exclude), fell back to broadcast orbits and clocks for satellites missing
 from the SP3, and did not apply the satellite antenna PCO to the
@@ -1397,3 +1408,34 @@ BeiDou) on the same files is not a usable reference: it reproduces its
 GPS-only result to the millimetre on the GPS + BDS-3 files and ends 2.5-3.8 m
 off with the BDS-2 satellites (GEO included).
 
+
+## mgex-ppp: multi-GNSS station-day (2026-11-14)
+
+`mgex-ppp` is a docs lane, not a README row. It runs `gnss_ppp --sp3 --clk
+--antex` on the OBE4 (Oberpfaffenhofen) daily observations of 2022-11-24
+(30 s) with the CODE MGEX orbits and clocks, static and kinematic, and
+scores each `.pos` against the station's coordinate of that day in the EPN
+daily solution. GPS, GLONASS, Galileo and BeiDou are used. A third run adds
+the day's observable-specific code biases (`--dcb com22374.bia`), where GPS
+takes `C1C` with its bias instead of the `C1W` range.
+
+```bash
+python3 apps/gnss.py reproduce mgex-ppp --mgex-data-root /datasets/mgex/obe4-2022-328 --check
+```
+
+The inputs are public but not committed; see [Datasets](#datasets).
+
+Local result (Linux gcc Release, 2026-11-14, 75 s):
+
+| Run | H / U at 60 min | 120 min | after 24 h | RMS after the first hour (E / N / U) |
+|---|---|---|---|---|
+| static | 0.045 / +0.007 m | 0.023 / +0.020 m | **0.018 / +0.025 m** | 0.008 / 0.017 / 0.020 m |
+| static, `--dcb` | 0.047 / +0.005 m | 0.024 / +0.018 m | **0.019 / +0.025 m** | 0.010 / 0.018 / 0.020 m |
+| kinematic | 0.059 / -0.022 m | 0.037 / +0.008 m | 0.042 / +0.036 m | **0.013 / 0.026 / 0.019 m** |
+
+The lane gates the static runs at H <= 0.05 m and |U| <= 0.06 m after 24 h,
+the static run at H <= 0.10 m after 60 min and 0.06 m after 120 min, and the
+kinematic run at an RMS of 0.06 m horizontal and vertical after the first
+hour. Each constellation alone (the clock file restricted to it) gives the
+same static coordinate within 2.5 cm and a kinematic RMS of at most
+0.019 / 0.032 / 0.054 m.

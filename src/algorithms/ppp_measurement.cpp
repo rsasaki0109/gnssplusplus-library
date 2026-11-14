@@ -353,9 +353,11 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                         ppp_config_.outlier_threshold *
                             std::sqrt(safeVariance(observation.variance_cp, 1e-8)) * 10.0,
                         phase_residual_floor);
+                const double gated_phase_residual = phaseResidualForInnovationGate(
+                    phase_residual, residual, madoca_innovation_gate);
                 if (!apply_outlier_detection ||
                     !ppp_config_.enable_outlier_detection ||
-                    std::abs(phase_residual) <= phase_limit) {
+                    std::abs(gated_phase_residual) <= phase_limit) {
                     Eigen::RowVectorXd phase_row = Eigen::RowVectorXd::Zero(filter_state_.total_states);
                     phase_row.segment(filter_state_.pos_index, 3) = -line_of_sight;
                     phase_row(clock_state_index) = 1.0;

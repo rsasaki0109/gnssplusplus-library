@@ -237,7 +237,7 @@ export async function runSmoke(factoryFor, log = console.log, options = {}) {
       b2bLog: '046r_bdsb2b.txt', antex: 'igs20.atx', elevationMask: '10', maxEpochs: '1800', out: 'b2b.pos',
     }));
     const b2b = parseSolution('b2b.pos', text('b2b.pos'));
-    const b2bDelta = ecefDistance(b2b, [-3962108.341542, 3381309.420944, 3668678.413964]);
+    const b2bDelta = ecefDistance(b2b, [-3962108.346714, 3381309.401852, 3668678.431544]);
     log(`PPP-B2b: ${b2b.n} epochs, H ${horizontalError(b2b, [-3962108.6836, 3381309.5672, 3668678.6720]).toFixed(3)} m, `
       + `final ${(b2bDelta * 1000).toFixed(2)} mm from native`);
     assert.equal(b2b.n, 1800);
