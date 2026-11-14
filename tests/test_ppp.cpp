@@ -215,6 +215,28 @@ TEST(PPPAntennaPcv, NoaziGridIsInterpolatedAndHeldAtBothEnds) {
     EXPECT_DOUBLE_EQ(ppp_internal::antexNoaziPcvMeters(ReceiverPcvGrid{}, 10.0), 0.0);
 }
 
+TEST(PPPTest, CarrierArcEndsAtADataGap) {
+    using libgnss::ppp_internal::carrierArcBrokenByGap;
+    EXPECT_FALSE(carrierArcBrokenByGap(false, 43200.0));  // first epoch of the satellite
+    EXPECT_FALSE(carrierArcBrokenByGap(true, 30.0));
+    EXPECT_FALSE(carrierArcBrokenByGap(true, 120.0));     // three missing 30 s epochs
+    EXPECT_TRUE(carrierArcBrokenByGap(true, 150.0));
+    EXPECT_TRUE(carrierArcBrokenByGap(true, 43200.0));    // the next pass
+    EXPECT_TRUE(carrierArcBrokenByGap(true, -150.0));     // backward pass
+}
+
+TEST(PPPTest, PreciseBeiDouClocksUseTheB1IB3IPair) {
+    using libgnss::ppp_internal::beiDouPreciseClockPair;
+    const SatelliteId bds2(GNSSSystem::BeiDou, 6);
+    const SatelliteId bds3(GNSSSystem::BeiDou, 32);
+    EXPECT_TRUE(beiDouPreciseClockPair(bds2, true, false));
+    EXPECT_TRUE(beiDouPreciseClockPair(bds3, true, false));
+    // SSR corrections bring their own code biases; broadcast clocks have TGD.
+    EXPECT_FALSE(beiDouPreciseClockPair(bds2, true, true));
+    EXPECT_FALSE(beiDouPreciseClockPair(bds2, false, false));
+    EXPECT_FALSE(beiDouPreciseClockPair(SatelliteId(GNSSSystem::GPS, 6), true, false));
+}
+
 TEST(PPPTest, ReceiverAntexSignalFallsBackToTheGpsCalibration) {
     using libgnss::ppp_internal::findReceiverAntexSignal;
     // An igs14.atx receiver antenna: GPS and GLONASS only.
