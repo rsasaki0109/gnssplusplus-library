@@ -164,10 +164,10 @@ foreach = [
   { run = "b2b_046r_kinematic", t = "30min", field = "up_m", expected = -0.240 },
   { run = "b2b_046r_kinematic", t = "60min", field = "h_m", expected = 0.052 },
   { run = "b2b_046r_kinematic", t = "60min", field = "up_m", expected = -0.526 },
-  { run = "b2b_233h_static", t = "30min", field = "h_m", expected = 0.090 },
-  { run = "b2b_233h_static", t = "30min", field = "up_m", expected = -0.058 },
-  { run = "b2b_233h_static", t = "60min", field = "h_m", expected = 0.078 },
-  { run = "b2b_233h_static", t = "60min", field = "up_m", expected = -0.217 },
+  { run = "b2b_233h_static", t = "30min", field = "h_m", expected = 0.078 },
+  { run = "b2b_233h_static", t = "30min", field = "up_m", expected = -0.222 },
+  { run = "b2b_233h_static", t = "60min", field = "h_m", expected = 0.057 },
+  { run = "b2b_233h_static", t = "60min", field = "up_m", expected = -0.148 },
   { run = "b2b_233h_kinematic", t = "30min", field = "h_m", expected = 0.039 },
   { run = "b2b_233h_kinematic", t = "30min", field = "up_m", expected = -0.249 },
   { run = "b2b_233h_kinematic", t = "60min", field = "h_m", expected = 0.013 },
@@ -183,5 +183,5 @@ abs_tol = 1.5
 readme = "docs/bds_ppp_b2b.md table"
 foreach = [
   { run = "b2b_046r_static", expected = 15.82 },
-  { run = "b2b_233h_static", expected = 18.15 },
+  { run = "b2b_233h_static", expected = 13.18 },
 ]

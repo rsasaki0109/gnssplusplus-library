@@ -165,10 +165,24 @@ TEST(PPPCycleSlipDetection, CombinationDetectorsCoverStaticIonosphereFree) {
 
 TEST(PPPSingleFrequency, PreciseProductIonosphereFreeDropsSingleFrequencySatellites) {
     EXPECT_TRUE(ppp_internal::dropSingleFrequencyPreciseProductSatellite(true, false));
-    // Broadcast-only and SSR paths keep their single-frequency rows.
+    // The broadcast-only path keeps its single-frequency rows.
     EXPECT_FALSE(ppp_internal::dropSingleFrequencyPreciseProductSatellite(false, false));
-    EXPECT_FALSE(ppp_internal::dropSingleFrequencyPreciseProductSatellite(false, true));
-    EXPECT_FALSE(ppp_internal::dropSingleFrequencyPreciseProductSatellite(true, true));
+    // SSR corrections give no ionospheric delay for such a row either.
+    EXPECT_TRUE(ppp_internal::dropSingleFrequencyPreciseProductSatellite(false, true));
+    EXPECT_TRUE(ppp_internal::dropSingleFrequencyPreciseProductSatellite(true, true));
+    // Unless the delay is estimated or taken from IONEX.
+    EXPECT_FALSE(ppp_internal::dropSingleFrequencyPreciseProductSatellite(false, true, true));
+    EXPECT_FALSE(ppp_internal::dropSingleFrequencyPreciseProductSatellite(true, true, true));
+}
+
+TEST(PPPInnovationGate, PhaseIsTestedAgainstTheCodeRowOfTheSameSatellite) {
+    // A 12 m error of the predicted receiver clock is in both rows: it is
+    // not a phase outlier.
+    EXPECT_NEAR(ppp_internal::phaseResidualForInnovationGate(-12.03, -12.4, false), 0.37, 1e-12);
+    // A 14 m step of the phase alone is.
+    EXPECT_NEAR(ppp_internal::phaseResidualForInnovationGate(2.0, -12.0, false), 14.0, 1e-12);
+    // The MADOCA per-frequency path tests the residual itself.
+    EXPECT_DOUBLE_EQ(ppp_internal::phaseResidualForInnovationGate(-12.03, -12.4, true), -12.03);
 }
 
 TEST(PPPPostfitScreening, KinematicNonMadocaNonClasOnly) {
