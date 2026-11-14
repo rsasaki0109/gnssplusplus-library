@@ -690,6 +690,18 @@ inline double phaseResidualForInnovationGate(double phase_residual_m,
                                   : phase_residual_m - code_residual_m;
 }
 
+// Initial ionosphere-free ambiguity (metres): phase minus code of the same
+// satellite, which is free of the receiver clock; the predicted range only
+// when there is no usable code.
+inline double ionosphereFreeAmbiguitySeedMeters(double carrier_phase_if_m,
+                                                double pseudorange_if_m,
+                                                double predicted_range_m) {
+    if (std::isfinite(pseudorange_if_m) && pseudorange_if_m > 0.0) {
+        return carrier_phase_if_m - pseudorange_if_m;
+    }
+    return carrier_phase_if_m - predicted_range_m;
+}
+
 inline bool broadcastClockIonosphereFree(bool use_ionosphere_free,
                                          bool precise_products_loaded,
                                          bool ssr_products_loaded,

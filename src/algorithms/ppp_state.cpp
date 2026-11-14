@@ -1670,7 +1670,18 @@ void PPPProcessor::initializeAmbiguityState(const IonosphereFreeObs& observation
         ambiguity.wavelength_l1 = observation.wavelength_l1;
         ambiguity.float_value_l1 = filter_state_.state(state_index);
     } else {
-        filter_state_.state(state_index) = observation.carrier_phase_if - predicted;
+        // Seeded from the code of the same satellite (RTKLIB udbias_ppp),
+        // not from the predicted range: that holds the error of the predicted
+        // receiver clock (13 m on the Kamakura JPL GDGPS hours), which put a
+        // new ambiguity 13 m from the others and kept its phase out at the
+        // pre-fit gate for as long as the clock error lasted. Without a code
+        // the predicted range is all there is.
+        // The coherent MADOCA profile keeps the seed it was matched to
+        // MADOCALIB with.
+        filter_state_.state(state_index) = require_coherent_ssr_
+            ? observation.carrier_phase_if - predicted
+            : ppp_internal::ionosphereFreeAmbiguitySeedMeters(
+                  observation.carrier_phase_if, observation.pseudorange_if, predicted);
         filter_state_.covariance(state_index, state_index) =
             precise_products_loaded_ ? 25.0 : ppp_config_.initial_ambiguity_variance;
     }
