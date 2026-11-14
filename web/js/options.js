@@ -15,7 +15,7 @@ const DISPATCH = { gnss_solve: 'solve', gnss_ppp: 'ppp', gnss_fuse: 'fuse' };
 // `false` values each tool's TOML schema turns into a negative flag.
 const NEGATIVE_FLAG = { enable_ar: 'no-ar', enable_wide_lane_ar: 'no-wide-lane-ar' };
 // Keys naming input/output files: skipped on export, matched to Files on import.
-const FILE_KEYS = ['rover', 'base', 'nav', 'obs', 'sp3', 'clk', 'imu', 'out', 'rtk_pos_out', 'data_dir', 'kml', 'antex',
+const FILE_KEYS = ['rover', 'base', 'nav', 'obs', 'sp3', 'clk', 'imu', 'out', 'rtk_pos_out', 'data_dir', 'kml', 'antex', 'dcb',
   'ssr_rtcm', 'has_pages', 'b2b'];
 // The MADOCA PPP-AR convergence settings the GUI adds (commands.js), as TOML.
 const MADOCA_CONVERGENCE = Object.fromEntries(

@@ -30,7 +30,7 @@ be repeated natively, for example on a larger dataset or in a script.
    trajectory), converts both streams to RINEX, runs kinematic RTK and opens
    the result in Plot with the errors against the reference.
 2. Or add your own files with **Add files** or drag and drop: RINEX OBS/NAV,
-   SP3, CLK, ANTEX, QZSS L6 logs (CLAS, MADOCA L6E / L6D), Galileo HAS
+   SP3, CLK, ANTEX, Bias-SINEX, QZSS L6 logs (CLAS, MADOCA L6E / L6D), Galileo HAS
    E6-B page logs (cssrlib text; Septentrio SBF), BeiDou PPP-B2b message logs
    (cssrlib text), RTCM3 (including RTCM SSR),
    u-blox UBX, `.pos` (libgnss++ or RTKLIB) and reference CSV files are
@@ -149,7 +149,9 @@ natively for the full Tokyo run1), within the 4 GB of a browser run.
 
 In the PPP modes, *PPP corrections* picks where the corrections come from:
 
-- *Broadcast / precise products*: the NAV, SP3 and CLK files above.
+- *Broadcast / precise products*: the NAV, SP3 and CLK files above. With SP3
+  and CLK, a Bias-SINEX file of the day (`.BIA` / `.BSX`, observable-specific
+  code biases) can be added: `--dcb <file>`.
 - *Galileo HAS, internet*: the HAS Internet Data Distribution recorded as an
   RTCM 3 SSR file, with the broadcast NAV of the same day:
   `gnss ppp --ssr-rtcm <file> --ssr-rtcm-profile has-idd` (IODE-matched

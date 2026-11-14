@@ -177,7 +177,7 @@ export function defaultPosName(rover, mode, corrections) {
  *         preset, iono, ratio, baseEcef: [x,y,z] | null, kml, verbose,
  *         ionoFree, enableAr, realtime, combined, imu, leverArm: [x,y,z] | null, tightCoupling,
  *         imuFormat, fgoPreset, corrections, l6e: [names], l6d: [names],
- *         clasL6, hasIdd, hasPages, hasPagesFormat, b2bLog, antex, extra, workspaceNames }
+ *         clasL6, hasIdd, hasPages, hasPagesFormat, b2bLog, antex, dcb, extra, workspaceNames }
  */
 export function buildPostCommand(opts) {
   const mode = POST_MODES[opts.mode];
@@ -309,6 +309,12 @@ export function buildPostCommand(opts) {
     if (corrections === 'products') {
       if (opts.sp3) cmd.input('--sp3', opts.sp3);
       if (opts.clk) cmd.input('--clk', opts.clk);
+      // Observable-specific code biases of the day (Bias-SINEX); they go
+      // with the precise clocks.
+      if (opts.dcb) {
+        if (!(opts.sp3 && opts.clk)) throw new Error('Code biases (--dcb) need SP3 and CLK products');
+        cmd.input('--dcb', opts.dcb);
+      }
     } else if (corrections === 'madoca') {
       for (const name of l6e) cmd.input('--madoca-l6', name);
       for (const name of l6d) cmd.input('--madoca-l6d', name);
