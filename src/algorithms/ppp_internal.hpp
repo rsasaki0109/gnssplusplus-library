@@ -873,6 +873,19 @@ inline bool beiDouPreciseClockPair(const SatelliteId& sat,
            !ssr_products_loaded;
 }
 
+// BDS-2 satellites (C01-C16) are left out with precise clocks. With the CODE
+// MGEX products at OBE4 on 2022-11-24 they pull the kinematic height: 0.091 m
+// low with GPS + BDS-2 against 0.013 m with GPS alone, and the same with
+// their weight lowered (a sigma of 0.03 to 0.3 m added), with the
+// Wanninger-Beer code corrections, or without the satellite antenna's
+// horizontal offset. The cause is not known; BDS-3 is unaffected.
+inline bool beiDou2LeftOutWithPreciseClocks(const SatelliteId& sat,
+                                            bool precise_products_loaded,
+                                            bool ssr_products_loaded) {
+    return beiDouPreciseClockPair(sat, precise_products_loaded, ssr_products_loaded) &&
+           !isBeiDou3Satellite(sat);
+}
+
 // The B3I observation of any BeiDou satellite (see
 // findBroadcastBeiDouSecondaryObservation for why it may only be among the
 // per-tracking-code observations).

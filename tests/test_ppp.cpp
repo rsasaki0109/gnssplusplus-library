@@ -237,6 +237,17 @@ TEST(PPPTest, PreciseBeiDouClocksUseTheB1IB3IPair) {
     EXPECT_FALSE(beiDouPreciseClockPair(SatelliteId(GNSSSystem::GPS, 6), true, false));
 }
 
+TEST(PPPTest, PreciseClocksLeaveBeiDou2Out) {
+    using libgnss::ppp_internal::beiDou2LeftOutWithPreciseClocks;
+    EXPECT_TRUE(beiDou2LeftOutWithPreciseClocks(SatelliteId(GNSSSystem::BeiDou, 6), true, false));
+    EXPECT_TRUE(beiDou2LeftOutWithPreciseClocks(SatelliteId(GNSSSystem::BeiDou, 16), true, false));
+    EXPECT_FALSE(beiDou2LeftOutWithPreciseClocks(SatelliteId(GNSSSystem::BeiDou, 19), true, false));
+    // SSR and broadcast runs keep them.
+    EXPECT_FALSE(beiDou2LeftOutWithPreciseClocks(SatelliteId(GNSSSystem::BeiDou, 6), true, true));
+    EXPECT_FALSE(beiDou2LeftOutWithPreciseClocks(SatelliteId(GNSSSystem::BeiDou, 6), false, false));
+    EXPECT_FALSE(beiDou2LeftOutWithPreciseClocks(SatelliteId(GNSSSystem::GPS, 6), true, false));
+}
+
 TEST(PPPTest, ReceiverAntexSignalFallsBackToTheGpsCalibration) {
     using libgnss::ppp_internal::findReceiverAntexSignal;
     // An igs14.atx receiver antenna: GPS and GLONASS only.

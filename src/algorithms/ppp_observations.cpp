@@ -122,6 +122,10 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         if (signal_policy::isBeiDouGeoSatellite(sat)) {
             continue;
         }
+        if (beidou_precise_pair &&
+            beiDou2LeftOutWithPreciseClocks(sat, precise_products_loaded_, ssr_products_loaded_)) {
+            continue;
+        }
 
         const Ephemeris* eph = nav.getEphemeris(sat, obs.time);
 
