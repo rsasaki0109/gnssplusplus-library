@@ -1211,9 +1211,9 @@ IODP mismatch.
 
 | Run | 30 min | 60 min | H < 0.20 m from |
 |---|---|---|---:|
-| 2025-02-15 static (gated) | 0.110 / -0.406 m | 0.015 / -0.293 m | 16.4 min |
+| 2025-02-15 static (gated) | 0.114 / -0.388 m | 0.012 / -0.274 m | 16.5 min |
 | 2025-02-15 kinematic | 0.108 / -0.240 m | 0.052 / -0.526 m | |
-| 2025-08-21 static (gated) | 0.077 / -0.219 m | 0.057 / -0.149 m | 13.2 min |
+| 2025-08-21 static (gated) | 0.085 / -0.190 m | 0.066 / -0.132 m | 13.4 min |
 | 2025-08-21 kinematic | 0.039 / -0.249 m | 0.013 / -0.120 m | |
 
 The gates are H <= 0.20 m and |U| <= 0.40 m after one hour, and H below
