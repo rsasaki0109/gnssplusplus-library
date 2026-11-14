@@ -37,7 +37,8 @@ samples, final products). Real-time equivalent numbers come from runs with
 | (docs, not a README row) Galileo HAS float PPP via SIS (E6-B pages) | `has-sis-ppp` | ready | ~1 min | **Pass.** Decoder (432 MT1 messages per hour, no CRC failure) and static Kamakura 2025-02-15 hour; indicative only (outside the HAS service area); see [has-sis-ppp](#has-sis-ppp-galileo-has-sis-float-ppp-2026-11-07) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) BeiDou PPP-B2b float PPP | `bds-b2b-ppp` | ready | ~30 s | **Pass.** Decoder (3600 C59 messages per hour, no CRC failure or IOD mismatch) and static Kamakura 2025-02-15 / 2025-08-21 hours: horizontal below 0.2 m from 16 / 13 min, within 0.06 m horizontal / 0.30 m vertical after one hour; see [bds-b2b-ppp](#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07) and [BeiDou PPP-B2b support](bds_ppp_b2b.md) |
 | (docs, not a README row) Precise-product PPP with IGS final SP3/CLK | `igs-final-ppp` | ready | ~2 min | **Pass.** Static Kamakura 2025-02-15 / 2025-08-21 hours and OBE4 2023-08-17 hour hours within 0.16 m horizontal / 0.23 m vertical after one hour (OBE4 0.03 / 0.04 m), level with or better than RTKLIB demo5 on the same inputs; see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01) |
-| (docs, not a README row) Precise-product PPP, multi-GNSS station-day | `mgex-ppp` | ready | ~2 min | **Pass.** OBE4 2022-11-24 with CODE MGEX products: static 0.018 m horizontal / 0.025 m vertical after 24 h, kinematic RMS 0.029 / 0.019 m after the first hour, against the EPN daily coordinate; see [mgex-ppp](#mgex-ppp-multi-gnss-station-day-2026-11-14) |
+| (docs, not a README row) Precise-product PPP, multi-GNSS station-day | `mgex-ppp` | ready | ~2 min | **Pass.** OBE4 2022-11-24 with CODE MGEX products: static 0.014 m horizontal / 0.005 m vertical after 24 h, kinematic RMS 0.019 / 0.022 m after the first hour, against the EPN daily coordinate; see [mgex-ppp](#mgex-ppp-multi-gnss-station-day-2026-11-14) |
+| (docs, not a README row) Precise-product PPP, four stations in one reference frame | `epn-ppp` | ready | ~2 min | **Pass.** OBE4, WTZR, MATE and ONSA 2023-08-17 with IGS final products: static within 0.011 m horizontal / 0.017 m vertical of the EPN daily coordinates, OBE4 kinematic RMS 0.041 / 0.035 m after the first hour; see [epn-ppp](#epn-ppp-four-stations-in-one-reference-frame-2026-11-14) |
 
 Runtimes were measured on a 12-thread Windows 11 workstation with an MSVC
 Release build. Lanes that run in parallel slow each other down.
@@ -56,6 +57,7 @@ Release build. Lanes that run in parallel slow each other down.
 | BeiDou PPP-B2b samples ([hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data) ec1dfa2c, `data/doy2025-046`, `data/doy2025-233`) plus `igs20_2353.atx` | `bds-b2b-ppp` | Download `046r_rnx.obs`, `046r_rnx.nav`, `046r_bdsb2b.txt`, `233h_rnx.obs`, `233h_rnx.nav`, `233h_bdsb2b.txt` from those directories (the `*_rnx.nav` files are the receiver's RINEX 4 NAV with the B-CNAV1 records) and the immutable IGS archive copy `https://files.igs.org/pub/station/general/pcv_archive/igs20_2353.atx` (SHA-256 `485720bd...`). Nothing from cssrlib-data is redistributed | `<has-sis-data-root>/igs20_2353.atx`, `<has-sis-data-root>/doy2025-046/{046r_rnx.obs,046r_rnx.nav,046r_bdsb2b.txt}`, same for `doy2025-233/233h_*` |
 | IGS final orbits/clocks and `igs20.atx` (public, IGS) on top of the two cssrlib-data sets above | `igs-final-ppp` | `IGS0OPSFIN_{20250460000,20252330000,20232290000}_01D_{15M_ORB.SP3,30S_CLK.CLK}.gz` from `https://igs.bkg.bund.de/root_ftp/IGS/products/{2353,2380,2275}/` (gunzip next to the observations of that day) and `igs20.atx` from the immutable IGS archive copy `https://files.igs.org/pub/station/general/pcv_archive/igs20_2425.atx.gz` (gunzip; SHA-256 `8715268e...`) | `<has-sis-data-root>/igs20.atx`, `<has-sis-data-root>/doy2025-{046,233}/IGS0OPSFIN_2025{046,233}0000_01D_*` next to `{046r,233h}_rnx.obs`, and `<has-data-root>/IGS0OPSFIN_20232290000_01D_*` next to `OBE42023229c.obs` |
 | OBE4 daily observations, IGS merged navigation and CODE MGEX products of 2022-11-24 (public, IGS) | `mgex-ppp` | `OBE400DEU_R_20223280000_01D_30S_MO.crx.gz` from `https://igs.bkg.bund.de/root_ftp/IGS/obs/2022/328/` (gunzip, then `crx2rnx`), `BRDC00IGS_R_20223280000_01D_MN.rnx.gz` from `.../IGS/BRDC/2022/328/`, `com22374.{eph,clk,bia}.Z` from `.../IGS/products/mgex/2237/` (uncompress) and `igs14_2233.atx` from `https://files.igs.org/pub/station/general/pcv_archive/` | `<mgex-data-root>/` holding `OBE400DEU_R_20223280000_01D_30S_MO.rnx`, `BRDC00IGS_R_20223280000_01D_MN.rnx`, `com22374.eph`, `com22374.clk`, `com22374.bia`, `igs14_2233.atx` |
+| Daily observations of OBE4, WTZR, MATE and ONSA, IGS merged navigation and IGS final products of 2023-08-17 (public, IGS) | `epn-ppp` | `{OBE400DEU,WTZR00DEU,MATE00ITA,ONSA00SWE}_R_20232290000_01D_30S_MO.crx.gz` from `https://igs.bkg.bund.de/root_ftp/IGS/obs/2023/229/` (gunzip, then `crx2rnx`), `BRDC00IGS_R_20232290000_01D_MN.rnx.gz` from `.../IGS/BRDC/2023/229/`, `IGS0OPSFIN_20232290000_01D_{15M_ORB.SP3,30S_CLK.CLK}.gz` from `.../IGS/products/2275/` and `igs20_2425.atx.gz` from `https://files.igs.org/pub/station/general/pcv_archive/` (saved as `igs20.atx`) | `<epn-data-root>/` holding the four `.rnx` observation files, `BRDC00IGS_R_20232290000_01D_MN.rnx`, `IGS0OPSFIN_20232290000_01D_15M_ORB.SP3`, `IGS0OPSFIN_20232290000_01D_30S_CLK.CLK`, `igs20.atx` |
 | QZSS L6 CLAS archive | `clas-ppc` | Downloaded automatically from `https://sys.qzss.go.jp/archives/l6` | Cached under `<work-dir>/inputs/l6_cache` (about 1.7 GB of expanded SSR CSV per run) |
 
 Dataset roots are resolved in this order:
@@ -164,6 +166,9 @@ python3 apps/gnss.py reproduce igs-final-ppp --has-sis-data-root /datasets/cssrl
 
 # Multi-GNSS float PPP of one station-day with CODE MGEX products (docs lane)
 python3 apps/gnss.py reproduce mgex-ppp --mgex-data-root /datasets/mgex/obe4-2022-328 --check
+
+# GPS float PPP of four EPN stations, products and coordinates in one frame (docs lane)
+python3 apps/gnss.py reproduce epn-ppp --epn-data-root /datasets/epn/2023-229 --check
 
 # BeiDou PPP-B2b float PPP on the same hours (docs lane)
 python3 apps/gnss.py reproduce bds-b2b-ppp --has-sis-data-root /datasets/cssrlib-data/data --check
@@ -1415,7 +1420,7 @@ off with the BDS-2 satellites (GEO included).
 --antex` on the OBE4 (Oberpfaffenhofen) daily observations of 2022-11-24
 (30 s) with the CODE MGEX orbits and clocks, static and kinematic, and
 scores each `.pos` against the station's coordinate of that day in the EPN
-daily solution. GPS, GLONASS, Galileo and BeiDou are used. A third run adds
+daily solution. GPS, GLONASS, Galileo and BeiDou (BDS-3) are used. A third run adds
 the day's observable-specific code biases (`--dcb com22374.bia`), where GPS
 takes `C1C` with its bias instead of the `C1W` range.
 
@@ -1429,13 +1434,71 @@ Local result (Linux gcc Release, 2026-11-14, 75 s):
 
 | Run | H / U at 60 min | 120 min | after 24 h | RMS after the first hour (E / N / U) |
 |---|---|---|---|---|
-| static | 0.045 / +0.007 m | 0.023 / +0.020 m | **0.018 / +0.025 m** | 0.008 / 0.017 / 0.020 m |
-| static, `--dcb` | 0.047 / +0.005 m | 0.024 / +0.018 m | **0.019 / +0.025 m** | 0.010 / 0.018 / 0.020 m |
-| kinematic | 0.059 / -0.022 m | 0.037 / +0.008 m | 0.042 / +0.036 m | **0.013 / 0.026 / 0.019 m** |
+| static | 0.045 / -0.017 m | 0.028 / -0.013 m | **0.014 / -0.005 m** | 0.010 / 0.014 / 0.009 m |
+| static, `--dcb` | 0.049 / -0.020 m | 0.030 / -0.017 m | **0.015 / -0.005 m** | 0.012 / 0.014 / 0.010 m |
+| kinematic | 0.039 / -0.026 m | 0.031 / -0.018 m | 0.019 / -0.004 m | **0.012 / 0.015 / 0.022 m** |
 
 The lane gates the static runs at H <= 0.05 m and |U| <= 0.06 m after 24 h,
 the static run at H <= 0.10 m after 60 min and 0.06 m after 120 min, and the
 kinematic run at an RMS of 0.06 m horizontal and vertical after the first
-hour. Each constellation alone (the clock file restricted to it) gives the
-same static coordinate within 2.5 cm and a kinematic RMS of at most
-0.019 / 0.032 / 0.054 m.
+hour.
+
+`igs14_2233.atx` calibrates the station's antenna (SEPCHOKE_B3E6) for GPS and
+GLONASS only. Galileo and BeiDou take the GPS L1 / L2 calibration
+(2026-11-14); without it they had no phase centre offset, and each alone
+(orbits and clocks restricted to it) ended +0.106 m and +0.095 m high in the
+static run. With it the four constellations alone end at -0.003 (GPS),
+-0.014 (GLONASS), +0.004 (Galileo) and -0.006 m (BeiDou).
+
+BeiDou takes the B1I / B3I pair with precise clocks, for BDS-2 as well: the
+CODE clocks refer to it (the day's `.bia` has `C2I` and `C6I` only, and their
+ionosphere-free combination is zero). A satellite back after a data gap of
+more than two minutes starts a new carrier arc: C32 came back after 12 h
+with no loss-of-lock flag and passed the geometry-free test, which moved the
+BeiDou-only static solution 0.25 m.
+
+BDS-2 (C06-C16 here) is left out with precise clocks. With it the kinematic
+height was 0.026 m low on average with all four constellations (GPS +
+Galileo 0.008 m, GPS + BDS-3 0.030 m, GPS + BDS-2 0.091 m); without it
+0.016 m. Lowering the BDS-2 weight (a sigma of 0.03 to 0.3 m added), the
+Wanninger-Beer code corrections and dropping the satellite antenna's
+horizontal offset did not change that, so the cause is in the model and
+open.
+
+
+## epn-ppp: four stations in one reference frame (2026-11-14)
+
+`epn-ppp` is a docs lane, not a README row. It runs `gnss_ppp --sp3 --clk
+--antex` on the daily observations of 2023-08-17 (30 s) of four EPN stations
+with different antennas, with the IGS final orbits and clocks, and scores
+each `.pos` against the station's coordinate of that day in the EPN daily
+solution. Products, antenna file (`igs20.atx`) and coordinates are all in
+IGS20, which `mgex-ppp` cannot offer (IGS14 products against IGS20
+coordinates, about a centimetre apart). The IGS final clocks are GPS-only,
+so this is a GPS solution.
+
+```bash
+python3 apps/gnss.py reproduce epn-ppp --epn-data-root /datasets/epn/2023-229 --check
+```
+
+The inputs are public but not committed; see [Datasets](#datasets).
+
+Local result (Linux gcc Release, 2026-11-14, 99 s):
+
+| Run | Antenna | H / U at 60 min | 120 min | at the end | RMS after the first hour (E / N / U) |
+|---|---|---|---|---|---|
+| OBE4 static | SEPCHOKE_B3E6 NONE | 0.063 / +0.038 m | 0.012 / +0.021 m | **0.008 / -0.009 m** | 0.004 / 0.009 / 0.011 m |
+| WTZR static | LEIAR25.R3 LEIT | 0.009 / -0.028 m | 0.005 / +0.007 m | **0.008 / +0.002 m** | 0.008 / 0.004 / 0.010 m |
+| MATE static | LEIAR20 NONE | 0.014 / -0.003 m | 0.001 / +0.003 m | **0.003 / +0.001 m** | 0.007 / 0.004 / 0.003 m |
+| ONSA static | AOAD/M_B OSOD | 0.027 / +0.018 m | 0.016 / -0.007 m | **0.011 / -0.017 m** | 0.015 / 0.006 / 0.015 m |
+| OBE4 kinematic | SEPCHOKE_B3E6 NONE | 0.101 / +0.071 m | 0.043 / -0.000 m | 0.005 / +0.024 m | **0.028 / 0.031 / 0.035 m** |
+
+The lane gates every static run at H <= 0.025 m and |U| <= 0.035 m at the
+end, and the kinematic run at an RMS of 0.06 m horizontal and vertical after
+the first hour.
+
+The orbit file's last sample is at 23:45. `gnss ppp` gives no precise orbit
+more than 5 s outside the samples of a satellite (a polynomial through the
+last samples was 1.4 m off at 23:59:30 in the kinematic run), so the last 29
+epochs carry the code solution (status 1); the scorer leaves them out
+(`--skip-code-only`) and "at the end" is 23:45.

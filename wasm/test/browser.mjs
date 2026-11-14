@@ -169,6 +169,31 @@ try {
     await page.selectOption('#post-form select[name="clk"]', 'synthetic_ppp.clk');
   }, ['synthetic_ppp_ppp.pos']);
 
+  // Code biases (Bias-SINEX) are offered with SP3 / CLK products only.
+  await page.setInputFiles('#file-input', {
+    name: 'sample.bia',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('%=BIA 1.00 COD 2022:331:13573 IGS 2022:328:00000 2022:329:00000 A 00000001\n+BIAS/SOLUTION\n'
+      + ' OSB  G063 G01           C1C       2022:328:00000 2022:329:00000 ns                 -1.5036      0.0067\n-BIAS/SOLUTION\n'),
+  });
+  await page.waitForFunction(() => [...document.querySelectorAll('#file-list .name')].some((e) => e.textContent.includes('sample.bia')), null, { timeout: 30000 });
+  await page.click('button[data-tool="post"]');
+  await mode('ppp-static');
+  await page.selectOption('#post-form select[name="pppCorr"]', 'products');
+  assert.ok(await page.isVisible('#post-form select[name="dcb"]'), 'bias file field with products');
+  assert.doesNotMatch(await text('#tool-post [data-cmd]'), /--dcb/);
+  await page.selectOption('#post-form select[name="dcb"]', 'sample.bia');
+  await page.dispatchEvent('#post-form select[name="dcb"]', 'change');
+  assert.match(await text('#tool-post [data-cmd]'), /--dcb sample\.bia/);
+  await page.selectOption('#post-form select[name="pppCorr"]', 'has-idd');
+  await page.dispatchEvent('#post-form select[name="pppCorr"]', 'change');
+  assert.ok(!(await page.isVisible('#post-form select[name="dcb"]')), 'no bias file field with SSR corrections');
+  assert.doesNotMatch(await text('#tool-post [data-cmd]'), /--dcb/);
+  await page.selectOption('#post-form select[name="pppCorr"]', 'products');
+  await page.dispatchEvent('#post-form select[name="pppCorr"]', 'change');
+  await page.selectOption('#post-form select[name="dcb"]', '');
+  await page.dispatchEvent('#post-form select[name="dcb"]', 'change');
+
   // Plot: no tile request before a map is chosen; then map, error colours, PNG.
   assert.equal(tiles, 0, 'tiles requested before choosing a map');
   await page.click('button[data-tool="plot"]');

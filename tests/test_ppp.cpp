@@ -201,6 +201,120 @@ TEST(PPPAmbiguitySeed, IonosphereFreeSeedIsPhaseMinusCode) {
         phase_m - predicted_m);
 }
 
+TEST(PPPAntennaPcv, NoaziGridIsInterpolatedAndHeldAtBothEnds) {
+    ReceiverPcvGrid grid;
+    grid.zen1_deg = 0.0;
+    grid.zen2_deg = 20.0;
+    grid.dzen_deg = 5.0;
+    grid.noazi_m = {0.000, 0.002, 0.006, 0.004, -0.010};
+    EXPECT_DOUBLE_EQ(ppp_internal::antexNoaziPcvMeters(grid, 0.0), 0.000);
+    EXPECT_NEAR(ppp_internal::antexNoaziPcvMeters(grid, 7.5), 0.004, 1e-12);
+    EXPECT_DOUBLE_EQ(ppp_internal::antexNoaziPcvMeters(grid, 20.0), -0.010);
+    EXPECT_DOUBLE_EQ(ppp_internal::antexNoaziPcvMeters(grid, -3.0), 0.000);
+    EXPECT_DOUBLE_EQ(ppp_internal::antexNoaziPcvMeters(grid, 45.0), -0.010);
+    EXPECT_DOUBLE_EQ(ppp_internal::antexNoaziPcvMeters(ReceiverPcvGrid{}, 10.0), 0.0);
+}
+
+TEST(PPPTest, CarrierArcEndsAtADataGap) {
+    using libgnss::ppp_internal::carrierArcBrokenByGap;
+    EXPECT_FALSE(carrierArcBrokenByGap(false, 43200.0));  // first epoch of the satellite
+    EXPECT_FALSE(carrierArcBrokenByGap(true, 30.0));
+    EXPECT_FALSE(carrierArcBrokenByGap(true, 45.0));      // a 1 Hz outage of 45 s
+    EXPECT_TRUE(carrierArcBrokenByGap(true, 60.0));       // one missing 30 s epoch
+    EXPECT_TRUE(carrierArcBrokenByGap(true, 150.0));
+    EXPECT_TRUE(carrierArcBrokenByGap(true, 43200.0));    // the next pass
+    EXPECT_TRUE(carrierArcBrokenByGap(true, -150.0));     // backward pass
+}
+
+TEST(PPPTest, PreciseBeiDouClocksUseTheB1IB3IPair) {
+    using libgnss::ppp_internal::beiDouPreciseClockPair;
+    const SatelliteId bds2(GNSSSystem::BeiDou, 6);
+    const SatelliteId bds3(GNSSSystem::BeiDou, 32);
+    EXPECT_TRUE(beiDouPreciseClockPair(bds2, true, false));
+    EXPECT_TRUE(beiDouPreciseClockPair(bds3, true, false));
+    // SSR corrections bring their own code biases; broadcast clocks have TGD.
+    EXPECT_FALSE(beiDouPreciseClockPair(bds2, true, true));
+    EXPECT_FALSE(beiDouPreciseClockPair(bds2, false, false));
+    EXPECT_FALSE(beiDouPreciseClockPair(SatelliteId(GNSSSystem::GPS, 6), true, false));
+}
+
+TEST(PPPTest, PreciseClocksLeaveBeiDou2Out) {
+    using libgnss::ppp_internal::beiDou2LeftOutWithPreciseClocks;
+    EXPECT_TRUE(beiDou2LeftOutWithPreciseClocks(SatelliteId(GNSSSystem::BeiDou, 6), true, false));
+    EXPECT_TRUE(beiDou2LeftOutWithPreciseClocks(SatelliteId(GNSSSystem::BeiDou, 16), true, false));
+    EXPECT_FALSE(beiDou2LeftOutWithPreciseClocks(SatelliteId(GNSSSystem::BeiDou, 19), true, false));
+    // SSR and broadcast runs keep them.
+    EXPECT_FALSE(beiDou2LeftOutWithPreciseClocks(SatelliteId(GNSSSystem::BeiDou, 6), true, true));
+    EXPECT_FALSE(beiDou2LeftOutWithPreciseClocks(SatelliteId(GNSSSystem::BeiDou, 6), false, false));
+    EXPECT_FALSE(beiDou2LeftOutWithPreciseClocks(SatelliteId(GNSSSystem::GPS, 6), true, false));
+}
+
+TEST(PPPTest, ReceiverAntexSignalFallsBackToTheGpsCalibration) {
+    using libgnss::ppp_internal::findReceiverAntexSignal;
+    // An igs14.atx receiver antenna: GPS and GLONASS only.
+    const std::map<SignalType, int> gps_glonass = {
+        {SignalType::GPS_L1CA, 1}, {SignalType::GPS_L2C, 2},
+        {SignalType::GLO_L1CA, 3}, {SignalType::GLO_L2CA, 4}};
+    auto value = [](const std::map<SignalType, int>& map, SignalType signal) {
+        const auto it = findReceiverAntexSignal(map, signal);
+        return it == map.end() ? 0 : it->second;
+    };
+    EXPECT_EQ(value(gps_glonass, SignalType::GPS_L2C), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::GLO_L2CA), 4);
+    // Same carrier.
+    EXPECT_EQ(value(gps_glonass, SignalType::GPS_L1P), 1);
+    EXPECT_EQ(value(gps_glonass, SignalType::GPS_L2P), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::GAL_E1), 1);
+    EXPECT_EQ(value(gps_glonass, SignalType::BDS_B1C), 1);
+    EXPECT_EQ(value(gps_glonass, SignalType::QZS_L2C), 2);
+    // No entry on the carrier: GPS L1 in the upper L band, GPS L2 below.
+    EXPECT_EQ(value(gps_glonass, SignalType::BDS_B1I), 1);
+    EXPECT_EQ(value(gps_glonass, SignalType::GAL_E5A), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::GAL_E5B), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::GAL_E6), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::BDS_B3I), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::GPS_L5), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::SIGNAL_TYPE_COUNT), 0);
+
+    // With an L5 calibration, E5a and B2a take it; its own entry wins.
+    const std::map<SignalType, int> with_l5 = {
+        {SignalType::GPS_L1CA, 1}, {SignalType::GPS_L2C, 2}, {SignalType::GPS_L5, 5},
+        {SignalType::GAL_E5B, 7}};
+    EXPECT_EQ(value(with_l5, SignalType::GAL_E5A), 5);
+    EXPECT_EQ(value(with_l5, SignalType::BDS_B2A), 5);
+    EXPECT_EQ(value(with_l5, SignalType::GAL_E5B), 7);
+    EXPECT_EQ(value(with_l5, SignalType::BDS_B2I), 7);
+
+    // Nothing to fall back to.
+    const std::map<SignalType, int> glonass_only = {{SignalType::GLO_L1CA, 3}};
+    EXPECT_EQ(value(glonass_only, SignalType::GAL_E5A), 0);
+}
+
+TEST(PPPAntennaPcv, IonosphereFreeRowTakesTheSameCombinationOfBothFrequencies) {
+    // GPS L1 / L2: c1 = 2.546, c2 = -1.546.
+    const double c1 = 2.5457277801631593;
+    const double c2 = 1.0 - c1;
+    EXPECT_NEAR(
+        ppp_internal::ionosphereFreeReceiverPcvMeters(0.004, true, -0.003, c1, c2),
+        c1 * 0.004 + c2 * -0.003, 1e-15);
+    // The same variation on both frequencies is that variation.
+    EXPECT_NEAR(
+        ppp_internal::ionosphereFreeReceiverPcvMeters(0.005, true, 0.005, c1, c2), 0.005, 1e-15);
+    // A single-frequency row has only its own.
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::ionosphereFreeReceiverPcvMeters(0.004, false, 99.0, 1.0, 0.0), 0.004);
+}
+
+TEST(PPPAntennaPcv, SatelliteNadirAngle) {
+    const Vector3d satellite(26560000.0, 0.0, 0.0);
+    // A receiver under the satellite sees it at the zenith: nadir angle 0.
+    EXPECT_NEAR(ppp_internal::satelliteNadirAngleDeg(satellite, Vector3d(6378137.0, 0.0, 0.0)), 0.0, 1e-9);
+    // On the Earth's limb the nadir angle of a GPS satellite is about 13.9 deg.
+    const double limb = ppp_internal::satelliteNadirAngleDeg(satellite, Vector3d(1531500.0, 6191600.0, 0.0));
+    EXPECT_NEAR(limb, std::asin(6378137.0 / 26560000.0) * 180.0 / M_PI, 0.02);
+    EXPECT_DOUBLE_EQ(ppp_internal::satelliteNadirAngleDeg(Vector3d::Zero(), Vector3d(1.0, 0.0, 0.0)), 0.0);
+}
+
 TEST(PPPInnovationGate, PhaseIsTestedAgainstTheCodeRowOfTheSameSatellite) {
     // A 12 m error of the predicted receiver clock is in both rows: it is
     // not a phase outlier.
@@ -1881,6 +1995,44 @@ TEST(PPPTest, PreciseProductsLoadSp3AndClockAndInterpolateMidpoint) {
 
     std::filesystem::remove(sp3_path);
     std::filesystem::remove(clk_path);
+}
+
+TEST(PPPTest, PreciseProductsDoNotExtrapolateTheOrbitBeyondItsSamples) {
+    // IGS final orbits end at 23:45: a polynomial through the last samples
+    // is metres off within minutes after it, so no orbit is given there.
+    const auto sp3_path = tempFilePath("libgnss_ppp_precise_span_test.sp3");
+    std::filesystem::remove(sp3_path);
+    std::string sp3_text;
+    for (int index = 0; index < 4; ++index) {
+        char line[128];
+        std::snprintf(line, sizeof(line), "*  2026 03 26 23 %02d 00.00000000\n", 15 * index);
+        sp3_text += line;
+        std::snprintf(line, sizeof(line),
+                      "PG01 %14.6f   14000.000000   21700.000000       123.000000\n",
+                      20200.0 + 1.5 * index);
+        sp3_text += line;
+    }
+    writeTextFile(sp3_path, sp3_text);
+
+    PreciseProducts precise_products;
+    ASSERT_TRUE(precise_products.loadSP3File(sp3_path.string()));
+
+    const SatelliteId satellite(GNSSSystem::GPS, 1);
+    Vector3d position = Vector3d::Zero();
+    Vector3d velocity = Vector3d::Zero();
+    double clock_bias = 0.0;
+    double clock_drift = 0.0;
+    EXPECT_TRUE(precise_products.interpolateOrbitClock(
+        satellite, makeTime(2026, 3, 26, 23, 45, 0.0), position, velocity, clock_bias, clock_drift));
+    EXPECT_NEAR(position.x(), 20'204'500.0, 1e-3);
+    EXPECT_TRUE(precise_products.interpolateOrbitClock(
+        satellite, makeTime(2026, 3, 26, 23, 0, 0.0), position, velocity, clock_bias, clock_drift));
+    EXPECT_FALSE(precise_products.interpolateOrbitClock(
+        satellite, makeTime(2026, 3, 26, 23, 45, 30.0), position, velocity, clock_bias, clock_drift));
+    EXPECT_FALSE(precise_products.interpolateOrbitClock(
+        satellite, makeTime(2026, 3, 26, 22, 59, 30.0), position, velocity, clock_bias, clock_drift));
+
+    std::filesystem::remove(sp3_path);
 }
 
 TEST(PPPTest, PreciseProductsInterpolateAtClockOnlyTimestampUsesSP3Bracket) {

@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/signals.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -240,6 +241,16 @@ inline int worstStandardizedResidualRow(const Eigen::VectorXd& innovations,
         }
     }
     return worst;
+}
+
+// A carrier arc does not continue across a data gap of more than 45 s: the
+// receiver has lost and reacquired the signal. In 30 s data that is one
+// missed epoch (G09 at 8 degrees, OBE4 2023-08-17 17:36: back after one
+// epoch 7.3 m off in phase, on both frequencies alike and within the
+// Melbourne-Wubbena limit, which moved a 17 h static solution 0.08 m).
+inline bool carrierArcBrokenByGap(bool has_last_carrier_time, double seconds_since_last) {
+    constexpr double kMaxCarrierGapSeconds = 45.0;
+    return has_last_carrier_time && std::abs(seconds_since_last) > kMaxCarrierGapSeconds;
 }
 
 inline double geometryFreeSlipThresholdMeters(
@@ -702,6 +713,79 @@ inline double ionosphereFreeAmbiguitySeedMeters(double carrier_phase_if_m,
     return carrier_phase_if_m - predicted_range_m;
 }
 
+// Receiver antenna calibration entry to use for `signal`. Many ANTEX
+// receiver antennas are calibrated for GPS and GLONASS only (all of
+// igs14.atx), and none names the P-code signals. Without an entry of its own
+// a signal takes, in this order: an entry on the same carrier frequency (L1 P
+// from G01, Galileo E1 or BeiDou B1C from G01, E5a from G05); the GPS L1
+// entry for the upper L band and the GPS L2 one below it, as RTKLIB and the
+// IGS analysis centres do. Without it the signal has no phase centre offset
+// at all: 0.1 m of height on a choke ring.
+template <typename Map>
+typename Map::const_iterator findReceiverAntexSignal(const Map& by_signal,
+                                                     SignalType signal) {
+    const auto exact = by_signal.find(signal);
+    if (exact != by_signal.end() || signal == SignalType::SIGNAL_TYPE_COUNT) {
+        return exact;
+    }
+    const double frequency_hz = signalFrequencyHz(signal);
+    if (frequency_hz <= 0.0) {
+        return by_signal.end();
+    }
+    for (auto it = by_signal.begin(); it != by_signal.end(); ++it) {
+        if (std::abs(signalFrequencyHz(it->first) - frequency_hz) < 1.0) {
+            return it;
+        }
+    }
+    constexpr double kUpperLBandHz = 1.4e9;
+    return by_signal.find(frequency_hz > kUpperLBandHz ? SignalType::GPS_L1CA
+                                                       : SignalType::GPS_L2C);
+}
+
+// Linear interpolation of an ANTEX NOAZI grid at `angle_deg` (zenith angle
+// of a receiver antenna, nadir angle of a satellite one), held at both ends
+// (RTKLIB interpvar()). Zero for an empty grid.
+inline double antexNoaziPcvMeters(const ReceiverPcvGrid& grid, double angle_deg) {
+    if (grid.noazi_m.empty() || grid.dzen_deg <= 0.0) {
+        return 0.0;
+    }
+    const double node = (angle_deg - grid.zen1_deg) / grid.dzen_deg;
+    const int last = static_cast<int>(grid.noazi_m.size()) - 1;
+    if (node <= 0.0) return grid.noazi_m.front();
+    if (node >= last) return grid.noazi_m.back();
+    const int i0 = static_cast<int>(std::floor(node));
+    const double frac = node - i0;
+    return grid.noazi_m[i0] * (1.0 - frac) + grid.noazi_m[i0 + 1] * frac;
+}
+
+// Nadir angle at the satellite (degrees): between the direction to the
+// receiver and the direction to the Earth's centre.
+inline double satelliteNadirAngleDeg(const Vector3d& satellite_position,
+                                     const Vector3d& receiver_position) {
+    const Vector3d to_receiver = receiver_position - satellite_position;
+    const double denominator = to_receiver.norm() * satellite_position.norm();
+    if (!(denominator > 0.0)) {
+        return 0.0;
+    }
+    const double cosine =
+        std::clamp(to_receiver.dot(-satellite_position) / denominator, -1.0, 1.0);
+    return std::acos(cosine) * 180.0 / M_PI;
+}
+
+// Receiver antenna phase centre variation of an ionosphere-free row: the
+// same combination of the two frequencies' variations as the observation
+// (c1 + c2 = 1); the first frequency's alone for a single-frequency row.
+inline double ionosphereFreeReceiverPcvMeters(double primary_pcv_m,
+                                              bool has_secondary,
+                                              double secondary_pcv_m,
+                                              double primary_coefficient,
+                                              double secondary_coefficient) {
+    if (!has_secondary) {
+        return primary_pcv_m;
+    }
+    return primary_coefficient * primary_pcv_m + secondary_coefficient * secondary_pcv_m;
+}
+
 inline bool broadcastClockIonosphereFree(bool use_ionosphere_free,
                                          bool precise_products_loaded,
                                          bool ssr_products_loaded,
@@ -770,6 +854,60 @@ inline const Observation* findBroadcastBeiDouSecondaryObservation(
     }
     if (!isBeiDou3Satellite(sat)) {
         return nullptr;
+    }
+    for (const char* tracking_code : {"6I", "6Q", "6X"}) {
+        const Observation* candidate =
+            obs.getRinexTrackingObservation(sat, tracking_code);
+        if (usable(candidate)) {
+            return candidate;
+        }
+    }
+    return nullptr;
+}
+
+// Precise BeiDou clocks (IGS MGEX analysis centres) refer to the B1I / B3I
+// ionosphere-free combination for BDS-2 as well as BDS-3. B1I / B2I, the
+// broadcast pair of BDS-2, differs from it by the satellite's B2I - B3I code
+// bias: metres in the code of every BDS-2 satellite.
+inline bool beiDouPreciseClockPair(const SatelliteId& sat,
+                                   bool precise_products_loaded,
+                                   bool ssr_products_loaded) {
+    return sat.system == GNSSSystem::BeiDou && precise_products_loaded &&
+           !ssr_products_loaded;
+}
+
+// BDS-2 satellites (C01-C16) are left out with precise clocks. With the CODE
+// MGEX products at OBE4 on 2022-11-24 they pull the kinematic height: 0.091 m
+// low with GPS + BDS-2 against 0.013 m with GPS alone, and the same with
+// their weight lowered (a sigma of 0.03 to 0.3 m added), with the
+// Wanninger-Beer code corrections, or without the satellite antenna's
+// horizontal offset. The cause is not known; BDS-3 is unaffected.
+inline bool beiDou2LeftOutWithPreciseClocks(const SatelliteId& sat,
+                                            bool precise_products_loaded,
+                                            bool ssr_products_loaded) {
+    return beiDouPreciseClockPair(sat, precise_products_loaded, ssr_products_loaded) &&
+           !isBeiDou3Satellite(sat);
+}
+
+// The B3I observation of any BeiDou satellite (see
+// findBroadcastBeiDouSecondaryObservation for why it may only be among the
+// per-tracking-code observations).
+inline const Observation* findBeiDouB3IObservation(
+    const ObservationData& obs, const SatelliteId& sat, bool require_carrier) {
+    const auto usable = [require_carrier](const Observation* candidate) {
+        if (candidate == nullptr || !candidate->valid) {
+            return false;
+        }
+        if (require_carrier) {
+            return candidate->has_carrier_phase &&
+                   std::isfinite(candidate->carrier_phase);
+        }
+        return candidate->has_pseudorange && candidate->pseudorange > 0.0 &&
+               std::isfinite(candidate->pseudorange);
+    };
+    const Observation* selected = obs.getObservation(sat, SignalType::BDS_B3I);
+    if (usable(selected)) {
+        return selected;
     }
     for (const char* tracking_code : {"6I", "6Q", "6X"}) {
         const Observation* candidate =

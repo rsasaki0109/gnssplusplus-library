@@ -51,9 +51,18 @@ def ecef_delta_to_enu(delta: Sequence[float], lat: float, lon: float) -> tuple[f
     return east, north, up
 
 
-def read_pos(path: Path) -> list[tuple[float, float, float, float]]:
-    """Return (seconds_since_first_epoch, x, y, z) rows of a libgnss++ .pos file."""
+CODE_ONLY_STATUS = 1  # .pos status of a code (SPP) solution
+
+
+def read_pos(path: Path, skip_code_only: bool = False) -> list[tuple[float, float, float, float]]:
+    """Return (seconds_since_first_epoch, x, y, z) rows of a libgnss++ .pos file.
+
+    With `skip_code_only`, rows whose status is the code solution are left
+    out: `gnss ppp` writes that solution where it has no PPP one, such as
+    after the last sample of the orbit product.
+    """
     rows: list[tuple[float, float, float, float]] = []
+    start: float | None = None
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip() or line.startswith(("%", "#")):
             continue
@@ -64,10 +73,13 @@ def read_pos(path: Path) -> list[tuple[float, float, float, float]]:
             x, y, z = (float(value) for value in fields[2:5])
         except (ValueError, IndexError):
             continue
+        if start is None:
+            start = week * 604800.0 + tow
+        if skip_code_only and len(fields) > 8 and fields[8] == str(CODE_ONLY_STATUS):
+            continue
         rows.append((week * 604800.0 + tow, x, y, z))
-    if not rows:
+    if not rows or start is None:
         raise SystemExit(f"no solution epochs in {path}")
-    start = rows[0][0]
     return [(t - start, x, y, z) for t, x, y, z in rows]
 
 
@@ -81,9 +93,9 @@ def convergence_seconds(times: Sequence[float], ok: Sequence[bool]) -> float | N
     return result
 
 
-def score_run(path: Path, reference: Sequence[float]) -> dict:
+def score_run(path: Path, reference: Sequence[float], skip_code_only: bool = False) -> dict:
     lat, lon = ecef_to_geodetic_rad(*reference)
-    rows = read_pos(path)
+    rows = read_pos(path, skip_code_only)
     times = [row[0] for row in rows]
     enu = [ecef_delta_to_enu((x - reference[0], y - reference[1], z - reference[2]), lat, lon)
            for _, x, y, z in rows]
@@ -138,7 +150,7 @@ def command_score(args: argparse.Namespace) -> int:
         label, _, path = item.partition("=")
         if not label or not path:
             raise SystemExit(f"--run expects LABEL=PATH, got {item!r}")
-        runs[label] = score_run(Path(path), reference)
+        runs[label] = score_run(Path(path), reference, args.skip_code_only)
     summary = {
         "reference_ecef_m": reference,
         "thresholds": {"horizontal_m": HORIZONTAL_THRESHOLD_M, "vertical_m": VERTICAL_THRESHOLD_M},
@@ -161,6 +173,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     score.add_argument("--reference-ecef", nargs=3, required=True, metavar=("X", "Y", "Z"))
     score.add_argument("--run", action="append", required=True, metavar="LABEL=POS")
     score.add_argument("--summary-json", required=True)
+    score.add_argument("--skip-code-only", action="store_true",
+                       help="Leave out the epochs whose status is the code (SPP) solution.")
     score.set_defaults(func=command_score)
     args = parser.parse_args(argv)
     return args.func(args)

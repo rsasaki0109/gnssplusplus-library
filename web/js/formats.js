@@ -50,7 +50,7 @@ export function l6Service(headBytes) {
 
 /**
  * Guess what a file is from its name and first bytes.
- * Returns one of: obs, nav, sp3, clk, atx, l6e, l6d, clas, l6, has, rtcm,
+ * Returns one of: obs, nav, sp3, clk, atx, bia, l6e, l6d, clas, l6, has, rtcm,
  * ubx, sbf, pos, vis, imu, csv, kml, json, toml, other.
  */
 export function sniffKind(name, headBytes) {
@@ -64,6 +64,8 @@ export function sniffKind(name, headBytes) {
   const text = new TextDecoder('latin1').decode(bytes.subarray(0, 4096));
   const firstLine = text.split(/\r?\n/, 1)[0] || '';
   if (firstLine.includes('ANTEX VERSION / SYST')) return 'atx';
+  // Bias-SINEX (code biases for --dcb): "%=BIA 1.00 COD ...".
+  if (firstLine.startsWith('%=BIA')) return 'bia';
   // Galileo E6-B (HAS) pages and BeiDou PPP-B2b messages as cssrlib logs
   // them: week, tow, PRN, ... and the page in hex, tab separated. B2b comes
   // from the BDS GEO satellites (PRN 59-63), HAS from Galileo (PRN 1-36).
@@ -87,6 +89,7 @@ export function sniffKind(name, headBytes) {
   if (/\.(sp3|eph)$/.test(lower)) return 'sp3';
   if (/\.clk(_\d+s)?$/.test(lower)) return 'clk';
   if (/\.atx$/.test(lower)) return 'atx';
+  if (/\.(bia|bsx)$/.test(lower)) return 'bia';
   if (/\.l6$/.test(lower)) return 'l6';
   if (/\.sbf$/.test(lower)) return 'sbf';
   if (/\.csv$/.test(lower)) return 'csv';

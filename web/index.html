@@ -111,6 +111,8 @@
               <select name="b2bLog" data-kinds="b2b"></select></label>
             <label data-show="ppp">Antenna model (ANTEX) <span class="opt">optional</span>
               <select name="antex" data-kinds="atx" data-optional></select></label>
+            <label data-show="ppp" data-show-corr="products">Code biases (Bias-SINEX) <span class="opt">optional, with SP3 / CLK</span>
+              <select name="dcb" data-kinds="bia" data-optional></select></label>
             <p class="hint" data-show="ppp" data-show-corr="has-idd has-sis">Galileo HAS gives float PPP (no phase biases, so no ambiguity resolution) with GPS and Galileo; use the broadcast NAV of the same day, with Galileo I/NAV. East Asia and the Pacific (90°E–180°E) are outside its service area.</p>
             <p class="hint" data-show="ppp" data-show-corr="b2b">BeiDou PPP-B2b gives float PPP with GPS and BDS-3 over China and the Asia-Pacific. The NAV must be RINEX 4 with BeiDou B-CNAV1 (CNV1) records of the same time, such as the receiver's own; add an ANTEX file for the BDS antenna offsets.</p>
             <p class="hint" data-show="ppp" data-show-corr="madoca clas">QZSS L6 logs are the 250-byte frames of an L6 receiver or the hourly files of the QZSS archive; use the broadcast NAV of the same day.</p>

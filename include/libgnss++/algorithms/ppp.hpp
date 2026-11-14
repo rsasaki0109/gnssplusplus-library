@@ -32,20 +32,21 @@ struct BdsB2bUpdate;
 /// centre-of-mass positions (as delivered by SP3) to the antenna phase
 /// centre. Body frame uses ANTEX semantics: x = north-of-antenna,
 /// y = east-of-antenna, z = up-of-antenna ≡ boresight toward Earth.
-struct SatelliteAntexEntry {
-    SatelliteId satellite;
-    GNSSTime valid_from;
-    GNSSTime valid_until;
-    std::map<SignalType, Vector3d> body_offsets_m;
-};
-
-// Receiver antenna phase-centre variation (NOAZI elevation grid) for one
-// signal, used by the est-stec per-frequency path.
+// Antenna phase-centre variation (NOAZI grid) for one signal: against the
+// zenith angle for a receiver antenna, the nadir angle for a satellite one.
 struct ReceiverPcvGrid {
     double zen1_deg = 0.0;
     double zen2_deg = 90.0;
     double dzen_deg = 5.0;
     std::vector<double> noazi_m;  // PCV at each zenith node (metres)
+};
+
+struct SatelliteAntexEntry {
+    SatelliteId satellite;
+    GNSSTime valid_from;
+    GNSSTime valid_until;
+    std::map<SignalType, Vector3d> body_offsets_m;
+    std::map<SignalType, ReceiverPcvGrid> pcv;  ///< against the nadir angle
 };
 
 struct MadocaL6dShadowStatus {
@@ -764,6 +765,7 @@ private:
     // available. Sign matches RTKLIB antmodel(): the value is added to the
     // modeled range (equivalently subtracted from the observable).
     double receiverAntennaPcvMeters(SignalType signal, double elevation_rad) const;
+    bool receiverAntexFallbackAllowed() const;
     double clasReceiverAntennaRangeCorrectionMeters(
         SignalType signal,
         double azimuth_rad,

@@ -1,0 +1,144 @@
+# Static float PPP of four EPN stations for one day, with everything in one
+# reference frame: IGS final orbits and clocks (IGS20), igs20.atx, and the
+# stations' coordinates of that day in an EPN daily solution (IGS20).
+# Not a README row; see docs/reproduce.md#epn-ppp.
+#
+# The mgex-ppp lane compares IGS14 products with coordinates of the EPN
+# reprocessing in IGS20, which agree to about a centimetre only. This lane
+# gates at the centimetre.
+#
+# Inputs (public, not redistributed here), all in the --epn-data-root
+# directory:
+# - {OBE400DEU,WTZR00DEU,MATE00ITA,ONSA00SWE}_R_20232290000_01D_30S_MO.rnx:
+#   the daily observations of 2023-08-17 from
+#   https://igs.bkg.bund.de/root_ftp/IGS/obs/2023/229/ (.crx.gz there:
+#   gunzip, then Hatanaka-decompress with crx2rnx);
+# - BRDC00IGS_R_20232290000_01D_MN.rnx from
+#   https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2023/229/ (gunzip);
+# - IGS0OPSFIN_20232290000_01D_{15M_ORB.SP3,30S_CLK.CLK} from
+#   https://igs.bkg.bund.de/root_ftp/IGS/products/2275/ (gunzip);
+# - igs20.atx: the immutable IGS archive copy
+#   https://files.igs.org/pub/station/general/pcv_archive/igs20_2425.atx.gz,
+#   gunzipped (SHA-256 8715268e17e09e5447f4949d67cbd067e7f0f33d48dd698aafe14f5cffb26de2).
+#
+# Reference: BKG0EPNFIN_20232290000_01D_01D_SOL.SNX
+# (https://igs.bkg.bund.de/root_ftp/EUREF/products/2275/), sigmas below 1 mm.
+# IGS0OPSFIN is GPS-only, so the other constellations are dropped. Its orbit
+# samples end at 23:45: the last 15 minutes of the day have no PPP solution
+# (gnss ppp writes its code solution there) and are not scored.
+#
+# Antennas: OBE4 SEPCHOKE_B3E6 NONE, WTZR LEIAR25.R3 LEIT, MATE LEIAR20 NONE,
+# ONSA AOAD/M_B OSOD. Before the antenna phase centre variations were applied
+# (2026-11-14) the heights were -25, -5, -34 and -27 mm.
+
+[lane]
+name = "epn-ppp"
+status = "ready"
+title = "Static float PPP with IGS final SP3/CLK: four EPN stations, one day, vs the EPN daily coordinates"
+readme_row = "(docs) Precise-product PPP: four stations, 24 h static, one reference frame"
+runtime_estimate = "~2 min"
+docs = "docs/reproduce.md"
+
+[datasets.epn]
+required = [
+  "OBE400DEU_R_20232290000_01D_30S_MO.rnx",
+  "WTZR00DEU_R_20232290000_01D_30S_MO.rnx",
+  "MATE00ITA_R_20232290000_01D_30S_MO.rnx",
+  "ONSA00SWE_R_20232290000_01D_30S_MO.rnx",
+  "BRDC00IGS_R_20232290000_01D_MN.rnx",
+  "IGS0OPSFIN_20232290000_01D_15M_ORB.SP3",
+  "IGS0OPSFIN_20232290000_01D_30S_CLK.CLK",
+  "igs20.atx",
+]
+
+[tools.igs_products]
+repository = "https://igs.bkg.bund.de/root_ftp/IGS/"
+path = "obs/2023/229/{OBE400DEU,WTZR00DEU,MATE00ITA,ONSA00SWE}_R_20232290000_01D_30S_MO.crx.gz, BRDC/2023/229/BRDC00IGS_R_20232290000_01D_MN.rnx.gz, products/2275/IGS0OPSFIN_20232290000_01D_{15M_ORB.SP3,30S_CLK.CLK}.gz"
+note = "IGS observations and final products (public); download locally, do not commit."
+
+[[steps]]
+name = "gnss-ppp-epn-{station}"
+foreach = [
+  { station = "obe4", file = "OBE400DEU" },
+  { station = "wtzr", file = "WTZR00DEU" },
+  { station = "mate", file = "MATE00ITA" },
+  { station = "onsa", file = "ONSA00SWE" },
+]
+argv = [
+  "{bin:gnss_ppp}",
+  "--obs", "{epn_root}/{file}_R_20232290000_01D_30S_MO.rnx",
+  "--nav", "{epn_root}/BRDC00IGS_R_20232290000_01D_MN.rnx",
+  "--sp3", "{epn_root}/IGS0OPSFIN_20232290000_01D_15M_ORB.SP3",
+  "--clk", "{epn_root}/IGS0OPSFIN_20232290000_01D_30S_CLK.CLK",
+  "--antex", "{epn_root}/igs20.atx",
+  "--static",
+  "--out", "{work_dir}/epn_{station}_static.pos",
+  "--summary-json", "{work_dir}/epn_{station}_static_run.json",
+  "--quiet",
+]
+
+[[steps]]
+name = "gnss-ppp-epn-obe4-kinematic"
+argv = [
+  "{bin:gnss_ppp}",
+  "--obs", "{epn_root}/OBE400DEU_R_20232290000_01D_30S_MO.rnx",
+  "--nav", "{epn_root}/BRDC00IGS_R_20232290000_01D_MN.rnx",
+  "--sp3", "{epn_root}/IGS0OPSFIN_20232290000_01D_15M_ORB.SP3",
+  "--clk", "{epn_root}/IGS0OPSFIN_20232290000_01D_30S_CLK.CLK",
+  "--antex", "{epn_root}/igs20.atx",
+  "--kinematic",
+  "--out", "{work_dir}/epn_obe4_kinematic.pos",
+  "--summary-json", "{work_dir}/epn_obe4_kinematic_run.json",
+  "--quiet",
+]
+
+[[steps]]
+name = "score-{station}"
+foreach = [
+  { station = "obe4", x = "4186704.2222", y = "834903.7671", z = "4723664.9260" },
+  { station = "wtzr", x = "4075580.2442", y = "931854.1155", z = "4801568.3116" },
+  { station = "mate", x = "4641949.2135", y = "1393045.7782", z = "4133287.7299" },
+  { station = "onsa", x = "3370658.2751", y = "711877.4107", z = "5349787.1359" },
+]
+argv = [
+  "{python}", "scripts/experiments/has/has_idd_ppp_reproduce.py", "score",
+  "--reference-ecef", "{x}", "{y}", "{z}",
+  "--run", "static={work_dir}/epn_{station}_static.pos",
+  "--summary-json", "{work_dir}/summary_{station}.json",
+  "--skip-code-only",
+]
+
+[[steps]]
+name = "score-obe4-kinematic"
+argv = [
+  "{python}", "scripts/experiments/has/has_idd_ppp_reproduce.py", "score",
+  "--reference-ecef", "4186704.2222", "834903.7671", "4723664.9260",
+  "--run", "kinematic={work_dir}/epn_obe4_kinematic.pos",
+  "--summary-json", "{work_dir}/summary_obe4_kinematic.json",
+  "--skip-code-only",
+]
+
+# Gates (reproduced 2026-11-14, Linux gcc Release).
+[[metrics]]
+name = "epn {station} static H after 24 h (m)"
+source = "{work_dir}/summary_{station}.json"
+path = "runs.static.final.h_m"
+max = 0.025
+readme = "docs/reproduce.md"
+foreach = [{ station = "obe4" }, { station = "wtzr" }, { station = "mate" }, { station = "onsa" }]
+
+[[metrics]]
+name = "epn {station} static |U| after 24 h (m)"
+source = "{work_dir}/summary_{station}.json"
+path = "runs.static.final.abs_up_m"
+max = 0.035
+readme = "docs/reproduce.md"
+foreach = [{ station = "obe4" }, { station = "wtzr" }, { station = "mate" }, { station = "onsa" }]
+
+[[metrics]]
+name = "epn obe4 kinematic RMS after the first hour, {field} (m)"
+source = "{work_dir}/summary_obe4_kinematic.json"
+path = "runs.kinematic.rms_after_60min.{field}"
+max = 0.06
+readme = "docs/reproduce.md"
+foreach = [{ field = "h_m" }, { field = "up_m" }]

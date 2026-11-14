@@ -87,10 +87,13 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         const bool beidou_b1i_b3i =
             sat.system == GNSSSystem::BeiDou &&
             (broadcast_clock || bds_b2b_corrections_);
+        const bool beidou_precise_pair =
+            !require_coherent_ssr_ && ppp_config_.use_ionosphere_free &&
+            beiDouPreciseClockPair(sat, precise_products_loaded_, ssr_products_loaded_);
         const Observation* primary =
             findObservationForSignals(
                 obs, sat,
-                beidou_b1i_b3i ? broadcastBeiDouPrimarySignals()
+                (beidou_b1i_b3i || beidou_precise_pair) ? broadcastBeiDouPrimarySignals()
                                : primarySignals(sat.system));
         if (require_coherent_ssr_) {
             primary =
@@ -117,6 +120,10 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         // (e.g. C59 ~270 km on the MIZU sample), which destabilises the filter.
         // SPP already gates them (spp.cpp validateObservations); mirror that here.
         if (signal_policy::isBeiDouGeoSatellite(sat)) {
+            continue;
+        }
+        if (beidou_precise_pair &&
+            beiDou2LeftOutWithPreciseClocks(sat, precise_products_loaded_, ssr_products_loaded_)) {
             continue;
         }
 
@@ -181,7 +188,9 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             continue;
         }
         const Observation* secondary =
-            beidou_b1i_b3i
+            beidou_precise_pair
+                ? findBeiDouB3IObservation(obs, sat, false)
+            : beidou_b1i_b3i
                 ? findBroadcastBeiDouSecondaryObservation(obs, sat, false)
                 : findObservationForSignals(
                       obs, sat,
