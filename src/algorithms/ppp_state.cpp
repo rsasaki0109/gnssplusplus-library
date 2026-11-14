@@ -1175,6 +1175,14 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
         }
 
         auto& ambiguity = ambiguity_states_[satellite];
+        // A satellite back after a data gap is a new arc. Many receivers
+        // align a new arc's carrier with its code and set no loss-of-lock
+        // flag, so the geometry-free and Melbourne-Wubbena tests below can
+        // pass hours later (BDS C32, OBE4 2022-11-24: back after 12 h, the
+        // 24 h static solution moved 0.25 m).
+        const bool gap_slip = ppp_internal::carrierArcBrokenByGap(
+            ambiguity.has_last_carrier_time,
+            ambiguity.has_last_carrier_time ? obs.time - ambiguity.last_carrier_time : 0.0);
         bool lli_slip = false;
         for (const auto& measurement : obs.observations) {
             if (!(measurement.satellite == satellite) ||
@@ -1214,8 +1222,14 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
                                           ssr_products_loaded_,
                                           dcb_products_loaded_) ||
              (bds_b2b_corrections_ && ppp_config_.use_ionosphere_free));
+        const bool beidou_precise_pair =
+            !require_coherent_ssr_ && ppp_config_.use_ionosphere_free &&
+            ppp_internal::beiDouPreciseClockPair(
+                satellite, precise_products_loaded_, ssr_products_loaded_);
         const Observation* secondary =
             !use_combination_slip_detection ? nullptr
+            : beidou_precise_pair
+                ? ppp_internal::findBeiDouB3IObservation(obs, satellite, true)
             : broadcast_beidou3
                 ? findBroadcastBeiDouSecondaryObservation(obs, satellite, true)
                 : findCarrierObservationForSignals(obs, satellite, secondary_candidates);
@@ -1327,9 +1341,12 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
             gf_slip = !madoca_gf_slipped_signals.empty();
         }
 
-        if (lli_slip || gf_slip || mw_slip || discnt_slip) {
+        if (lli_slip || gf_slip || mw_slip || discnt_slip || gap_slip) {
             if (pppDebugEnabled()) {
                 std::string reason;
+                if (gap_slip) {
+                    reason += "gap+";
+                }
                 if (lli_slip) {
                     reason += "lli";
                 }
@@ -1372,6 +1389,8 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
         }
 
         auto& updated_ambiguity = ambiguity_states_[satellite];
+        updated_ambiguity.last_carrier_time = obs.time;
+        updated_ambiguity.has_last_carrier_time = true;
         if (have_gf) {
             updated_ambiguity.last_geometry_free_m = gf_m;
             updated_ambiguity.has_last_geometry_free = true;

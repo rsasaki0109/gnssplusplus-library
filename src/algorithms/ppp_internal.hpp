@@ -243,6 +243,13 @@ inline int worstStandardizedResidualRow(const Eigen::VectorXd& innovations,
     return worst;
 }
 
+// A carrier arc does not continue across a data gap of more than two
+// minutes: the receiver has lost and reacquired the signal.
+inline bool carrierArcBrokenByGap(bool has_last_carrier_time, double seconds_since_last) {
+    constexpr double kMaxCarrierGapSeconds = 120.0;
+    return has_last_carrier_time && std::abs(seconds_since_last) > kMaxCarrierGapSeconds;
+}
+
 inline double geometryFreeSlipThresholdMeters(
     bool madoca_per_frequency,
     double configured_threshold_m) {
@@ -844,6 +851,47 @@ inline const Observation* findBroadcastBeiDouSecondaryObservation(
     }
     if (!isBeiDou3Satellite(sat)) {
         return nullptr;
+    }
+    for (const char* tracking_code : {"6I", "6Q", "6X"}) {
+        const Observation* candidate =
+            obs.getRinexTrackingObservation(sat, tracking_code);
+        if (usable(candidate)) {
+            return candidate;
+        }
+    }
+    return nullptr;
+}
+
+// Precise BeiDou clocks (IGS MGEX analysis centres) refer to the B1I / B3I
+// ionosphere-free combination for BDS-2 as well as BDS-3. B1I / B2I, the
+// broadcast pair of BDS-2, differs from it by the satellite's B2I - B3I code
+// bias: metres in the code of every BDS-2 satellite.
+inline bool beiDouPreciseClockPair(const SatelliteId& sat,
+                                   bool precise_products_loaded,
+                                   bool ssr_products_loaded) {
+    return sat.system == GNSSSystem::BeiDou && precise_products_loaded &&
+           !ssr_products_loaded;
+}
+
+// The B3I observation of any BeiDou satellite (see
+// findBroadcastBeiDouSecondaryObservation for why it may only be among the
+// per-tracking-code observations).
+inline const Observation* findBeiDouB3IObservation(
+    const ObservationData& obs, const SatelliteId& sat, bool require_carrier) {
+    const auto usable = [require_carrier](const Observation* candidate) {
+        if (candidate == nullptr || !candidate->valid) {
+            return false;
+        }
+        if (require_carrier) {
+            return candidate->has_carrier_phase &&
+                   std::isfinite(candidate->carrier_phase);
+        }
+        return candidate->has_pseudorange && candidate->pseudorange > 0.0 &&
+               std::isfinite(candidate->pseudorange);
+    };
+    const Observation* selected = obs.getObservation(sat, SignalType::BDS_B3I);
+    if (usable(selected)) {
+        return selected;
     }
     for (const char* tracking_code : {"6I", "6Q", "6X"}) {
         const Observation* candidate =

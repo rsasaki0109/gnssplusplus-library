@@ -508,6 +508,8 @@ struct PPPAmbiguityInfo {
     bool has_last_carrier_ionosphere = false;
     double last_melbourne_wubbena_m = 0.0;
     bool has_last_melbourne_wubbena = false;
+    GNSSTime last_carrier_time;           ///< last epoch with a carrier phase
+    bool has_last_carrier_time = false;
     GNSSTime last_slip_time;
     bool has_last_slip_time = false;
     double mw_sum_cycles = 0.0;
