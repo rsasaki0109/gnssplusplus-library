@@ -243,10 +243,13 @@ inline int worstStandardizedResidualRow(const Eigen::VectorXd& innovations,
     return worst;
 }
 
-// A carrier arc does not continue across a data gap of more than two
-// minutes: the receiver has lost and reacquired the signal.
+// A carrier arc does not continue across a data gap of more than 45 s: the
+// receiver has lost and reacquired the signal. In 30 s data that is one
+// missed epoch (G09 at 8 degrees, OBE4 2023-08-17 17:36: back after one
+// epoch 7.3 m off in phase, on both frequencies alike and within the
+// Melbourne-Wubbena limit, which moved a 17 h static solution 0.08 m).
 inline bool carrierArcBrokenByGap(bool has_last_carrier_time, double seconds_since_last) {
-    constexpr double kMaxCarrierGapSeconds = 120.0;
+    constexpr double kMaxCarrierGapSeconds = 45.0;
     return has_last_carrier_time && std::abs(seconds_since_last) > kMaxCarrierGapSeconds;
 }
 
