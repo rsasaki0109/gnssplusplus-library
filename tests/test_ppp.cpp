@@ -175,6 +175,32 @@ TEST(PPPSingleFrequency, PreciseProductIonosphereFreeDropsSingleFrequencySatelli
     EXPECT_FALSE(ppp_internal::dropSingleFrequencyPreciseProductSatellite(true, true, true));
 }
 
+TEST(PPPAmbiguitySeed, IonosphereFreeSeedIsPhaseMinusCode) {
+    // The predicted range is 13 m off (error of the predicted receiver
+    // clock); the seed must not carry it.
+    const double code_m = 22000000.0;
+    const double phase_m = code_m - 7.25;
+    const double predicted_m = code_m + 13.0;
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::ionosphereFreeAmbiguitySeedMeters(phase_m, code_m, predicted_m), -7.25);
+    // With that seed the phase residual equals the code residual, so the
+    // pre-fit gate sees no difference between them.
+    const double seed = ppp_internal::ionosphereFreeAmbiguitySeedMeters(phase_m, code_m, predicted_m);
+    const double code_residual = code_m - predicted_m;
+    const double phase_residual = phase_m - (predicted_m + seed);
+    EXPECT_NEAR(
+        ppp_internal::phaseResidualForInnovationGate(phase_residual, code_residual, false),
+        0.0, 1e-6);
+    // No usable code: the predicted range is the only reference.
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::ionosphereFreeAmbiguitySeedMeters(phase_m, 0.0, predicted_m),
+        phase_m - predicted_m);
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::ionosphereFreeAmbiguitySeedMeters(
+            phase_m, std::numeric_limits<double>::quiet_NaN(), predicted_m),
+        phase_m - predicted_m);
+}
+
 TEST(PPPInnovationGate, PhaseIsTestedAgainstTheCodeRowOfTheSameSatellite) {
     // A 12 m error of the predicted receiver clock is in both rows: it is
     // not a phase outlier.
