@@ -663,10 +663,31 @@ inline std::vector<SignalType> secondarySignals(GNSSSystem system) {
 // ionosphere-free ambiguity state, so a satellite that drops its second
 // frequency for a few epochs corrupts that ambiguity (metres) when the second
 // frequency returns. RTKLIB/MADOCALIB (IONOOPT_IFLC) skip such a satellite;
-// do the same. Broadcast and SSR paths keep their own single-frequency rows.
+// do the same. The same holds with SSR corrections (a satellite whose L2 is
+// not acquired yet after rising: 14 m when it arrived on the Kamakura JPL
+// GDGPS hour), unless the delay of the row is estimated or taken from IONEX.
+// The broadcast-only path keeps its single-frequency rows (broadcast model).
 inline bool dropSingleFrequencyPreciseProductSatellite(bool precise_products_loaded,
-                                                       bool ssr_products_loaded) {
-    return precise_products_loaded && !ssr_products_loaded;
+                                                       bool ssr_products_loaded,
+                                                       bool ionosphere_delay_modelled = false) {
+    if (ssr_products_loaded) {
+        return !ionosphere_delay_modelled;
+    }
+    return precise_products_loaded;
+}
+
+// The value the pre-fit phase gate tests. The pre-fit residual of every row
+// holds the error of the predicted receiver clock, common to all satellites:
+// metres to tens of metres (12 m on the Kamakura JPL GDGPS hours), so a 10 m
+// floor on the phase residual itself dropped the phase of every satellite for
+// most of a static run. The code row of the same satellite carries the same
+// clock error, so the phase is tested against it. The MADOCA per-frequency
+// path keeps the MADOCALIB test of the residual itself (maxinno).
+inline double phaseResidualForInnovationGate(double phase_residual_m,
+                                             double code_residual_m,
+                                             bool madoca_innovation_gate) {
+    return madoca_innovation_gate ? phase_residual_m
+                                  : phase_residual_m - code_residual_m;
 }
 
 inline bool broadcastClockIonosphereFree(bool use_ionosphere_free,
