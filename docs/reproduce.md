@@ -37,7 +37,7 @@ samples, final products). Real-time equivalent numbers come from runs with
 | (docs, not a README row) Galileo HAS float PPP via SIS (E6-B pages) | `has-sis-ppp` | ready | ~1 min | **Pass.** Decoder (432 MT1 messages per hour, no CRC failure) and static Kamakura 2025-02-15 hour; indicative only (outside the HAS service area); see [has-sis-ppp](#has-sis-ppp-galileo-has-sis-float-ppp-2026-11-07) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) BeiDou PPP-B2b float PPP | `bds-b2b-ppp` | ready | ~30 s | **Pass.** Decoder (3600 C59 messages per hour, no CRC failure or IOD mismatch) and static Kamakura 2025-02-15 / 2025-08-21 hours: horizontal below 0.2 m from 16 / 18 min, within 0.08 m horizontal / 0.32 m vertical after one hour; see [bds-b2b-ppp](#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07) and [BeiDou PPP-B2b support](bds_ppp_b2b.md) |
 | (docs, not a README row) Precise-product PPP with IGS final SP3/CLK | `igs-final-ppp` | ready | ~2 min | **Pass.** Static Kamakura 2025-02-15 / 2025-08-21 hours and OBE4 2023-08-17 hour hours within 0.16 m horizontal / 0.23 m vertical after one hour (OBE4 0.03 / 0.04 m), level with or better than RTKLIB demo5 on the same inputs; see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01) |
-| (docs, not a README row) Precise-product PPP, multi-GNSS station-day | `mgex-ppp` | ready | ~2 min | **Pass.** OBE4 2022-11-24 with CODE MGEX products: static 0.017 m horizontal / 0.008 m vertical after 24 h, kinematic RMS 0.023 / 0.030 m after the first hour, against the EPN daily coordinate; see [mgex-ppp](#mgex-ppp-multi-gnss-station-day-2026-11-14) |
+| (docs, not a README row) Precise-product PPP, multi-GNSS station-day | `mgex-ppp` | ready | ~2 min | **Pass.** OBE4 2022-11-24 with CODE MGEX products: static 0.014 m horizontal / 0.005 m vertical after 24 h, kinematic RMS 0.019 / 0.022 m after the first hour, against the EPN daily coordinate; see [mgex-ppp](#mgex-ppp-multi-gnss-station-day-2026-11-14) |
 | (docs, not a README row) Precise-product PPP, four stations in one reference frame | `epn-ppp` | ready | ~2 min | **Pass.** OBE4, WTZR, MATE and ONSA 2023-08-17 with IGS final products: static within 0.011 m horizontal / 0.017 m vertical of the EPN daily coordinates, OBE4 kinematic RMS 0.041 / 0.035 m after the first hour; see [epn-ppp](#epn-ppp-four-stations-in-one-reference-frame-2026-11-14) |
 
 Runtimes were measured on a 12-thread Windows 11 workstation with an MSVC
@@ -1420,7 +1420,7 @@ off with the BDS-2 satellites (GEO included).
 --antex` on the OBE4 (Oberpfaffenhofen) daily observations of 2022-11-24
 (30 s) with the CODE MGEX orbits and clocks, static and kinematic, and
 scores each `.pos` against the station's coordinate of that day in the EPN
-daily solution. GPS, GLONASS, Galileo and BeiDou are used. A third run adds
+daily solution. GPS, GLONASS, Galileo and BeiDou (BDS-3) are used. A third run adds
 the day's observable-specific code biases (`--dcb com22374.bia`), where GPS
 takes `C1C` with its bias instead of the `C1W` range.
 
@@ -1434,9 +1434,9 @@ Local result (Linux gcc Release, 2026-11-14, 75 s):
 
 | Run | H / U at 60 min | 120 min | after 24 h | RMS after the first hour (E / N / U) |
 |---|---|---|---|---|
-| static | 0.055 / -0.027 m | 0.035 / -0.018 m | **0.017 / -0.008 m** | 0.014 / 0.016 / 0.013 m |
-| static, `--dcb` | 0.060 / -0.031 m | 0.037 / -0.022 m | **0.018 / -0.008 m** | 0.016 / 0.017 / 0.014 m |
-| kinematic | 0.051 / -0.044 m | 0.038 / -0.026 m | 0.020 / -0.015 m | **0.014 / 0.019 / 0.030 m** |
+| static | 0.045 / -0.017 m | 0.028 / -0.013 m | **0.014 / -0.005 m** | 0.010 / 0.014 / 0.009 m |
+| static, `--dcb` | 0.049 / -0.020 m | 0.030 / -0.017 m | **0.015 / -0.005 m** | 0.012 / 0.014 / 0.010 m |
+| kinematic | 0.039 / -0.026 m | 0.031 / -0.018 m | 0.019 / -0.004 m | **0.012 / 0.015 / 0.022 m** |
 
 The lane gates the static runs at H <= 0.05 m and |U| <= 0.06 m after 24 h,
 the static run at H <= 0.10 m after 60 min and 0.06 m after 120 min, and the
@@ -1455,10 +1455,15 @@ CODE clocks refer to it (the day's `.bia` has `C2I` and `C6I` only, and their
 ionosphere-free combination is zero). A satellite back after a data gap of
 more than two minutes starts a new carrier arc: C32 came back after 12 h
 with no loss-of-lock flag and passed the geometry-free test, which moved the
-BeiDou-only static solution 0.25 m. The kinematic height is still 0.026 m low
-on average with all four constellations: GPS + Galileo is 0.008 m low,
-GPS + BDS-3 0.030 m and GPS + BDS-2 0.091 m, so that part comes with BDS-2
-(C06-C16) and is open.
+BeiDou-only static solution 0.25 m.
+
+BDS-2 (C06-C16 here) is left out with precise clocks. With it the kinematic
+height was 0.026 m low on average with all four constellations (GPS +
+Galileo 0.008 m, GPS + BDS-3 0.030 m, GPS + BDS-2 0.091 m); without it
+0.016 m. Lowering the BDS-2 weight (a sigma of 0.03 to 0.3 m added), the
+Wanninger-Beer code corrections and dropping the satellite antenna's
+horizontal offset did not change that, so the cause is in the model and
+open.
 
 
 ## epn-ppp: four stations in one reference frame (2026-11-14)
