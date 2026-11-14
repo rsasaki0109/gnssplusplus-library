@@ -657,8 +657,14 @@ Vector3d PPPProcessor::calculateReceiverAntennaOffsetEcef(
         const auto antenna_it =
             receiver_antex_offsets_.find(normalizeAntennaType(ppp_config_.receiver_antenna_type));
         if (antenna_it != receiver_antex_offsets_.end()) {
+            const bool fallback = receiverAntexFallbackAllowed();
+            auto findSignal = [fallback](const std::map<SignalType, Vector3d>& by_signal,
+                                         SignalType signal) {
+                return fallback ? ppp_internal::findReceiverAntexSignal(by_signal, signal)
+                                : by_signal.find(signal);
+            };
             auto signal_offset = [&](SignalType signal) -> Vector3d {
-                const auto it = antenna_it->second.find(signal);
+                const auto it = findSignal(antenna_it->second, signal);
                 return it != antenna_it->second.end() ? it->second : Vector3d::Zero();
             };
             if (!ppp_config_.use_ionosphere_free ||
@@ -676,6 +682,12 @@ Vector3d PPPProcessor::calculateReceiverAntennaOffsetEcef(
     return enu2ecef(offset_enu, latitude_rad, longitude_rad);
 }
 
+bool PPPProcessor::receiverAntexFallbackAllowed() const {
+    // MADOCALIB and CLASLIB leave an uncalibrated signal without an offset;
+    // those profiles are compared with them, so they keep doing the same.
+    return !require_coherent_ssr_ && !ppp_config_.use_clas_osr_filter;
+}
+
 double PPPProcessor::receiverAntennaPcvMeters(SignalType signal,
                                               double elevation_rad) const {
     if (!receiver_antex_loaded_ || ppp_config_.receiver_antenna_type.empty()) {
@@ -686,7 +698,9 @@ double PPPProcessor::receiverAntennaPcvMeters(SignalType signal,
     if (ant_it == receiver_antex_pcv_.end()) {
         return 0.0;
     }
-    const auto sig_it = ant_it->second.find(signal);
+    const auto sig_it = (receiverAntexFallbackAllowed()
+                            ? ppp_internal::findReceiverAntexSignal(ant_it->second, signal)
+                            : ant_it->second.find(signal));
     if (sig_it == ant_it->second.end()) {
         return 0.0;
     }

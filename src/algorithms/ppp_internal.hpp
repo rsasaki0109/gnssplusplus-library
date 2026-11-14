@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/signals.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -700,6 +701,35 @@ inline double ionosphereFreeAmbiguitySeedMeters(double carrier_phase_if_m,
         return carrier_phase_if_m - pseudorange_if_m;
     }
     return carrier_phase_if_m - predicted_range_m;
+}
+
+// Receiver antenna calibration entry to use for `signal`. Many ANTEX
+// receiver antennas are calibrated for GPS and GLONASS only (all of
+// igs14.atx), and none names the P-code signals. Without an entry of its own
+// a signal takes, in this order: an entry on the same carrier frequency (L1 P
+// from G01, Galileo E1 or BeiDou B1C from G01, E5a from G05); the GPS L1
+// entry for the upper L band and the GPS L2 one below it, as RTKLIB and the
+// IGS analysis centres do. Without it the signal has no phase centre offset
+// at all: 0.1 m of height on a choke ring.
+template <typename Map>
+typename Map::const_iterator findReceiverAntexSignal(const Map& by_signal,
+                                                     SignalType signal) {
+    const auto exact = by_signal.find(signal);
+    if (exact != by_signal.end() || signal == SignalType::SIGNAL_TYPE_COUNT) {
+        return exact;
+    }
+    const double frequency_hz = signalFrequencyHz(signal);
+    if (frequency_hz <= 0.0) {
+        return by_signal.end();
+    }
+    for (auto it = by_signal.begin(); it != by_signal.end(); ++it) {
+        if (std::abs(signalFrequencyHz(it->first) - frequency_hz) < 1.0) {
+            return it;
+        }
+    }
+    constexpr double kUpperLBandHz = 1.4e9;
+    return by_signal.find(frequency_hz > kUpperLBandHz ? SignalType::GPS_L1CA
+                                                       : SignalType::GPS_L2C);
 }
 
 // Linear interpolation of an ANTEX NOAZI grid at `angle_deg` (zenith angle
