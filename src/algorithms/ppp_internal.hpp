@@ -702,6 +702,50 @@ inline double ionosphereFreeAmbiguitySeedMeters(double carrier_phase_if_m,
     return carrier_phase_if_m - predicted_range_m;
 }
 
+// Linear interpolation of an ANTEX NOAZI grid at `angle_deg` (zenith angle
+// of a receiver antenna, nadir angle of a satellite one), held at both ends
+// (RTKLIB interpvar()). Zero for an empty grid.
+inline double antexNoaziPcvMeters(const ReceiverPcvGrid& grid, double angle_deg) {
+    if (grid.noazi_m.empty() || grid.dzen_deg <= 0.0) {
+        return 0.0;
+    }
+    const double node = (angle_deg - grid.zen1_deg) / grid.dzen_deg;
+    const int last = static_cast<int>(grid.noazi_m.size()) - 1;
+    if (node <= 0.0) return grid.noazi_m.front();
+    if (node >= last) return grid.noazi_m.back();
+    const int i0 = static_cast<int>(std::floor(node));
+    const double frac = node - i0;
+    return grid.noazi_m[i0] * (1.0 - frac) + grid.noazi_m[i0 + 1] * frac;
+}
+
+// Nadir angle at the satellite (degrees): between the direction to the
+// receiver and the direction to the Earth's centre.
+inline double satelliteNadirAngleDeg(const Vector3d& satellite_position,
+                                     const Vector3d& receiver_position) {
+    const Vector3d to_receiver = receiver_position - satellite_position;
+    const double denominator = to_receiver.norm() * satellite_position.norm();
+    if (!(denominator > 0.0)) {
+        return 0.0;
+    }
+    const double cosine =
+        std::clamp(to_receiver.dot(-satellite_position) / denominator, -1.0, 1.0);
+    return std::acos(cosine) * 180.0 / M_PI;
+}
+
+// Receiver antenna phase centre variation of an ionosphere-free row: the
+// same combination of the two frequencies' variations as the observation
+// (c1 + c2 = 1); the first frequency's alone for a single-frequency row.
+inline double ionosphereFreeReceiverPcvMeters(double primary_pcv_m,
+                                              bool has_secondary,
+                                              double secondary_pcv_m,
+                                              double primary_coefficient,
+                                              double secondary_coefficient) {
+    if (!has_secondary) {
+        return primary_pcv_m;
+    }
+    return primary_coefficient * primary_pcv_m + secondary_coefficient * secondary_pcv_m;
+}
+
 inline bool broadcastClockIonosphereFree(bool use_ionosphere_free,
                                          bool precise_products_loaded,
                                          bool ssr_products_loaded,

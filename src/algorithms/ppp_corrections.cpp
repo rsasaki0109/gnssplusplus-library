@@ -690,20 +690,10 @@ double PPPProcessor::receiverAntennaPcvMeters(SignalType signal,
     if (sig_it == ant_it->second.end()) {
         return 0.0;
     }
-    const ReceiverPcvGrid& grid = sig_it->second;
-    if (grid.noazi_m.empty() || grid.dzen_deg <= 0.0) {
-        return 0.0;
-    }
     // RTKLIB interpvar(): linear interpolation of the NOAZI grid at the zenith
     // angle, clamped at both ends.
-    const double zenith_deg = 90.0 - elevation_rad / kDegreesToRadians;
-    const double node = (zenith_deg - grid.zen1_deg) / grid.dzen_deg;
-    const int last = static_cast<int>(grid.noazi_m.size()) - 1;
-    if (node <= 0.0) return grid.noazi_m.front();
-    if (node >= last) return grid.noazi_m.back();
-    const int i0 = static_cast<int>(std::floor(node));
-    const double frac = node - i0;
-    return grid.noazi_m[i0] * (1.0 - frac) + grid.noazi_m[i0 + 1] * frac;
+    return ppp_internal::antexNoaziPcvMeters(
+        sig_it->second, 90.0 - elevation_rad / kDegreesToRadians);
 }
 
 double PPPProcessor::clasReceiverAntennaRangeCorrectionMeters(
@@ -1393,6 +1383,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         // 2.94 x (PCO_B1I - PCO_B3I), 0.8-1.1 m on BDS-3 MEO in igs20
         // (cssrlib antModelTx with the B3I reference signal). GPS rows use
         // the L1 / L2 reference frequencies themselves.
+        double satellite_pcv_m = 0.0;
         const bool b2b_bds_pco_difference =
             bds_b2b_corrections_ && !have_precise &&
             observation.satellite.system == GNSSSystem::BeiDou;
@@ -1423,6 +1414,22 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     if (reference_it == entry.body_offsets_m.end()) break;
                     pco_body_if -= reference_it->second;
                 }
+                // The phase centre variation with the nadir angle goes with
+                // the offset (same combination of the two frequencies).
+                const double nadir_deg = ppp_internal::satelliteNadirAngleDeg(
+                    sat_position, receiver_position);
+                const auto pcv_at = [&](SignalType signal) {
+                    const auto grid = entry.pcv.find(signal);
+                    return grid == entry.pcv.end()
+                        ? 0.0 : ppp_internal::antexNoaziPcvMeters(grid->second, nadir_deg);
+                };
+                satellite_pcv_m = ppp_internal::ionosphereFreeReceiverPcvMeters(
+                    pcv_at(observation.primary_signal),
+                    ppp_config_.use_ionosphere_free &&
+                        observation.secondary_signal != SignalType::SIGNAL_TYPE_COUNT,
+                    pcv_at(observation.secondary_signal),
+                    observation.primary_code_bias_coeff,
+                    observation.secondary_code_bias_coeff);
                 have_pco = true;
                 break;
             }
@@ -1697,6 +1704,29 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         receiverAntennaPcvMeters(extra.signal, observation.elevation);
                 }
             }
+        }
+
+        // Ionosphere-free rows: the receiver PCO is in the position shift
+        // (calculateReceiverAntennaOffsetEcef); the phase centre variation
+        // with the zenith angle was left out. It is the same combination of
+        // the two frequencies' variations: centimetres at low elevations on
+        // many antennas, which is centimetres in height (WTZR, LEIAR25.R3
+        // LEIT: +53 mm after 24 h with a 15 degree mask, +113 mm with 25).
+        if (ppp_config_.use_ionosphere_free && !coherent_madoca_receiver_antenna &&
+            !ppp_config_.use_clas_osr_filter) {
+            // Satellite antenna: set with its offset above (zero without one).
+            observation.rx_ant_corr_l1_m = satellite_pcv_m;
+        }
+        if (receiver_antex_loaded_ && ppp_config_.use_ionosphere_free &&
+            !coherent_madoca_receiver_antenna && !ppp_config_.use_clas_osr_filter &&
+            !ppp_config_.receiver_antenna_type.empty()) {
+            observation.rx_ant_corr_l1_m +=
+                ppp_internal::ionosphereFreeReceiverPcvMeters(
+                    receiverAntennaPcvMeters(observation.primary_signal, observation.elevation),
+                    observation.secondary_signal != SignalType::SIGNAL_TYPE_COUNT,
+                    receiverAntennaPcvMeters(observation.secondary_signal, observation.elevation),
+                    observation.primary_code_bias_coeff,
+                    observation.secondary_code_bias_coeff);
         }
 
         // Phase wind-up correction (Wu et al. 1993). Same cycle count for L1

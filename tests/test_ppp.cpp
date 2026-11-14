@@ -201,6 +201,45 @@ TEST(PPPAmbiguitySeed, IonosphereFreeSeedIsPhaseMinusCode) {
         phase_m - predicted_m);
 }
 
+TEST(PPPAntennaPcv, NoaziGridIsInterpolatedAndHeldAtBothEnds) {
+    ReceiverPcvGrid grid;
+    grid.zen1_deg = 0.0;
+    grid.zen2_deg = 20.0;
+    grid.dzen_deg = 5.0;
+    grid.noazi_m = {0.000, 0.002, 0.006, 0.004, -0.010};
+    EXPECT_DOUBLE_EQ(ppp_internal::antexNoaziPcvMeters(grid, 0.0), 0.000);
+    EXPECT_NEAR(ppp_internal::antexNoaziPcvMeters(grid, 7.5), 0.004, 1e-12);
+    EXPECT_DOUBLE_EQ(ppp_internal::antexNoaziPcvMeters(grid, 20.0), -0.010);
+    EXPECT_DOUBLE_EQ(ppp_internal::antexNoaziPcvMeters(grid, -3.0), 0.000);
+    EXPECT_DOUBLE_EQ(ppp_internal::antexNoaziPcvMeters(grid, 45.0), -0.010);
+    EXPECT_DOUBLE_EQ(ppp_internal::antexNoaziPcvMeters(ReceiverPcvGrid{}, 10.0), 0.0);
+}
+
+TEST(PPPAntennaPcv, IonosphereFreeRowTakesTheSameCombinationOfBothFrequencies) {
+    // GPS L1 / L2: c1 = 2.546, c2 = -1.546.
+    const double c1 = 2.5457277801631593;
+    const double c2 = 1.0 - c1;
+    EXPECT_NEAR(
+        ppp_internal::ionosphereFreeReceiverPcvMeters(0.004, true, -0.003, c1, c2),
+        c1 * 0.004 + c2 * -0.003, 1e-15);
+    // The same variation on both frequencies is that variation.
+    EXPECT_NEAR(
+        ppp_internal::ionosphereFreeReceiverPcvMeters(0.005, true, 0.005, c1, c2), 0.005, 1e-15);
+    // A single-frequency row has only its own.
+    EXPECT_DOUBLE_EQ(
+        ppp_internal::ionosphereFreeReceiverPcvMeters(0.004, false, 99.0, 1.0, 0.0), 0.004);
+}
+
+TEST(PPPAntennaPcv, SatelliteNadirAngle) {
+    const Vector3d satellite(26560000.0, 0.0, 0.0);
+    // A receiver under the satellite sees it at the zenith: nadir angle 0.
+    EXPECT_NEAR(ppp_internal::satelliteNadirAngleDeg(satellite, Vector3d(6378137.0, 0.0, 0.0)), 0.0, 1e-9);
+    // On the Earth's limb the nadir angle of a GPS satellite is about 13.9 deg.
+    const double limb = ppp_internal::satelliteNadirAngleDeg(satellite, Vector3d(1531500.0, 6191600.0, 0.0));
+    EXPECT_NEAR(limb, std::asin(6378137.0 / 26560000.0) * 180.0 / M_PI, 0.02);
+    EXPECT_DOUBLE_EQ(ppp_internal::satelliteNadirAngleDeg(Vector3d::Zero(), Vector3d(1.0, 0.0, 0.0)), 0.0);
+}
+
 TEST(PPPInnovationGate, PhaseIsTestedAgainstTheCodeRowOfTheSameSatellite) {
     // A 12 m error of the predicted receiver clock is in both rows: it is
     // not a phase outlier.
