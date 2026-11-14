@@ -219,7 +219,8 @@ TEST(PPPTest, CarrierArcEndsAtADataGap) {
     using libgnss::ppp_internal::carrierArcBrokenByGap;
     EXPECT_FALSE(carrierArcBrokenByGap(false, 43200.0));  // first epoch of the satellite
     EXPECT_FALSE(carrierArcBrokenByGap(true, 30.0));
-    EXPECT_FALSE(carrierArcBrokenByGap(true, 120.0));     // three missing 30 s epochs
+    EXPECT_FALSE(carrierArcBrokenByGap(true, 45.0));      // a 1 Hz outage of 45 s
+    EXPECT_TRUE(carrierArcBrokenByGap(true, 60.0));       // one missing 30 s epoch
     EXPECT_TRUE(carrierArcBrokenByGap(true, 150.0));
     EXPECT_TRUE(carrierArcBrokenByGap(true, 43200.0));    // the next pass
     EXPECT_TRUE(carrierArcBrokenByGap(true, -150.0));     // backward pass
