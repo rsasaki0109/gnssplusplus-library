@@ -1,0 +1,125 @@
+# Float PPP of one station-day with multi-GNSS precise products
+# (gnss_ppp --sp3 --clk, GPS + GLONASS + Galileo + BeiDou), against the
+# station's daily coordinate. Not a README row; see docs/reproduce.md#mgex-ppp.
+#
+# Inputs (public, not redistributed here), all in the --mgex-data-root
+# directory:
+# - OBE400DEU_R_20223280000_01D_30S_MO.rnx: the OBE4 (Oberpfaffenhofen) daily
+#   observations of 2022-11-24 from
+#   https://igs.bkg.bund.de/root_ftp/IGS/obs/2022/328/ (.crx.gz there:
+#   gunzip, then Hatanaka-decompress with crx2rnx);
+# - BRDC00IGS_R_20223280000_01D_MN.rnx from
+#   https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2022/328/ (gunzip);
+# - com22374.eph, com22374.clk, com22374.bia: the CODE MGEX orbits (5 min),
+#   clocks (30 s) and observable-specific biases of GPS week 2237 day 4 from
+#   https://igs.bkg.bund.de/root_ftp/IGS/products/mgex/2237/ (uncompress .Z);
+# - igs14_2233.atx from
+#   https://files.igs.org/pub/station/general/pcv_archive/ (the products are
+#   in IGS14).
+#
+# Reference: the OBE4 coordinate of that day in the EPN daily solution
+# BKG0EPNE03_20223280000_01D_01D_SOL.SNX
+# (https://igs.bkg.bund.de/root_ftp/EUREF/products/2237/), sigma below 1 mm.
+
+[lane]
+name = "mgex-ppp"
+status = "ready"
+title = "Float PPP with CODE MGEX SP3/CLK: OBE4 station-day vs the EPN daily coordinate"
+readme_row = "(docs) Precise-product PPP: multi-GNSS, one station-day, static and kinematic"
+runtime_estimate = "~2 min"
+docs = "docs/reproduce.md"
+
+[datasets.mgex]
+required = [
+  "OBE400DEU_R_20223280000_01D_30S_MO.rnx",
+  "BRDC00IGS_R_20223280000_01D_MN.rnx",
+  "com22374.eph",
+  "com22374.clk",
+  "com22374.bia",
+  "igs14_2233.atx",
+]
+
+[tools.igs_products]
+repository = "https://igs.bkg.bund.de/root_ftp/IGS/"
+path = "obs/2022/328/OBE400DEU_R_20223280000_01D_30S_MO.crx.gz, BRDC/2022/328/BRDC00IGS_R_20223280000_01D_MN.rnx.gz, products/mgex/2237/com22374.{eph,clk,bia}.Z"
+note = "IGS observations and CODE MGEX products (public); download locally, do not commit."
+
+[[steps]]
+name = "gnss-ppp-mgex-{run}"
+foreach = [
+  { run = "static", mode = "--static" },
+  { run = "kinematic", mode = "--kinematic" },
+]
+argv = [
+  "{bin:gnss_ppp}",
+  "--obs", "{mgex_root}/OBE400DEU_R_20223280000_01D_30S_MO.rnx",
+  "--nav", "{mgex_root}/BRDC00IGS_R_20223280000_01D_MN.rnx",
+  "--sp3", "{mgex_root}/com22374.eph",
+  "--clk", "{mgex_root}/com22374.clk",
+  "--antex", "{mgex_root}/igs14_2233.atx",
+  "{mode}",
+  "--out", "{work_dir}/mgex_{run}.pos",
+  "--summary-json", "{work_dir}/mgex_{run}_run.json",
+  "--quiet",
+]
+
+# The same static run with the day's observable-specific code biases: GPS
+# then takes C1C with its bias instead of the C1W range.
+[[steps]]
+name = "gnss-ppp-mgex-static-dcb"
+argv = [
+  "{bin:gnss_ppp}",
+  "--obs", "{mgex_root}/OBE400DEU_R_20223280000_01D_30S_MO.rnx",
+  "--nav", "{mgex_root}/BRDC00IGS_R_20223280000_01D_MN.rnx",
+  "--sp3", "{mgex_root}/com22374.eph",
+  "--clk", "{mgex_root}/com22374.clk",
+  "--antex", "{mgex_root}/igs14_2233.atx",
+  "--dcb", "{mgex_root}/com22374.bia",
+  "--static",
+  "--out", "{work_dir}/mgex_static_dcb.pos",
+  "--summary-json", "{work_dir}/mgex_static_dcb_run.json",
+  "--quiet",
+]
+
+[[steps]]
+name = "score"
+argv = [
+  "{python}", "scripts/experiments/has/has_idd_ppp_reproduce.py", "score",
+  "--reference-ecef", "4186704.2309", "834903.7561", "4723664.9139",
+  "--run", "mgex_static={work_dir}/mgex_static.pos",
+  "--run", "mgex_kinematic={work_dir}/mgex_kinematic.pos",
+  "--run", "mgex_static_dcb={work_dir}/mgex_static_dcb.pos",
+  "--summary-json", "{work_dir}/summary.json",
+]
+
+# Gates (reproduced 2026-11-14, Linux gcc Release).
+[[metrics]]
+name = "mgex {run} H after 24 h (m)"
+source = "{work_dir}/summary.json"
+path = "runs.mgex_{run}.final.h_m"
+max = 0.05
+readme = "docs/reproduce.md"
+foreach = [{ run = "static" }, { run = "static_dcb" }]
+
+[[metrics]]
+name = "mgex {run} |U| after 24 h (m)"
+source = "{work_dir}/summary.json"
+path = "runs.mgex_{run}.final.abs_up_m"
+max = 0.06
+readme = "docs/reproduce.md"
+foreach = [{ run = "static" }, { run = "static_dcb" }]
+
+[[metrics]]
+name = "mgex static H at {t} (m)"
+source = "{work_dir}/summary.json"
+path = "runs.mgex_static.checkpoints.{t}.h_m"
+readme = "docs/reproduce.md"
+foreach = [{ t = "60min", max = 0.10 }, { t = "120min", max = 0.06 }]
+
+[[metrics]]
+name = "mgex kinematic RMS after the first hour, {field} (m)"
+source = "{work_dir}/summary.json"
+path = "runs.mgex_kinematic.rms_after_60min.{field}"
+max = 0.06
+readme = "docs/reproduce.md"
+foreach = [{ field = "h_m" }, { field = "up_m" }]

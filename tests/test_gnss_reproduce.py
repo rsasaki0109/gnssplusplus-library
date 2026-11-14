@@ -31,7 +31,7 @@ HAVE_SCIPY_STACK = all(importlib.util.find_spec(name) for name in ("numpy", "pan
 
 READY_LANES = {
     "clas-ppc", "spp-policy", "rtk-demo5", "odaiba", "fgo-tokyo", "gsdc-dev-routes", "ppc-goal",
-    "gsdc-official", "has-idd-ppp", "has-sis-ppp", "igs-final-ppp", "bds-b2b-ppp",
+    "gsdc-official", "has-idd-ppp", "has-sis-ppp", "igs-final-ppp", "bds-b2b-ppp", "mgex-ppp",
 }
 PLANNED_LANES: set[str] = set()
 
@@ -467,8 +467,65 @@ class IgsFinalPppLaneTest(unittest.TestCase):
         for hour in ("046r", "233h"):
             self.assertEqual(gated[f"igs {hour} static H at 60 min (m)"]["max"], 0.40)
             self.assertEqual(gated[f"igs {hour} static |U| at 60 min (m)"]["max"], 0.40)
-        self.assertEqual(gated["igs obe4 static H at 60 min (m)"]["max"], 0.30)
-        self.assertEqual(gated["igs obe4 static |U| at 60 min (m)"]["max"], 0.30)
+        self.assertEqual(gated["igs obe4 static H at 60 min (m)"]["max"], 0.10)
+        self.assertEqual(gated["igs obe4 static |U| at 60 min (m)"]["max"], 0.15)
+
+
+class MgexPppLaneTest(unittest.TestCase):
+    def test_dry_run_renders_the_station_day_runs(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable, str(GNSS_CLI), "reproduce", "mgex-ppp", "--dry-run",
+                "--work-dir", "output/reproduce/test-mgex-dry-run",
+                "--mgex-data-root", "/data/mgex",
+            ],
+            cwd=ROOT_DIR, check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = result.stdout
+        ppp_runs = [line for line in out.splitlines() if "--sp3 /data/mgex/com22374.eph" in line]
+        self.assertEqual(len(ppp_runs), 3)
+        self.assertTrue(all("--clk /data/mgex/com22374.clk" in line for line in ppp_runs))
+        self.assertTrue(all("--antex /data/mgex/igs14_2233.atx" in line for line in ppp_runs))
+        self.assertEqual(sum("--kinematic" in line for line in ppp_runs), 1)
+        self.assertEqual(sum("--dcb /data/mgex/com22374.bia" in line for line in ppp_runs), 1)
+        self.assertIn("--reference-ecef 4186704.2309 834903.7561 4723664.9139", out)
+        self.assertIn("warning: dataset `mgex` incomplete", out)
+        self.assertFalse((ROOT_DIR / "output" / "reproduce" / "test-mgex-dry-run").exists())
+
+    def test_manifest_gates_the_day_at_centimetres(self) -> None:
+        manifest = reproduce.load_manifest(ROOT_DIR / "configs" / "reproduce" / "mgex-ppp.toml")
+        metrics = reproduce.expand_metric_specs(manifest["metrics"], "mgex-ppp.metrics")
+        gated = {metric["name"]: metric for metric in metrics if metric.get("gate", True)}
+        for run in ("static", "static_dcb"):
+            self.assertEqual(gated[f"mgex {run} H after 24 h (m)"]["max"], 0.05)
+            self.assertEqual(gated[f"mgex {run} |U| after 24 h (m)"]["max"], 0.06)
+        self.assertEqual(gated["mgex static H at 60min (m)"]["max"], 0.10)
+        for field in ("h_m", "up_m"):
+            self.assertEqual(
+                gated[f"mgex kinematic RMS after the first hour, {field} (m)"]["max"], 0.06)
+
+    def test_score_reports_the_rms_after_the_first_hour(self) -> None:
+        sys.path.insert(0, str(ROOT_DIR / "scripts" / "experiments" / "has"))
+        import has_idd_ppp_reproduce  # noqa: E402
+
+        reference = (4186704.2309, 834903.7561, 4723664.9139)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "run.pos"
+            rows = ["% LibGNSS++ Position Solution"]
+            # One hour 1 m off in X, then two hours 0.03 m off in X.
+            for index in range(0, 3 * 120 + 1):
+                offset = 1.0 if index <= 120 else 0.03
+                rows.append(
+                    f"2237 {345600.0 + 30.0 * index:.3f} {reference[0] + offset:.4f} "
+                    f"{reference[1]:.4f} {reference[2]:.4f} 0 0 0 5 10 1.0 0.0 0 1")
+            path.write_text("\n".join(rows) + "\n", encoding="ascii")
+            run = has_idd_ppp_reproduce.score_run(path, reference)
+        self.assertEqual(run["rms_after_60min"]["epochs"], 240)
+        total = math.hypot(run["rms_after_60min"]["h_m"], run["rms_after_60min"]["up_m"])
+        self.assertAlmostEqual(total, 0.03, places=3)
+        self.assertIn("120min", run["checkpoints"])
+        self.assertAlmostEqual(run["final"]["abs_up_m"], abs(run["final"]["up_m"]), places=4)
 
 
 class GsdcDevRoutesLaneTest(unittest.TestCase):
