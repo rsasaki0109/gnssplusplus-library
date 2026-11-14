@@ -32,6 +32,7 @@ HAVE_SCIPY_STACK = all(importlib.util.find_spec(name) for name in ("numpy", "pan
 READY_LANES = {
     "clas-ppc", "spp-policy", "rtk-demo5", "odaiba", "fgo-tokyo", "gsdc-dev-routes", "ppc-goal",
     "gsdc-official", "has-idd-ppp", "has-sis-ppp", "igs-final-ppp", "bds-b2b-ppp", "mgex-ppp",
+    "epn-ppp",
 }
 PLANNED_LANES: set[str] = set()
 
@@ -526,6 +527,72 @@ class MgexPppLaneTest(unittest.TestCase):
         self.assertAlmostEqual(total, 0.03, places=3)
         self.assertIn("120min", run["checkpoints"])
         self.assertAlmostEqual(run["final"]["abs_up_m"], abs(run["final"]["up_m"]), places=4)
+
+
+class EpnPppLaneTest(unittest.TestCase):
+    def test_dry_run_renders_four_stations_and_a_kinematic_run(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable, str(GNSS_CLI), "reproduce", "epn-ppp", "--dry-run",
+                "--work-dir", "output/reproduce/test-epn-dry-run",
+                "--epn-data-root", "/data/epn",
+            ],
+            cwd=ROOT_DIR, check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = result.stdout
+        ppp_runs = [line for line in out.splitlines()
+                    if "--sp3 /data/epn/IGS0OPSFIN_20232290000_01D_15M_ORB.SP3" in line]
+        self.assertEqual(len(ppp_runs), 5)
+        self.assertTrue(all("--antex /data/epn/igs20.atx" in line for line in ppp_runs))
+        self.assertEqual(sum("--kinematic" in line for line in ppp_runs), 1)
+        for station in ("OBE400DEU", "WTZR00DEU", "MATE00ITA", "ONSA00SWE"):
+            self.assertTrue(
+                any(f"/data/epn/{station}_R_20232290000_01D_30S_MO.rnx" in line for line in ppp_runs),
+                station)
+        scores = [line for line in out.splitlines() if "has_idd_ppp_reproduce.py score" in line]
+        self.assertEqual(len(scores), 5)
+        self.assertTrue(all("--skip-code-only" in line for line in scores))
+        self.assertIn("warning: dataset `epn` incomplete", out)
+        self.assertFalse((ROOT_DIR / "output" / "reproduce" / "test-epn-dry-run").exists())
+
+    def test_manifest_gates_every_station(self) -> None:
+        manifest = reproduce.load_manifest(ROOT_DIR / "configs" / "reproduce" / "epn-ppp.toml")
+        metrics = reproduce.expand_metric_specs(manifest["metrics"], "epn-ppp.metrics")
+        gated = {metric["name"]: metric for metric in metrics if metric.get("gate", True)}
+        for station in ("obe4", "wtzr", "mate", "onsa"):
+            self.assertEqual(gated[f"epn {station} static H after 24 h (m)"]["max"], 0.025)
+            self.assertEqual(gated[f"epn {station} static |U| after 24 h (m)"]["max"], 0.035)
+        for field in ("h_m", "up_m"):
+            self.assertEqual(
+                gated[f"epn obe4 kinematic RMS after the first hour, {field} (m)"]["max"], 0.06)
+
+    def test_score_can_leave_out_code_only_epochs(self) -> None:
+        sys.path.insert(0, str(ROOT_DIR / "scripts" / "experiments" / "has"))
+        import has_idd_ppp_reproduce  # noqa: E402
+
+        reference = (4186704.2222, 834903.7671, 4723664.9260)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "run.pos"
+            rows = ["% LibGNSS++ Position Solution"]
+            # A code solution first and for the last 15 minutes, 2 m off;
+            # PPP float 0.01 m off in between.
+            for index in range(0, 2 * 120 + 1):
+                code_only = index == 0 or index > 210
+                offset = 2.0 if code_only else 0.01
+                rows.append(
+                    f"2275 {345600.0 + 30.0 * index:.3f} {reference[0] + offset:.4f} "
+                    f"{reference[1]:.4f} {reference[2]:.4f} 0 0 0 {1 if code_only else 5} 10 1.0 0.0 0 1")
+            path.write_text("\n".join(rows) + "\n", encoding="ascii")
+            every = has_idd_ppp_reproduce.score_run(path, reference)
+            ppp = has_idd_ppp_reproduce.score_run(path, reference, skip_code_only=True)
+        self.assertEqual(every["epochs"], 241)
+        self.assertEqual(ppp["epochs"], 210)
+        self.assertGreater(math.hypot(every["final"]["h_m"], every["final"]["up_m"]), 1.9)
+        self.assertAlmostEqual(math.hypot(ppp["final"]["h_m"], ppp["final"]["up_m"]), 0.01, places=3)
+        # Elapsed time still counts from the first epoch of the file.
+        self.assertEqual(ppp["checkpoints"]["60min"]["elapsed_s"], 3600.0)
+        self.assertEqual(ppp["rms_after_60min"]["epochs"], 90)
 
 
 class GsdcDevRoutesLaneTest(unittest.TestCase):
