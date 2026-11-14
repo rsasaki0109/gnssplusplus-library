@@ -114,6 +114,7 @@ bool loadSatelliteAntexOffsets(
     bool in_antenna = false;
     bool satellite_entry = false;
     SignalType current_signal = SignalType::SIGNAL_TYPE_COUNT;
+    double zen1_deg = 0.0, zen2_deg = 14.0, dzen_deg = 1.0;
     std::string line;
     while (std::getline(input, line)) {
         const std::string label = line.size() >= 60 ? trimCopy(line.substr(60)) : "";
@@ -185,6 +186,11 @@ bool loadSatelliteAntexOffsets(
             current_signal = SignalType::SIGNAL_TYPE_COUNT;
             continue;
         }
+        if (label == "ZEN1 / ZEN2 / DZEN") {
+            std::istringstream iss(line.substr(0, std::min<size_t>(line.size(), 60U)));
+            iss >> zen1_deg >> zen2_deg >> dzen_deg;
+            continue;
+        }
         if (label == "NORTH / EAST / UP" &&
             current_signal != SignalType::SIGNAL_TYPE_COUNT) {
             std::istringstream iss(line.substr(0, std::min<size_t>(line.size(), 30U)));
@@ -192,6 +198,25 @@ bool loadSatelliteAntexOffsets(
             if (iss >> north_mm >> east_mm >> up_mm) {
                 current.body_offsets_m[current_signal] =
                     Vector3d(north_mm * 1e-3, east_mm * 1e-3, up_mm * 1e-3);
+            }
+            continue;
+        }
+        // Phase centre variation against the nadir angle ("NOAZI" row).
+        if (current_signal != SignalType::SIGNAL_TYPE_COUNT) {
+            std::istringstream iss(line);
+            std::string tag;
+            if (iss >> tag && tag == "NOAZI") {
+                ReceiverPcvGrid grid;
+                grid.zen1_deg = zen1_deg;
+                grid.zen2_deg = zen2_deg;
+                grid.dzen_deg = dzen_deg;
+                double v_mm = 0.0;
+                while (iss >> v_mm) {
+                    grid.noazi_m.push_back(v_mm * 1e-3);
+                }
+                if (!grid.noazi_m.empty()) {
+                    current.pcv[current_signal] = std::move(grid);
+                }
             }
         }
     }
