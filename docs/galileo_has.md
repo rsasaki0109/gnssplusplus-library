@@ -165,11 +165,11 @@ convergence as in the IDD table below:
 | 2025-02-15 17h, libgnss++ SIS, kinematic | 0.409 / +0.541 m | 0.008 / +0.230 m | 0.052 / +0.070 m | 0.125 / -0.135 m | 15.9 min | 11.3 min |
 | 2025-02-15 17h, cssrlib SIS, static (10 deg, E29 excluded, igs20.atx) | 0.531 / +0.450 m | 0.220 / -0.033 m | 0.077 / +0.193 m | 0.153 / -0.065 m | 48.4 min | 45.1 min |
 | 2025-02-15 17h, libgnss++ broadcast only, GPS + Galileo | 0.454 / -0.145 m | 0.122 / +0.214 m | 0.192 / +0.086 m | 0.319 / +0.123 m | never | 9.3 min |
-| 2025-08-21 07h, libgnss++ SIS, static | 0.515 / -1.053 m | 0.332 / -0.807 m | 0.305 / -0.871 m | 0.118 / -0.332 m | 43.9 min | 48.5 min |
+| 2025-08-21 07h, libgnss++ SIS, static | 0.309 / -0.398 m | 0.170 / -0.403 m | 0.188 / -0.769 m | 0.139 / -0.753 m | 40.1 min | never |
 | 2025-08-21 07h, libgnss++ SIS, kinematic | 0.315 / -0.908 m | 0.175 / +0.097 m | 0.177 / -0.079 m | 0.137 / -0.463 m | 47.3 min | never |
 | 2025-08-21 07h, cssrlib SIS, static (10 deg, L1 C/A + L2 CL) | 0.303 / -0.663 m | 0.112 / -0.501 m | 0.079 / -0.186 m | 0.079 / +0.212 m | 18.1 min | 22.2 min |
 | 2025-08-21 07h, cssrlib SIS, static (15 deg, L1 C/A + L2 W) | 0.381 / -1.214 m | 0.117 / -0.629 m | 0.139 / -0.607 m | 0.084 / +0.563 m | 18.4 min | never |
-| 2025-08-21 07h, libgnss++ JPL GDGPS RTCM SSR, GPS + Galileo | 0.507 / +0.689 m | 0.214 / +0.002 m | 0.251 / +0.054 m | 0.057 / -0.254 m | 42.1 min | 17.8 min |
+| 2025-08-21 07h, libgnss++ JPL GDGPS RTCM SSR, GPS + Galileo | 0.143 / -0.300 m | 0.103 / -0.175 m | 0.042 / -0.168 m | 0.024 / -0.253 m | 8.6 min | 1.0 min |
 | 2025-08-21 07h, libgnss++ broadcast only, GPS + Galileo | 0.874 / +0.774 m | 0.710 / +0.069 m | 0.699 / +0.067 m | 0.651 / -0.246 m | never | 17.8 min |
 | For reference: OBE4 (Germany) HAS IDD, static (table below) | 0.100 / -0.167 m | 0.184 / -0.102 m | 0.156 / -0.112 m | 0.176 / -0.039 m | 5.8 min | 1.1 min |
 

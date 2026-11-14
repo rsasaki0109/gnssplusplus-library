@@ -11,7 +11,7 @@ service area (BDS-SIS-ICD-PPP-B2b, Version 1.0, 2020).
 | PPP-B2b message decoder (`io::BdsB2bDecoder`) | **Supported**: cssrlib `wn tow prn type len hex` logs, CRC-24Q, message types 1 (mask), 2 (orbit + URA), 3 (code bias), 4 (clock), the IODP / IODSSR / IOD Corr bookkeeping |
 | Decoder parity with cssrlib | **Exact**: every mask, orbit, clock and code-bias entry of C59, C60 and C62 on the two public Kamakura hours (about 1500 orbit, 35000 clock and 6500 code-bias entries per satellite and hour) equals cssrlib's `cssr_bds` decoder |
 | Float PPP with B2b corrections | **Supported** (`gnss_ppp --b2b <log>`): GPS (LNAV) and BDS-3 (B-CNAV1) |
-| Static float PPP on a known coordinate | **Validated** on the Kamakura hours below (0.01-0.08 m horizontal after one hour, below 0.2 m from 16-18 min); `gnss reproduce bds-b2b-ppp` gates it ([lane](reproduce.md#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07)) |
+| Static float PPP on a known coordinate | **Validated** on the Kamakura hours below (0.01-0.06 m horizontal after one hour, below 0.2 m from 13-16 min); `gnss reproduce bds-b2b-ppp` gates it ([lane](reproduce.md#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07)) |
 | Browser GUI | **Supported**: *PPP corrections: BeiDou PPP-B2b* with the log recognised from its content; run on the public sample in Node and Chromium by the Docs workflow ([Browser GUI](web_app.md)) |
 | PPP-AR | **Not available**: PPP-B2b carries no phase biases |
 
@@ -72,8 +72,8 @@ B-CNAV1, and the coordinate -3962108.6836, 3381309.5672, 3668678.6720.
 
 | Hour | Horizontal / up after 1 h | Horizontal < 0.2 m from | Kinematic after 1 h | cssrlib `test_pppbds` (B1C / B2a) | cssrlib with B1I / B3I |
 |---|---|---|---|---|---|
-| 2025-02-15 17h (`046r`) | 0.01 m / -0.31 m | 16 min | 0.05 m / -0.53 m | 0.09 m, from 39 min | 0.14 m, from 54 min |
-| 2025-08-21 07h (`233h`) | 0.08 m / -0.22 m | 18 min | 0.01 m / -0.12 m | 0.04 m, from 14 min | 0.05 m, from 13 min |
+| 2025-02-15 17h (`046r`) | 0.01 m / -0.29 m | 16 min | 0.05 m / -0.53 m | 0.09 m, from 39 min | 0.14 m, from 54 min |
+| 2025-08-21 07h (`233h`) | 0.06 m / -0.15 m | 13 min | 0.01 m / -0.12 m | 0.04 m, from 14 min | 0.05 m, from 13 min |
 
 `gnss_ppp --b2b <log> --b2b-prn 59 --antex igs20_2353.atx --elevation-mask
 10 --static` (or `--kinematic`), 3599 epochs, about 7 s per hour. cssrlib
