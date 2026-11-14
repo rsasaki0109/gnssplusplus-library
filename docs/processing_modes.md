@@ -87,12 +87,12 @@ below 0.20 m):
 
 | Run | Default | `--realtime` |
 |---|---|---|
-| HAS IDD, OBE4 2023-08-17 | 0.123 / 0.116 m, 5.8 min | 0.115 / 0.123 m, 5.6 min |
-| JPL GDGPS RTCM SSR, Kamakura 2025-08-21 | 0.251 / 0.057 m, 42.1 min | 0.264 / 0.050 m, 42.0 min |
-| JPL GDGPS RTCM SSR, Kamakura 2024-02-12 | 0.332 / 0.029 m, 38.6 min | 0.332 / 0.028 m, 38.2 min |
+| HAS IDD, OBE4 2023-08-17 | 0.156 / 0.176 m, 5.8 min | 0.156 / 0.176 m, 5.8 min |
+| JPL GDGPS RTCM SSR, Kamakura 2025-08-21 | 0.042 / 0.024 m, 8.6 min | 0.042 / 0.024 m, 8.6 min |
+| JPL GDGPS RTCM SSR, Kamakura 2024-02-12 | 0.088 / 0.038 m, 2.9 min | 0.088 / 0.038 m, 2.9 min |
 | HAS SIS, Kamakura 2025-02-15 | 0.027 / 0.118 m, 41.9 min | 0.075 / 0.071 m, 15.2 min |
-| HAS SIS, Kamakura 2025-08-21 | 0.305 / 0.118 m, 43.9 min | 0.119 / 0.091 m, 34.0 min |
-| PPP-B2b, Kamakura 2025-02-15 | 0.111 / 0.014 m, 15.8 min | 0.113 / 0.063 m, 16.2 min |
+| HAS SIS, Kamakura 2025-08-21 | 0.188 / 0.139 m, 40.1 min | 0.099 / 0.077 m, 19.1 min |
+| PPP-B2b, Kamakura 2025-02-15 | 0.110 / 0.015 m, 16.4 min | 0.113 / 0.062 m, 16.5 min |
 | MADOCA (L6E + L6D), MIZU sample, kinematic PPP-AR (120 epochs) | 91 FIX of 118 | 91 FIX of 118 |
 | CLAS L6, CLASLIB sample (300 epochs) | H RMS 1.56 m, last 100 epochs | 3.05 m |
 
@@ -131,9 +131,9 @@ RTCM SSR with `--realtime --ssr-latency <s>` (same columns):
 
 | Run | 0 s | 5 s | 10 s |
 |---|---|---|---|
-| HAS IDD, OBE4 2023-08-17 | 0.115 / 0.123 m, 5.6 min | 0.117 / 0.122 m, 5.9 min | 0.120 / 0.121 m, 7.5 min |
-| JPL GDGPS, Kamakura 2025-08-21 | 0.264 / 0.050 m, 42.0 min | 0.279 / 0.051 m, 42.1 min | 0.269 / 0.051 m, 42.1 min |
-| JPL GDGPS, Kamakura 2024-02-12 | 0.332 / 0.028 m, 38.2 min | 0.327 / 0.029 m, 38.6 min | 0.308 / 0.031 m, 38.1 min |
+| HAS IDD, OBE4 2023-08-17 | 0.156 / 0.176 m, 5.8 min | 0.157 / 0.176 m, 6.2 min | 0.159 / 0.176 m, 7.8 min |
+| JPL GDGPS, Kamakura 2025-08-21 | 0.042 / 0.024 m, 8.6 min | 0.043 / 0.024 m, 8.3 min | 0.043 / 0.024 m, 8.2 min |
+| JPL GDGPS, Kamakura 2024-02-12 | 0.088 / 0.038 m, 2.9 min | 0.093 / 0.037 m, 2.9 min | 0.097 / 0.037 m, 7.7 min |
 
 ## RTK: `gnss solve --realtime`
 
@@ -293,11 +293,11 @@ then kinematic ones, H at 10 / 30 min and the time after which H stays below
 | Run | Static | Static `--combined` | Kinematic | Kinematic `--combined` |
 |---|---|---|---|---|
 | HAS SIS, Kamakura 2025-02-15 | 0.379 / 0.027 m, 41.9 min | 0.126 / 0.084 m, 0 min | 0.409 / 0.052 m | 0.066 / 0.043 m |
-| HAS SIS, Kamakura 2025-08-21 | 0.515 / 0.305 m, 43.9 min | 0.097 / 0.092 m, 0 min | 0.315 / 0.177 m | 0.131 / 0.084 m |
-| PPP-B2b, Kamakura 2025-02-15 | 0.466 / 0.111 m, 15.8 min | 0.022 / 0.007 m, 0 min | 0.493 / 0.108 m | 0.145 / 0.056 m |
-| JPL GDGPS, Kamakura 2025-08-21 | 0.507 / 0.251 m, 42.1 min | 0.188 / 0.153 m, 0 min | 0.216 / 0.063 m | 0.082 / 0.028 m |
-| JPL GDGPS, Kamakura 2024-02-12 | 0.274 / 0.332 m, 38.6 min | 0.172 / 0.112 m, 0 min | 0.198 / 0.215 m | 0.045 / 0.043 m |
-| HAS IDD, OBE4 2023-08-17 | 0.063 / 0.123 m, 5.8 min | 0.122 / 0.250 m, 41.2 min | 0.127 / 0.205 m | 0.223 / 0.240 m |
+| HAS SIS, Kamakura 2025-08-21 | 0.309 / 0.188 m, 40.1 min | 0.188 / 0.112 m, 0 min | 0.315 / 0.177 m | 0.131 / 0.084 m |
+| PPP-B2b, Kamakura 2025-02-15 | 0.471 / 0.110 m, 16.4 min | 0.024 / 0.006 m, 0 min | 0.493 / 0.108 m | 0.145 / 0.056 m |
+| JPL GDGPS, Kamakura 2025-08-21 | 0.143 / 0.042 m, 8.6 min | 0.070 / 0.005 m, 0 min | 0.216 / 0.063 m | 0.082 / 0.028 m |
+| JPL GDGPS, Kamakura 2024-02-12 | 0.145 / 0.088 m, 2.9 min | 0.041 / 0.035 m, 0 min | 0.068 / 0.136 m | 0.083 / 0.040 m |
+| HAS IDD, OBE4 2023-08-17 | 0.100 / 0.156 m, 5.8 min | 0.177 / 0.203 m, 31.7 min | 0.155 / 0.203 m | 0.226 / 0.245 m |
 
 - **OBE4 gets worse.** On this hour the kinematic solution drifts west
   whatever it is made of: after one hour GPS alone is 0.24 m west of the
@@ -314,7 +314,13 @@ then kinematic ones, H at 10 / 30 min and the time after which H stays below
     0.151 and 0.125 m static after 60 min against 0.118 m with E5a, and on
     the JPL GDGPS hour of 2025-08-21 0.047 against 0.057 m. The signal choice
     is left as it is.
-  - The source of the common drift is not identified (2026-11-13).
+  - The error comes with the HAS corrections, not with the filter. The same
+    hour with the IGS final orbits and clocks (GPS only) ends 0.05 m from the
+    coordinate static and 0.02 m kinematic, and stays below 0.04 m with
+    `--combined`. Against those products the HAS clocks differ by a
+    satellite-specific constant of up to 0.3 m once the P1-C1 biases are
+    taken out. The carrier phase absorbs a constant; the code does not, and
+    a one-hour float solution leans on the code.
 - **MADOCA PPP-AR** (MIZU sample with L6D, kinematic, 118 epochs), against
   a 24 h static PPP of MIZU with the IGS final orbits and clocks:
 

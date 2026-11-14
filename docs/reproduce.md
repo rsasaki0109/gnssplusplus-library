@@ -35,7 +35,7 @@ samples, final products). Real-time equivalent numbers come from runs with
 | Smartphone GSDC official submission | `gsdc-official` | ready | Linux GCC: full run ~3 h with `--jobs 4` on 4 cores (the third pass doubles the long drives) | **Pass on one build.** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 57742915 (`12d39d57...`), and the Kaggle score is readback-only. Every drive is pinned to one Linux GCC 15 build; MSVC outputs differ by up to 0.08 m and do not pass. On 2026-10-25 the full lane (25 stage-0 runs, 25 height maps, 40 final drives) ran on that build; the 9 final drives and 8 stage-0 runs already pinned to GCC came out byte-identical, and the assembled file was submitted as 57619467. 57626255 / 57629197 then solved ebf-x Mi8 from the taroz IdxStart epoch, 57664241 / 57678818 added the upstream third pass, 57717122 tuned 18 drives on Kaggle probes, 57733487 picked 22 drives by a rule fixed on train and snapped toward a train-truth road map, and 57742915 moves that road map into the factor graph; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
 | (docs, not a README row) Galileo HAS float PPP via IDD | `has-idd-ppp` | ready | ~1 min | **Pass.** Static and kinematic OBE4 hour; see [has-idd-ppp](#has-idd-ppp-galileo-has-float-ppp-2026-11-07) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) Galileo HAS float PPP via SIS (E6-B pages) | `has-sis-ppp` | ready | ~1 min | **Pass.** Decoder (432 MT1 messages per hour, no CRC failure) and static Kamakura 2025-02-15 hour; indicative only (outside the HAS service area); see [has-sis-ppp](#has-sis-ppp-galileo-has-sis-float-ppp-2026-11-07) and [Galileo HAS support](galileo_has.md) |
-| (docs, not a README row) BeiDou PPP-B2b float PPP | `bds-b2b-ppp` | ready | ~30 s | **Pass.** Decoder (3600 C59 messages per hour, no CRC failure or IOD mismatch) and static Kamakura 2025-02-15 / 2025-08-21 hours: horizontal below 0.2 m from 16 / 18 min, within 0.08 m horizontal / 0.32 m vertical after one hour; see [bds-b2b-ppp](#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07) and [BeiDou PPP-B2b support](bds_ppp_b2b.md) |
+| (docs, not a README row) BeiDou PPP-B2b float PPP | `bds-b2b-ppp` | ready | ~30 s | **Pass.** Decoder (3600 C59 messages per hour, no CRC failure or IOD mismatch) and static Kamakura 2025-02-15 / 2025-08-21 hours: horizontal below 0.2 m from 16 / 13 min, within 0.06 m horizontal / 0.30 m vertical after one hour; see [bds-b2b-ppp](#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07) and [BeiDou PPP-B2b support](bds_ppp_b2b.md) |
 | (docs, not a README row) Precise-product PPP with IGS final SP3/CLK | `igs-final-ppp` | ready | ~2 min | **Pass.** Static Kamakura 2025-02-15 / 2025-08-21 hours and OBE4 2023-08-17 hour hours within 0.16 m horizontal / 0.23 m vertical after one hour (OBE4 0.03 / 0.04 m), level with or better than RTKLIB demo5 on the same inputs; see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01) |
 | (docs, not a README row) Precise-product PPP, multi-GNSS station-day | `mgex-ppp` | ready | ~2 min | **Pass.** OBE4 2022-11-24 with CODE MGEX products: static 0.014 m horizontal / 0.005 m vertical after 24 h, kinematic RMS 0.019 / 0.022 m after the first hour, against the EPN daily coordinate; see [mgex-ppp](#mgex-ppp-multi-gnss-station-day-2026-11-14) |
 | (docs, not a README row) Precise-product PPP, four stations in one reference frame | `epn-ppp` | ready | ~2 min | **Pass.** OBE4, WTZR, MATE and ONSA 2023-08-17 with IGS final products: static within 0.011 m horizontal / 0.017 m vertical of the EPN daily coordinates, OBE4 kinematic RMS 0.041 / 0.035 m after the first hour; see [epn-ppp](#epn-ppp-four-stations-in-one-reference-frame-2026-11-14) |
@@ -1143,11 +1143,11 @@ sources' terms, so the three input files are not redistributed; download them
 into the `--has-data-root` directory.
 
 Local result (Linux gcc Release, 2026-11-07, 17 s): every metric passes. The
-static run is at 0.116 m horizontal / +0.002 m vertical after one hour and
+static run is at 0.176 m horizontal / -0.039 m vertical after one hour and
 converges below 0.20 m horizontal after 5.8 min and below 0.40 m vertical
-from the first epoch; the gates are H <= 0.20 m and |U| <= 0.40 m at 60 min,
+after 1.1 min; the gates are H <= 0.20 m and |U| <= 0.40 m at 60 min,
 and convergence within 10 min (H) and 30 min (U). The kinematic run is at
-0.205 / -0.177 m after 30 min and 0.305 / -0.236 m after one hour, gated at
+0.203 / -0.159 m after 30 min and 0.306 / -0.221 m after one hour, gated at
 H <= 0.40 m and |U| <= 0.60 m at 30 and 60 min. Until Galileo got a receiver
 clock of its own with SSR corrections and C2W the L2 P code bias
 (2026-11-07) the static run ended at 0.014 / +0.050 m (0.8 / 5.8 min) and
@@ -1211,9 +1211,9 @@ IODP mismatch.
 
 | Run | 30 min | 60 min | H < 0.20 m from |
 |---|---|---|---:|
-| 2025-02-15 static (gated) | 0.111 / -0.439 m | 0.014 / -0.311 m | 15.8 min |
+| 2025-02-15 static (gated) | 0.114 / -0.388 m | 0.012 / -0.274 m | 16.5 min |
 | 2025-02-15 kinematic | 0.108 / -0.240 m | 0.052 / -0.526 m | |
-| 2025-08-21 static (gated) | 0.090 / -0.058 m | 0.078 / -0.217 m | 18.1 min |
+| 2025-08-21 static (gated) | 0.085 / -0.190 m | 0.066 / -0.132 m | 13.4 min |
 | 2025-08-21 kinematic | 0.039 / -0.249 m | 0.013 / -0.120 m | |
 
 The gates are H <= 0.20 m and |U| <= 0.40 m after one hour, and H below

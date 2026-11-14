@@ -156,10 +156,10 @@ gate = false
 abs_tol = 0.05
 readme = "docs/bds_ppp_b2b.md table"
 foreach = [
-  { run = "b2b_046r_static", t = "30min", field = "h_m", expected = 0.111 },
-  { run = "b2b_046r_static", t = "30min", field = "up_m", expected = -0.439 },
-  { run = "b2b_046r_static", t = "60min", field = "h_m", expected = 0.014 },
-  { run = "b2b_046r_static", t = "60min", field = "up_m", expected = -0.311 },
+  { run = "b2b_046r_static", t = "30min", field = "h_m", expected = 0.110 },
+  { run = "b2b_046r_static", t = "30min", field = "up_m", expected = -0.406 },
+  { run = "b2b_046r_static", t = "60min", field = "h_m", expected = 0.015 },
+  { run = "b2b_046r_static", t = "60min", field = "up_m", expected = -0.293 },
   { run = "b2b_046r_kinematic", t = "30min", field = "h_m", expected = 0.108 },
   { run = "b2b_046r_kinematic", t = "30min", field = "up_m", expected = -0.240 },
   { run = "b2b_046r_kinematic", t = "60min", field = "h_m", expected = 0.052 },
@@ -182,6 +182,6 @@ gate = false
 abs_tol = 1.5
 readme = "docs/bds_ppp_b2b.md table"
 foreach = [
-  { run = "b2b_046r_static", expected = 15.82 },
+  { run = "b2b_046r_static", expected = 16.38 },
   { run = "b2b_233h_static", expected = 13.18 },
 ]
