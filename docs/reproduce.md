@@ -37,7 +37,7 @@ samples, final products). Real-time equivalent numbers come from runs with
 | (docs, not a README row) Galileo HAS float PPP via SIS (E6-B pages) | `has-sis-ppp` | ready | ~1 min | **Pass.** Decoder (432 MT1 messages per hour, no CRC failure) and static Kamakura 2025-02-15 hour; indicative only (outside the HAS service area); see [has-sis-ppp](#has-sis-ppp-galileo-has-sis-float-ppp-2026-11-07) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) BeiDou PPP-B2b float PPP | `bds-b2b-ppp` | ready | ~30 s | **Pass.** Decoder (3600 C59 messages per hour, no CRC failure or IOD mismatch) and static Kamakura 2025-02-15 / 2025-08-21 hours: horizontal below 0.2 m from 16 / 18 min, within 0.08 m horizontal / 0.32 m vertical after one hour; see [bds-b2b-ppp](#bds-b2b-ppp-beidou-ppp-b2b-float-ppp-2026-11-07) and [BeiDou PPP-B2b support](bds_ppp_b2b.md) |
 | (docs, not a README row) Precise-product PPP with IGS final SP3/CLK | `igs-final-ppp` | ready | ~2 min | **Pass.** Static Kamakura 2025-02-15 / 2025-08-21 hours and OBE4 2023-08-17 hour hours within 0.16 m horizontal / 0.23 m vertical after one hour (OBE4 0.03 / 0.04 m), level with or better than RTKLIB demo5 on the same inputs; see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01) |
-| (docs, not a README row) Precise-product PPP, multi-GNSS station-day | `mgex-ppp` | ready | ~2 min | **Pass.** OBE4 2022-11-24 with CODE MGEX products: static 0.019 m horizontal / 0.026 m vertical after 24 h, kinematic RMS 0.030 / 0.019 m after the first hour, against the EPN daily coordinate; see [mgex-ppp](#mgex-ppp-multi-gnss-station-day-2026-11-14) |
+| (docs, not a README row) Precise-product PPP, multi-GNSS station-day | `mgex-ppp` | ready | ~2 min | **Pass.** OBE4 2022-11-24 with CODE MGEX products: static 0.020 m horizontal / 0.008 m vertical after 24 h, kinematic RMS 0.027 / 0.038 m after the first hour, against the EPN daily coordinate; see [mgex-ppp](#mgex-ppp-multi-gnss-station-day-2026-11-14) |
 | (docs, not a README row) Precise-product PPP, four stations in one reference frame | `epn-ppp` | ready | ~2 min | **Pass.** OBE4, WTZR, MATE and ONSA 2023-08-17 with IGS final products: static within 0.011 m horizontal / 0.017 m vertical of the EPN daily coordinates, OBE4 kinematic RMS 0.041 / 0.035 m after the first hour; see [epn-ppp](#epn-ppp-four-stations-in-one-reference-frame-2026-11-14) |
 
 Runtimes were measured on a 12-thread Windows 11 workstation with an MSVC
@@ -1434,16 +1434,23 @@ Local result (Linux gcc Release, 2026-11-14, 75 s):
 
 | Run | H / U at 60 min | 120 min | after 24 h | RMS after the first hour (E / N / U) |
 |---|---|---|---|---|
-| static | 0.052 / +0.005 m | 0.028 / +0.014 m | **0.019 / +0.026 m** | 0.012 / 0.019 / 0.018 m |
-| static, `--dcb` | 0.054 / +0.003 m | 0.030 / +0.012 m | **0.020 / +0.025 m** | 0.014 / 0.019 / 0.017 m |
-| kinematic | 0.062 / -0.018 m | 0.044 / +0.001 m | 0.046 / +0.035 m | **0.014 / 0.027 / 0.019 m** |
+| static | 0.051 / -0.033 m | 0.033 / -0.018 m | **0.020 / -0.008 m** | 0.015 / 0.017 / 0.014 m |
+| static, `--dcb` | 0.053 / -0.035 m | 0.034 / -0.021 m | **0.021 / -0.009 m** | 0.017 / 0.017 / 0.015 m |
+| kinematic | 0.056 / -0.057 m | 0.041 / -0.033 m | 0.022 / -0.019 m | **0.015 / 0.023 / 0.038 m** |
 
 The lane gates the static runs at H <= 0.05 m and |U| <= 0.06 m after 24 h,
 the static run at H <= 0.10 m after 60 min and 0.06 m after 120 min, and the
 kinematic run at an RMS of 0.06 m horizontal and vertical after the first
-hour. Each constellation alone (the clock file restricted to it) gives the
-same static coordinate within 2.5 cm and a kinematic RMS of at most
-0.019 / 0.032 / 0.054 m.
+hour.
+
+`igs14_2233.atx` calibrates the station's antenna (SEPCHOKE_B3E6) for GPS and
+GLONASS only. Galileo and BeiDou take the GPS L1 / L2 calibration
+(2026-11-14); without it they had no phase centre offset, and each alone
+(orbits and clocks restricted to it) ended +0.106 m and +0.095 m high in the
+static run. With it the four constellations alone end at -0.003 (GPS),
+-0.014 (GLONASS), +0.004 (Galileo) and -0.006 m (BeiDou). The kinematic
+height is 0.035 m low on average with all four; GPS + Galileo is 0.008 m low
+and GPS + BeiDou 0.063 m, so that part comes with BeiDou and is open.
 
 
 ## epn-ppp: four stations in one reference frame (2026-11-14)

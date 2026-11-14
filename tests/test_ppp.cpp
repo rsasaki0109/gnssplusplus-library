@@ -215,6 +215,47 @@ TEST(PPPAntennaPcv, NoaziGridIsInterpolatedAndHeldAtBothEnds) {
     EXPECT_DOUBLE_EQ(ppp_internal::antexNoaziPcvMeters(ReceiverPcvGrid{}, 10.0), 0.0);
 }
 
+TEST(PPPTest, ReceiverAntexSignalFallsBackToTheGpsCalibration) {
+    using libgnss::ppp_internal::findReceiverAntexSignal;
+    // An igs14.atx receiver antenna: GPS and GLONASS only.
+    const std::map<SignalType, int> gps_glonass = {
+        {SignalType::GPS_L1CA, 1}, {SignalType::GPS_L2C, 2},
+        {SignalType::GLO_L1CA, 3}, {SignalType::GLO_L2CA, 4}};
+    auto value = [](const std::map<SignalType, int>& map, SignalType signal) {
+        const auto it = findReceiverAntexSignal(map, signal);
+        return it == map.end() ? 0 : it->second;
+    };
+    EXPECT_EQ(value(gps_glonass, SignalType::GPS_L2C), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::GLO_L2CA), 4);
+    // Same carrier.
+    EXPECT_EQ(value(gps_glonass, SignalType::GPS_L1P), 1);
+    EXPECT_EQ(value(gps_glonass, SignalType::GPS_L2P), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::GAL_E1), 1);
+    EXPECT_EQ(value(gps_glonass, SignalType::BDS_B1C), 1);
+    EXPECT_EQ(value(gps_glonass, SignalType::QZS_L2C), 2);
+    // No entry on the carrier: GPS L1 in the upper L band, GPS L2 below.
+    EXPECT_EQ(value(gps_glonass, SignalType::BDS_B1I), 1);
+    EXPECT_EQ(value(gps_glonass, SignalType::GAL_E5A), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::GAL_E5B), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::GAL_E6), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::BDS_B3I), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::GPS_L5), 2);
+    EXPECT_EQ(value(gps_glonass, SignalType::SIGNAL_TYPE_COUNT), 0);
+
+    // With an L5 calibration, E5a and B2a take it; its own entry wins.
+    const std::map<SignalType, int> with_l5 = {
+        {SignalType::GPS_L1CA, 1}, {SignalType::GPS_L2C, 2}, {SignalType::GPS_L5, 5},
+        {SignalType::GAL_E5B, 7}};
+    EXPECT_EQ(value(with_l5, SignalType::GAL_E5A), 5);
+    EXPECT_EQ(value(with_l5, SignalType::BDS_B2A), 5);
+    EXPECT_EQ(value(with_l5, SignalType::GAL_E5B), 7);
+    EXPECT_EQ(value(with_l5, SignalType::BDS_B2I), 7);
+
+    // Nothing to fall back to.
+    const std::map<SignalType, int> glonass_only = {{SignalType::GLO_L1CA, 3}};
+    EXPECT_EQ(value(glonass_only, SignalType::GAL_E5A), 0);
+}
+
 TEST(PPPAntennaPcv, IonosphereFreeRowTakesTheSameCombinationOfBothFrequencies) {
     // GPS L1 / L2: c1 = 2.546, c2 = -1.546.
     const double c1 = 2.5457277801631593;

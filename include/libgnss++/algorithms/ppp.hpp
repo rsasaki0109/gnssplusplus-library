@@ -765,6 +765,7 @@ private:
     // available. Sign matches RTKLIB antmodel(): the value is added to the
     // modeled range (equivalently subtracted from the observable).
     double receiverAntennaPcvMeters(SignalType signal, double elevation_rad) const;
+    bool receiverAntexFallbackAllowed() const;
     double clasReceiverAntennaRangeCorrectionMeters(
         SignalType signal,
         double azimuth_rad,
