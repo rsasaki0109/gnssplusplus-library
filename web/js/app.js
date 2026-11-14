@@ -566,6 +566,7 @@ function postOptions() {
     hasPagesFormat: corrections === 'has-sis' ? HAS_PAGE_FORMATS[workspace.get(v.hasPages)?.kind] || 'cssrlib' : '',
     b2bLog: corrections === 'b2b' ? v.b2bLog : '',
     antex: group === 'ppp' ? v.antex : '',
+    dcb: products ? v.dcb : '',
     imu: group === 'imu' ? v.imu : '',
     leverArm: group === 'imu' ? [v.leverX, v.leverY, v.leverZ] : null,
     tightCoupling: v.tightCoupling,
@@ -645,7 +646,7 @@ function applyOptionsToml(name, text) {
   const matched = [];
   for (const [role, base] of Object.entries(imported.files)) {
     if (role === 'out') el.out.value = base;
-    else if (['rover', 'base', 'nav', 'sp3', 'clk', 'antex'].includes(role) && workspace.get(base)) {
+    else if (['rover', 'base', 'nav', 'sp3', 'clk', 'antex', 'dcb'].includes(role) && workspace.get(base)) {
       el[role].value = base;
       matched.push(base);
     }

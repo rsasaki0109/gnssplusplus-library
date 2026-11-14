@@ -592,6 +592,35 @@ function l6Frames(...headers) {
   return out;
 }
 
+test('code biases (Bias-SINEX) go with SP3 / CLK products', () => {
+  const header = '%=BIA 1.00 COD 2022:331:13573 IGS 2022:328:00000 2022:329:00000 A 00006641\n';
+  assert.equal(sniffKind('biases.txt', new TextEncoder().encode(header)), 'bia');
+  assert.equal(sniffKind('com22374.bia', new Uint8Array()), 'bia');
+  assert.equal(sniffKind('CAS0MGXRAP_20223280000_01D_01D_DCB.BSX', new Uint8Array()), 'bia');
+
+  const common = { mode: 'ppp-static', rover: 'obe4.obs', nav: 'brdc.rnx' };
+  const withBiases = buildPostCommand({
+    ...common, sp3: 'com22374.eph', clk: 'com22374.clk', antex: 'igs14.atx', dcb: 'com22374.bia',
+  });
+  assert.match(
+    withBiases.commandLine,
+    /^gnss ppp --obs obe4\.obs --nav brdc\.rnx --sp3 com22374\.eph --clk com22374\.clk --dcb com22374\.bia --antex igs14\.atx --out obe4_ppp\.pos --static/);
+  assert.ok(withBiases.inputs.includes('com22374.bia'));
+  assert.deepEqual(
+    withBiases.args.slice(withBiases.args.indexOf('--dcb'), withBiases.args.indexOf('--dcb') + 2),
+    ['--dcb', '/in/com22374.bia']);
+
+  // Without the precise clocks the biases have nothing to refer to.
+  assert.throws(
+    () => buildPostCommand({ ...common, dcb: 'com22374.bia' }),
+    /Code biases \(--dcb\) need SP3 and CLK products/);
+  // Not passed with SSR corrections, which carry their own code biases.
+  const hasIdd = buildPostCommand({
+    ...common, corrections: 'has-idd', hasIdd: 'idd.rtc', dcb: 'com22374.bia',
+  });
+  assert.ok(!hasIdd.args.includes('--dcb'));
+});
+
 test('QZSS L6 logs and ANTEX files are recognised', () => {
   // Header bytes as in the MADOCALIB / CLASLIB sample logs.
   assert.equal(l6Service(l6Frames([204, 0x41], [204, 0x61], [204, 0x40])), 'l6e');
