@@ -42,6 +42,7 @@ DATASET_ENV = {
     "has": "GNSSPP_HAS_DATA_ROOT",
     "has_sis": "GNSSPP_HAS_SIS_DATA_ROOT",
     "mgex": "GNSSPP_MGEX_DATA_ROOT",
+    "epn": "GNSSPP_EPN_DATA_ROOT",
 }
 # CLI option that sets each dataset root (default: --<name>-root).
 DATASET_OPTION = {
@@ -49,6 +50,7 @@ DATASET_OPTION = {
     "has": "--has-data-root",
     "has_sis": "--has-sis-data-root",
     "mgex": "--mgex-data-root",
+    "epn": "--epn-data-root",
 }
 # A dataset root that is set neither by option nor by environment variable
 # falls back to another dataset's root (GSDC ground truth usually ships inside
@@ -544,6 +546,7 @@ DEFAULT_DATA_SUBDIRS = {
     "has": Path("data") / "galileo_has" / "doy2023-229",
     "has_sis": Path("data") / "galileo_has" / "cssrlib-data",
     "mgex": Path("data") / "mgex" / "obe4-2022-328",
+    "epn": Path("data") / "epn" / "2023-229",
 }
 
 
@@ -675,6 +678,11 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
                              "the IGS merged broadcast navigation file, CODE MGEX orbits, clocks and biases "
                              "of that day and igs14_2233.atx (default: $GNSSPP_MGEX_DATA_ROOT or "
                              "<data-root>/mgex/obe4-2022-328).")
+    parser.add_argument("--epn-data-root", dest="epn_root", type=Path, default=None,
+                        help="Directory for the epn-ppp lane: the daily observations of OBE4, WTZR, MATE and "
+                             "ONSA of 2023-08-17, the IGS merged broadcast navigation file, the IGS final "
+                             "orbits and clocks of that day and igs20.atx (default: $GNSSPP_EPN_DATA_ROOT or "
+                             "<data-root>/epn/2023-229).")
     parser.add_argument("--build-dir", type=Path, default=os.environ.get("GNSSPP_BUILD_DIR"),
                         help="CMake build directory holding apps/gnss_* binaries (default: $GNSSPP_BUILD_DIR or <repo>/build*).")
     parser.add_argument("--rtklib-bin", type=Path, default=None,

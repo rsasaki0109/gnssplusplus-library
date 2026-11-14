@@ -1922,6 +1922,44 @@ TEST(PPPTest, PreciseProductsLoadSp3AndClockAndInterpolateMidpoint) {
     std::filesystem::remove(clk_path);
 }
 
+TEST(PPPTest, PreciseProductsDoNotExtrapolateTheOrbitBeyondItsSamples) {
+    // IGS final orbits end at 23:45: a polynomial through the last samples
+    // is metres off within minutes after it, so no orbit is given there.
+    const auto sp3_path = tempFilePath("libgnss_ppp_precise_span_test.sp3");
+    std::filesystem::remove(sp3_path);
+    std::string sp3_text;
+    for (int index = 0; index < 4; ++index) {
+        char line[128];
+        std::snprintf(line, sizeof(line), "*  2026 03 26 23 %02d 00.00000000\n", 15 * index);
+        sp3_text += line;
+        std::snprintf(line, sizeof(line),
+                      "PG01 %14.6f   14000.000000   21700.000000       123.000000\n",
+                      20200.0 + 1.5 * index);
+        sp3_text += line;
+    }
+    writeTextFile(sp3_path, sp3_text);
+
+    PreciseProducts precise_products;
+    ASSERT_TRUE(precise_products.loadSP3File(sp3_path.string()));
+
+    const SatelliteId satellite(GNSSSystem::GPS, 1);
+    Vector3d position = Vector3d::Zero();
+    Vector3d velocity = Vector3d::Zero();
+    double clock_bias = 0.0;
+    double clock_drift = 0.0;
+    EXPECT_TRUE(precise_products.interpolateOrbitClock(
+        satellite, makeTime(2026, 3, 26, 23, 45, 0.0), position, velocity, clock_bias, clock_drift));
+    EXPECT_NEAR(position.x(), 20'204'500.0, 1e-3);
+    EXPECT_TRUE(precise_products.interpolateOrbitClock(
+        satellite, makeTime(2026, 3, 26, 23, 0, 0.0), position, velocity, clock_bias, clock_drift));
+    EXPECT_FALSE(precise_products.interpolateOrbitClock(
+        satellite, makeTime(2026, 3, 26, 23, 45, 30.0), position, velocity, clock_bias, clock_drift));
+    EXPECT_FALSE(precise_products.interpolateOrbitClock(
+        satellite, makeTime(2026, 3, 26, 22, 59, 30.0), position, velocity, clock_bias, clock_drift));
+
+    std::filesystem::remove(sp3_path);
+}
+
 TEST(PPPTest, PreciseProductsInterpolateAtClockOnlyTimestampUsesSP3Bracket) {
     // Reproduces the silent SP3+CLK aliasing bug (2026-05-09): when the query
     // time lands exactly on a CLK-only entry (added at 30 s spacing for IGS

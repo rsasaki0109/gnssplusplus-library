@@ -38,6 +38,7 @@ double nevillePolynomial(const std::vector<double>& x,
     return y[0];
 }
 
+constexpr double kMaxOrbitExtrapolationSeconds = 5.0;
 constexpr int kLagrangeOrder = 10;  ///< number of SP3 samples (degree 9)
 
 }  // namespace
@@ -234,6 +235,18 @@ bool PreciseProducts::interpolateOrbitClock(const SatelliteId& sat,
     }
 
     if (pos_indices.empty()) {
+        return false;
+    }
+
+    // No orbit outside the span of its samples. The polynomial of the last
+    // window leaves the orbit by decimetres within minutes: with a daily
+    // SP3 of 15 min samples (last one at 23:45) a kinematic solution was
+    // 0.1 m off at 23:52 and 1.4 m off at 23:59:30. A few seconds are kept
+    // for the signal travel time before the first sample.
+    const double before_first_s = entries[pos_indices.front()].time - time;
+    const double after_last_s = time - entries[pos_indices.back()].time;
+    if (before_first_s > kMaxOrbitExtrapolationSeconds ||
+        after_last_s > kMaxOrbitExtrapolationSeconds) {
         return false;
     }
 
