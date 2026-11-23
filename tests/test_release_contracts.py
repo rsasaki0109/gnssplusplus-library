@@ -56,6 +56,63 @@ class ReleaseVersionValidatorTest(unittest.TestCase):
                 validator.validate_versions("v0.2.0", cmake_file)
 
 
+class PipPackageContractTest(unittest.TestCase):
+    """Static checks on pyproject.toml (the wheel itself is built by pip)."""
+
+    def setUp(self) -> None:
+        try:
+            import tomllib
+        except ModuleNotFoundError:  # Python < 3.11
+            self.skipTest("tomllib requires Python 3.11+")
+        with (ROOT_DIR / "pyproject.toml").open("rb") as handle:
+            self.pyproject = tomllib.load(handle)
+
+    def test_version_is_read_from_the_cmake_project(self) -> None:
+        import re
+
+        project = self.pyproject["project"]
+        self.assertIn("version", project["dynamic"])
+        self.assertNotIn("version", project)
+        version_cfg = self.pyproject["tool"]["scikit-build"]["metadata"]["version"]
+        self.assertEqual(version_cfg["input"], "CMakeLists.txt")
+        cmake_text = (ROOT_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
+        match = re.search(version_cfg["regex"], cmake_text)
+        self.assertIsNotNone(match)
+        self.assertEqual(
+            match.group("value"),
+            validator.validate_versions("v0.6.1", ROOT_DIR / "CMakeLists.txt"),
+        )
+
+    def test_gnss_entry_point_and_prefix_layout(self) -> None:
+        self.assertEqual(
+            self.pyproject["project"]["scripts"]["gnss"], "libgnsspp._cli:main"
+        )
+        self.assertTrue((ROOT_DIR / "python" / "libgnsspp" / "_cli.py").is_file())
+        python_cmake = (ROOT_DIR / "python" / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("libgnsspp/_cli.py", python_cmake)
+        build = self.pyproject["tool"]["scikit-build"]
+        self.assertEqual(build["wheel"]["install-dir"], "libgnsspp")
+        self.assertEqual(build["install"]["components"], ["Unspecified"])
+        self.assertEqual(build["cmake"]["define"]["BUILD_TESTING"], "OFF")
+
+    def test_sdist_keeps_every_docs_file_the_install_needs(self) -> None:
+        import fnmatch
+        import re
+
+        build = self.pyproject["tool"]["scikit-build"]
+        self.assertIn("/docs/", build["sdist"]["exclude"])
+        for pattern in build["sdist"]["exclude"]:
+            self.assertTrue(pattern.startswith("/"), pattern)
+        apps_cmake = (ROOT_DIR / "apps" / "CMakeLists.txt").read_text(encoding="utf-8")
+        needed = re.findall(r"\$\{CMAKE_SOURCE_DIR\}/(docs/[^\s)]+)", apps_cmake)
+        self.assertTrue(needed)
+        for path in needed:
+            with self.subTest(path=path):
+                self.assertTrue(
+                    any(fnmatch.fnmatch("/" + path, pattern) for pattern in build["sdist"]["include"])
+                )
+
+
 class ReleaseNotesTest(unittest.TestCase):
     notes = ROOT_DIR / "docs" / "releases" / "v0.5.0.md"
     docs = ROOT_DIR / "docs"

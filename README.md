@@ -501,6 +501,22 @@ docker run --rm -it -p 8085:8085 -v "$PWD:/workspace" \
 
 ## Install
 
+With pip (builds the native tools from source; needs a C++20 compiler, and
+CMake/pybind11 are fetched automatically):
+
+```bash
+pip install "git+https://github.com/rsasaki0109/gnssplusplus-library.git"
+gnss --help
+gnss demo --output-dir output/self-contained-demo
+```
+
+This installs the `gnss` command suite and the `libgnsspp` Python module
+(`import libgnsspp`). From a checkout, `pip install .` does the same. Eigen is
+used from the system when found, otherwise its headers are downloaded during
+the build. See [docs/python_package.md](docs/python_package.md).
+
+From a CMake build:
+
 ```bash
 cmake --install build --prefix /opt/libgnsspp
 /opt/libgnsspp/bin/gnss --help

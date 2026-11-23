@@ -32,6 +32,41 @@ else()
 endif()
 
 # Find necessary packages
+# Eigen is header-only. A pip build (scikit-build-core sets SKBUILD) may run
+# on a machine without it, so fall back to the Eigen 3.4.0 release headers and
+# a minimal Eigen3Config.cmake that every find_package(Eigen3) below resolves.
+if(SKBUILD)
+    find_package(Eigen3 QUIET)
+    if(NOT Eigen3_FOUND)
+        set(GNSSPP_EIGEN_ROOT ${CMAKE_BINARY_DIR}/_deps/eigen)
+        set(GNSSPP_EIGEN_SOURCE ${GNSSPP_EIGEN_ROOT}/eigen-3.4.0)
+        if(NOT EXISTS ${GNSSPP_EIGEN_SOURCE}/Eigen/Core)
+            message(STATUS "Eigen3 not found; downloading Eigen 3.4.0 headers")
+            file(DOWNLOAD
+                https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
+                ${GNSSPP_EIGEN_ROOT}/eigen-3.4.0.tar.gz
+                EXPECTED_HASH SHA256=8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72
+                TLS_VERIFY ON)
+            file(ARCHIVE_EXTRACT
+                INPUT ${GNSSPP_EIGEN_ROOT}/eigen-3.4.0.tar.gz
+                DESTINATION ${GNSSPP_EIGEN_ROOT})
+        endif()
+        file(WRITE ${GNSSPP_EIGEN_ROOT}/Eigen3Config.cmake
+"if(NOT TARGET Eigen3::Eigen)
+    add_library(Eigen3::Eigen INTERFACE IMPORTED)
+    set_target_properties(Eigen3::Eigen PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES \"${GNSSPP_EIGEN_SOURCE}\")
+endif()
+set(EIGEN3_INCLUDE_DIR \"${GNSSPP_EIGEN_SOURCE}\")
+set(EIGEN3_INCLUDE_DIRS \"${GNSSPP_EIGEN_SOURCE}\")
+")
+        file(WRITE ${GNSSPP_EIGEN_ROOT}/Eigen3ConfigVersion.cmake
+"set(PACKAGE_VERSION 3.4.0)
+set(PACKAGE_VERSION_COMPATIBLE TRUE)
+")
+        set(Eigen3_DIR ${GNSSPP_EIGEN_ROOT} CACHE PATH "Eigen3 config directory" FORCE)
+    endif()
+endif()
 find_package(Eigen3 REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Doxygen QUIET)
@@ -430,12 +465,16 @@ install(
     # installed libgnsspp::gnss_lib need the vendor symbols at link time.
     TARGETS ${GNSS_INSTALL_TARGETS}
     EXPORT libgnssppTargets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT Development
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT Development
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT Development
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+# The C++ SDK (static archives, headers, CMake/pkg-config files) is the
+# "Development" component so the pip wheel (pyproject.toml), which installs
+# only the "Unspecified" component, ships the CLI and Python module alone.
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT Development)
 
 configure_package_config_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake/libgnssppConfig.cmake.in
@@ -452,12 +491,14 @@ install(
     FILE libgnssppTargets.cmake
     NAMESPACE libgnsspp::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libgnsspp
+    COMPONENT Development
 )
 install(
     FILES
         ${CMAKE_CURRENT_BINARY_DIR}/libgnssppConfig.cmake
         ${CMAKE_CURRENT_BINARY_DIR}/libgnssppConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libgnsspp
+    COMPONENT Development
 )
 
 configure_file(
@@ -468,6 +509,7 @@ configure_file(
 install(
     FILES ${CMAKE_CURRENT_BINARY_DIR}/libgnsspp.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+    COMPONENT Development
 )
 
 if(DOXYGEN_FOUND)
@@ -544,7 +586,10 @@ if(EMSCRIPTEN)
 endif()
 
 # Add subdirectories
-add_subdirectory(examples)
+option(GNSSPP_BUILD_EXAMPLES "Build the examples/ programs" ON)
+if(GNSSPP_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 add_subdirectory(apps)
 if(GNSSPP_BUILD_PYTHON_BINDINGS)
     add_subdirectory(python)

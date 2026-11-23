@@ -1,9 +1,16 @@
 set(GNSSPP_PYTHON_PACKAGE_DIR ${CMAKE_BINARY_DIR}/python/libgnsspp)
-set(GNSSPP_PYTHON_INSTALL_DIR
-    ${CMAKE_INSTALL_LIBDIR}/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages/libgnsspp
-)
+if(SKBUILD)
+    # pip wheel: pyproject.toml sets the install prefix to the libgnsspp
+    # package directory itself, so the module lands at its root.
+    set(GNSSPP_PYTHON_INSTALL_DIR .)
+else()
+    set(GNSSPP_PYTHON_INSTALL_DIR
+        ${CMAKE_INSTALL_LIBDIR}/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages/libgnsspp
+    )
+endif()
 set(GNSSPP_PYTHON_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/libgnsspp/__init__.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/libgnsspp/_cli.py
     ${CMAKE_CURRENT_SOURCE_DIR}/libgnsspp/artifacts.py
     ${CMAKE_CURRENT_SOURCE_DIR}/libgnsspp/observations.py
 )
