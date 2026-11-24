@@ -106,6 +106,7 @@ nav:
           - SPP Accuracy Improvement: references/spp-accuracy-improvement.md
           - Roadmap: references/roadmap.md
   - Operations:
+      - v0.6.2 release highlights: releases/v0.6.2.md
       - v0.6.1 release highlights: releases/v0.6.1.md
       - v0.6.0 release highlights: releases/v0.6.0.md
       - v0.5.0 release highlights: releases/v0.5.0.md
