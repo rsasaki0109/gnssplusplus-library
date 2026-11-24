@@ -1,10 +1,11 @@
 # Install with pip
 
 ```bash
-pip install libgnsspp
+pip install gnsspp
 ```
 
-installs the whole command suite plus the Python bindings. PyPI carries
+installs the whole command suite plus the Python bindings. The PyPI
+project is `gnsspp`; the Python module keeps its name (`import libgnsspp`). PyPI carries
 prebuilt Linux wheels (x86_64, aarch64; CPython 3.10 to 3.14, from the first
 release published by the workflow below); elsewhere pip builds from the sdist
 with [scikit-build-core](https://scikit-build-core.readthedocs.io/). The
@@ -50,7 +51,7 @@ files) is left out; use a CMake build for C++ integration.
 Optional extras used by some analysis and plotting commands:
 
 ```bash
-pip install "libgnsspp[full] @ git+https://github.com/rsasaki0109/gnssplusplus-library.git"
+pip install "gnsspp[full] @ git+https://github.com/rsasaki0109/gnssplusplus-library.git"
 ```
 
 ## Build settings
@@ -68,7 +69,7 @@ To build distributable files:
 
 ```bash
 python -m pip install build
-python -m build            # dist/libgnsspp-<version>.tar.gz and .whl
+python -m build            # dist/gnsspp-<version>.tar.gz and .whl
 ```
 
 ## Publishing to PyPI
@@ -85,7 +86,7 @@ sdist, which compiles locally.
 One-time setup by a maintainer:
 
 1. On PyPI, open *Your projects → Publishing → Add a new pending publisher*
-   and enter: PyPI project name `libgnsspp`, owner `rsasaki0109`, repository
+   and enter: PyPI project name `gnsspp`, owner `rsasaki0109`, repository
    `gnssplusplus-library`, workflow `pypi.yml`, environment `pypi`.
 2. Optionally do the same on [TestPyPI](https://test.pypi.org/) with
    environment `testpypi`.
@@ -97,7 +98,7 @@ Dry runs: *Actions → PyPI → Run workflow* builds and tests everything; choos
 
 ```bash
 pip install --index-url https://test.pypi.org/simple/ \
-    --extra-index-url https://pypi.org/simple/ libgnsspp
+    --extra-index-url https://pypi.org/simple/ gnsspp
 ```
 
 A version can be uploaded to PyPI only once, so bump the `CMakeLists.txt`

@@ -67,6 +67,9 @@ class PipPackageContractTest(unittest.TestCase):
         with (ROOT_DIR / "pyproject.toml").open("rb") as handle:
             self.pyproject = tomllib.load(handle)
 
+    def workflow_text(self) -> str:
+        return (ROOT_DIR / ".github" / "workflows" / "pypi.yml").read_text(encoding="utf-8")
+
     def test_version_is_read_from_the_cmake_project(self) -> None:
         import re
 
@@ -84,6 +87,8 @@ class PipPackageContractTest(unittest.TestCase):
         )
 
     def test_gnss_entry_point_and_prefix_layout(self) -> None:
+        self.assertEqual(self.pyproject["project"]["name"], "gnsspp")
+        self.assertIn("pypi.org/project/gnsspp/", self.workflow_text())
         self.assertEqual(
             self.pyproject["project"]["scripts"]["gnss"], "libgnsspp._cli:main"
         )

@@ -506,7 +506,7 @@ first PyPI release on; other platforms compile from the sdist with a C++20
 compiler):
 
 ```bash
-pip install libgnsspp
+pip install gnsspp
 gnss --help
 gnss demo --output-dir output/self-contained-demo
 ```

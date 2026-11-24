@@ -90,7 +90,7 @@ jobs:
     timeout-minutes: 15
     environment:
       name: pypi
-      url: https://pypi.org/project/libgnsspp/
+      url: https://pypi.org/project/gnsspp/
     permissions:
       id-token: write
     steps:
@@ -109,7 +109,7 @@ jobs:
     timeout-minutes: 15
     environment:
       name: testpypi
-      url: https://test.pypi.org/project/libgnsspp/
+      url: https://test.pypi.org/project/gnsspp/
     permissions:
       id-token: write
     steps:

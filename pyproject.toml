@@ -3,7 +3,7 @@ requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "libgnsspp"
+name = "gnsspp"
 dynamic = ["version"]
 description = "libgnss++: GNSS processing (SPP, RTK, PPP, CLAS, FGO, GNSS/IMU) with the gnss command suite and Python bindings"
 readme = "README.md"
