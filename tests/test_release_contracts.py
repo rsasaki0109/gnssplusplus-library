@@ -14,7 +14,7 @@ VALIDATOR_PATH = ROOT_DIR / "scripts" / "release" / "validate_version.py"
 NOTES_PATH = ROOT_DIR / "scripts" / "release" / "release_notes.py"
 RELEASE_WORKFLOW_PATH = ROOT_DIR / ".github" / "workflows" / "release.yml"
 DOCKER_WORKFLOW_PATH = ROOT_DIR / ".github" / "workflows" / "docker.yml"
-PUBLIC_IMAGE = "ghcr.io/rsasaki0109/gnssplusplus-library:v0.6.1"
+PUBLIC_IMAGE = "ghcr.io/rsasaki0109/gnssplusplus-library:v0.6.2"
 
 
 def load_module(name: str, path: Path):
@@ -34,8 +34,8 @@ SITE_URL = "https://rsasaki0109.github.io/gnssplusplus-library/"
 class ReleaseVersionValidatorTest(unittest.TestCase):
     def test_valid_v060_matches_cmake(self) -> None:
         self.assertEqual(
-            validator.validate_versions("v0.6.1", ROOT_DIR / "CMakeLists.txt"),
-            "0.6.1",
+            validator.validate_versions("v0.6.2", ROOT_DIR / "CMakeLists.txt"),
+            "0.6.2",
         )
 
     def test_invalid_and_prerelease_tags_are_rejected(self) -> None:
@@ -83,7 +83,7 @@ class PipPackageContractTest(unittest.TestCase):
         self.assertIsNotNone(match)
         self.assertEqual(
             match.group("value"),
-            validator.validate_versions("v0.6.1", ROOT_DIR / "CMakeLists.txt"),
+            validator.validate_versions("v0.6.2", ROOT_DIR / "CMakeLists.txt"),
         )
 
     def test_gnss_entry_point_and_prefix_layout(self) -> None:

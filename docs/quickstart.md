@@ -50,11 +50,11 @@ For the no-build self-contained demo, use the published image and mount only
 the output directory:
 
 ```bash
-docker pull ghcr.io/rsasaki0109/gnssplusplus-library:v0.6.1
+docker pull ghcr.io/rsasaki0109/gnssplusplus-library:v0.6.2
 mkdir -p output
 docker run --rm \
   -v "$PWD/output:/workspace/output" \
-  ghcr.io/rsasaki0109/gnssplusplus-library:v0.6.1 \
+  ghcr.io/rsasaki0109/gnssplusplus-library:v0.6.2 \
   demo --output-dir /workspace/output/self-contained-demo
 ```
 

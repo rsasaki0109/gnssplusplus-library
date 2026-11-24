@@ -1,6 +1,6 @@
 # Maintainer release runbook
 
-This runbook covers the tag-driven v0.6.1 release. Release automation is
+This runbook covers the tag-driven v0.6.2 release. Release automation is
 intentionally started only by an annotated `vMAJOR.MINOR.PATCH` tag pushed to
 the repository.
 
@@ -18,7 +18,7 @@ not automate posting or change repository publication state.
 
    ```bash
    python3 scripts/release/validate_version.py \
-     --tag v0.6.1 --cmake-file CMakeLists.txt
+     --tag v0.6.2 --cmake-file CMakeLists.txt
    ```
 
 ## Start the release
@@ -26,12 +26,12 @@ not automate posting or change repository publication state.
 From the validated `develop` merge commit, create and push the annotated tag:
 
 ```bash
-git tag -a v0.6.1 -m "libgnss++ v0.6.1"
-git push origin v0.6.1
+git tag -a v0.6.2 -m "libgnss++ v0.6.2"
+git push origin v0.6.2
 ```
 
 The release workflow checks out the event commit, then refuses to proceed
-unless the local `v0.6.1` ref is an annotated tag that peels exactly to that
+unless the local `v0.6.2` ref is an annotated tag that peels exactly to that
 commit and matches CMake. It builds repeatable tag-driven packages for Ubuntu
 24.04 amd64 and verifies the tag with `gh release create --verify-tag`; the
 workflow never creates a Git tag.
@@ -47,13 +47,21 @@ workflow never creates a Git tag.
   fresh Ubuntu 24.04 amd64 container before running the offline demo.
 - Treat the binaries and packages as Ubuntu 24.04 amd64 release artifacts;
   the TGZ is not a universal portability promise.
-- Confirm the GitHub Release for `v0.6.1` contains those assets and generated
-  notes plus `docs/releases/v0.6.1.md` when that file is present. Its relative
+- Confirm the GitHub Release for `v0.6.2` contains those assets and generated
+  notes plus `docs/releases/v0.6.2.md` when that file is present. Its relative
   docs links are published as links to the docs site
   (`scripts/release/release_notes.py`), which fails the release on a link to
   a missing file.
-- Confirm GHCR has `v0.6.1`, `0.6.1`, and `0.6` aliases, together with the
+- Confirm GHCR has `v0.6.2`, `0.6.2`, and `0.6` aliases, together with the
   normal branch/ref, short-SHA, and `latest` tags.
+- The same tag starts the PyPI workflow (`.github/workflows/pypi.yml`). It
+  builds the sdist and the manylinux wheels, tests each wheel, and uploads them
+  to <https://pypi.org/project/gnsspp/> through Trusted Publishing. Confirm the
+  `0.6.2` files are there and that `pip install gnsspp==0.6.2` followed by
+  `gnss demo` works. A version can be uploaded to PyPI only once; a failed
+  upload of some files is fixed by rerunning the workflow, a wrong file only by
+  a new version. One-time setup:
+  [Install with pip](python_package.md#publishing-to-pypi).
 
 If a rerun finds an existing release, it uploads the freshly checked assets
 with `--clobber`. A version mistake requires a new corrective tag; do not
