@@ -113,6 +113,46 @@ class PipPackageContractTest(unittest.TestCase):
                 )
 
 
+class PypiWorkflowContractTest(unittest.TestCase):
+    workflow = (ROOT_DIR / ".github" / "workflows" / "pypi.yml").read_text(encoding="utf-8")
+
+    def job(self, name: str) -> str:
+        start = self.workflow.index(f"\n  {name}:\n")
+        following = [
+            self.workflow.find(f"\n  {other}:\n", start + 1)
+            for other in ("sdist", "wheels", "publish-pypi", "publish-testpypi")
+        ]
+        ends = [index for index in following if index > start]
+        return self.workflow[start : min(ends) if ends else len(self.workflow)]
+
+    def test_default_permissions_are_read_only(self) -> None:
+        header = self.workflow[: self.workflow.index("\njobs:")]
+        self.assertIn("permissions:\n  contents: read", header)
+        for name in ("sdist", "wheels"):
+            self.assertNotIn("id-token", self.job(name))
+
+    def test_pypi_upload_is_tag_only_trusted_publishing(self) -> None:
+        job = self.job("publish-pypi")
+        self.assertIn("if: github.event_name == 'push' && github.ref_type == 'tag'", job)
+        self.assertIn("needs: [sdist, wheels]", job)
+        self.assertIn("name: pypi\n", job)
+        self.assertIn("id-token: write", job)
+        self.assertIn("pypa/gh-action-pypi-publish@release/v1", job)
+        self.assertNotIn("password", job)
+        self.assertNotIn("repository-url", job)
+
+    def test_testpypi_upload_is_manual_only(self) -> None:
+        job = self.job("publish-testpypi")
+        self.assertIn("github.event_name == 'workflow_dispatch'", job)
+        self.assertIn("repository-url: https://test.pypi.org/legacy/", job)
+
+    def test_sdist_checks_the_tag_against_cmake(self) -> None:
+        self.assertIn(
+            'scripts/release/validate_version.py --tag "${GITHUB_REF_NAME}" --cmake-file CMakeLists.txt',
+            self.job("sdist"),
+        )
+
+
 class ReleaseNotesTest(unittest.TestCase):
     notes = ROOT_DIR / "docs" / "releases" / "v0.5.0.md"
     docs = ROOT_DIR / "docs"

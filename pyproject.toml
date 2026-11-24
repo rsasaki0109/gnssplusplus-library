@@ -71,3 +71,22 @@ GNSSPP_USE_CHOLMOD = "OFF"
 CMAKE_DISABLE_FIND_PACKAGE_GTSAM = "ON"
 CMAKE_DISABLE_FIND_PACKAGE_OpenCV = "ON"
 CMAKE_DISABLE_FIND_PACKAGE_ament_cmake = "ON"
+
+# Wheels for PyPI (.github/workflows/pypi.yml); also runs locally with
+# `pipx run cibuildwheel --only cp313-manylinux_x86_64`.
+[tool.cibuildwheel]
+build = "cp310-* cp311-* cp312-* cp313-* cp314-*"
+# musllinux and free-threaded interpreters are not built or tested.
+skip = "*-musllinux_* cp3??t-*"
+build-verbosity = 1
+# Runs in a temporary directory with the wheel installed.
+test-command = [
+    "python -c \"import libgnsspp; print(libgnsspp.ecef_to_geodetic_deg)\"",
+    "gnss --help",
+    "gnss demo --output-dir demo-out",
+]
+
+[tool.cibuildwheel.linux]
+# Eigen in the manylinux_2_28 image is 3.3, which rejects C++20; the build
+# downloads the Eigen 3.4.0 headers instead (see CMakeLists.txt).
+environment = { CMAKE_BUILD_PARALLEL_LEVEL = "4" }

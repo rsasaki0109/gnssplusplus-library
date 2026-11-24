@@ -38,7 +38,7 @@ a processing command that is guaranteed to fail.
 ## pip
 
 ```bash
-pip install "git+https://github.com/rsasaki0109/gnssplusplus-library.git"
+pip install libgnsspp
 gnss demo --output-dir output/self-contained-demo
 ```
 

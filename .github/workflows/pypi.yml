@@ -1,0 +1,125 @@
+name: PyPI
+
+# Builds the sdist and Linux wheels (manylinux_2_28, x86_64 and aarch64) and
+# publishes them to PyPI with Trusted Publishing (OIDC; no API token) when a
+# vMAJOR.MINOR.PATCH tag is pushed. A manual run builds everything and can
+# publish to TestPyPI. Other platforms install from the sdist.
+# One-time setup: docs/python_package.md#publishing-to-pypi.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Where to upload the built distributions"
+        type: choice
+        options:
+          - none
+          - testpypi
+        default: none
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sdist:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+    - uses: actions/checkout@v7
+
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.12"
+
+    - name: Validate tag and project version
+      if: github.ref_type == 'tag'
+      run: python3 scripts/release/validate_version.py --tag "${GITHUB_REF_NAME}" --cmake-file CMakeLists.txt
+
+    - name: Build sdist
+      run: |
+        python -m pip install build
+        python -m build --sdist --outdir dist
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: pypi-sdist
+        path: dist/*.tar.gz
+        if-no-files-found: error
+
+  wheels:
+    name: wheel ${{ matrix.python }} ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+        python: [cp310, cp311, cp312, cp313, cp314]
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Build and test wheel
+      uses: pypa/cibuildwheel@v4.3.5
+      env:
+        CIBW_BUILD: ${{ matrix.python }}-manylinux_${{ matrix.arch }}
+      with:
+        output-dir: wheelhouse
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: pypi-wheel-${{ matrix.python }}-${{ matrix.arch }}
+        path: wheelhouse/*.whl
+        if-no-files-found: error
+
+  publish-pypi:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [sdist, wheels]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/project/libgnsspp/
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/download-artifact@v8
+      with:
+        pattern: pypi-*
+        path: dist
+        merge-multiple: true
+
+    - uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-testpypi:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == 'testpypi'
+    needs: [sdist, wheels]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/libgnsspp/
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/download-artifact@v8
+      with:
+        pattern: pypi-*
+        path: dist
+        merge-multiple: true
+
+    - uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+        skip-existing: true
