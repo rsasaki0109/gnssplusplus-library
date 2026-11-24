@@ -56,6 +56,108 @@ class ReleaseVersionValidatorTest(unittest.TestCase):
                 validator.validate_versions("v0.2.0", cmake_file)
 
 
+class PipPackageContractTest(unittest.TestCase):
+    """Static checks on pyproject.toml (the wheel itself is built by pip)."""
+
+    def setUp(self) -> None:
+        try:
+            import tomllib
+        except ModuleNotFoundError:  # Python < 3.11
+            self.skipTest("tomllib requires Python 3.11+")
+        with (ROOT_DIR / "pyproject.toml").open("rb") as handle:
+            self.pyproject = tomllib.load(handle)
+
+    def workflow_text(self) -> str:
+        return (ROOT_DIR / ".github" / "workflows" / "pypi.yml").read_text(encoding="utf-8")
+
+    def test_version_is_read_from_the_cmake_project(self) -> None:
+        import re
+
+        project = self.pyproject["project"]
+        self.assertIn("version", project["dynamic"])
+        self.assertNotIn("version", project)
+        version_cfg = self.pyproject["tool"]["scikit-build"]["metadata"]["version"]
+        self.assertEqual(version_cfg["input"], "CMakeLists.txt")
+        cmake_text = (ROOT_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
+        match = re.search(version_cfg["regex"], cmake_text)
+        self.assertIsNotNone(match)
+        self.assertEqual(
+            match.group("value"),
+            validator.validate_versions("v0.6.1", ROOT_DIR / "CMakeLists.txt"),
+        )
+
+    def test_gnss_entry_point_and_prefix_layout(self) -> None:
+        self.assertEqual(self.pyproject["project"]["name"], "gnsspp")
+        self.assertIn("pypi.org/project/gnsspp/", self.workflow_text())
+        self.assertEqual(
+            self.pyproject["project"]["scripts"]["gnss"], "libgnsspp._cli:main"
+        )
+        self.assertTrue((ROOT_DIR / "python" / "libgnsspp" / "_cli.py").is_file())
+        python_cmake = (ROOT_DIR / "python" / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("libgnsspp/_cli.py", python_cmake)
+        build = self.pyproject["tool"]["scikit-build"]
+        self.assertEqual(build["wheel"]["install-dir"], "libgnsspp")
+        self.assertEqual(build["install"]["components"], ["Unspecified"])
+        self.assertEqual(build["cmake"]["define"]["BUILD_TESTING"], "OFF")
+
+    def test_sdist_keeps_every_docs_file_the_install_needs(self) -> None:
+        import fnmatch
+        import re
+
+        build = self.pyproject["tool"]["scikit-build"]
+        self.assertIn("/docs/", build["sdist"]["exclude"])
+        for pattern in build["sdist"]["exclude"]:
+            self.assertTrue(pattern.startswith("/"), pattern)
+        apps_cmake = (ROOT_DIR / "apps" / "CMakeLists.txt").read_text(encoding="utf-8")
+        needed = re.findall(r"\$\{CMAKE_SOURCE_DIR\}/(docs/[^\s)]+)", apps_cmake)
+        self.assertTrue(needed)
+        for path in needed:
+            with self.subTest(path=path):
+                self.assertTrue(
+                    any(fnmatch.fnmatch("/" + path, pattern) for pattern in build["sdist"]["include"])
+                )
+
+
+class PypiWorkflowContractTest(unittest.TestCase):
+    workflow = (ROOT_DIR / ".github" / "workflows" / "pypi.yml").read_text(encoding="utf-8")
+
+    def job(self, name: str) -> str:
+        start = self.workflow.index(f"\n  {name}:\n")
+        following = [
+            self.workflow.find(f"\n  {other}:\n", start + 1)
+            for other in ("sdist", "wheels", "publish-pypi", "publish-testpypi")
+        ]
+        ends = [index for index in following if index > start]
+        return self.workflow[start : min(ends) if ends else len(self.workflow)]
+
+    def test_default_permissions_are_read_only(self) -> None:
+        header = self.workflow[: self.workflow.index("\njobs:")]
+        self.assertIn("permissions:\n  contents: read", header)
+        for name in ("sdist", "wheels"):
+            self.assertNotIn("id-token", self.job(name))
+
+    def test_pypi_upload_is_tag_only_trusted_publishing(self) -> None:
+        job = self.job("publish-pypi")
+        self.assertIn("if: github.event_name == 'push' && github.ref_type == 'tag'", job)
+        self.assertIn("needs: [sdist, wheels]", job)
+        self.assertIn("name: pypi\n", job)
+        self.assertIn("id-token: write", job)
+        self.assertIn("pypa/gh-action-pypi-publish@release/v1", job)
+        self.assertNotIn("password", job)
+        self.assertNotIn("repository-url", job)
+
+    def test_testpypi_upload_is_manual_only(self) -> None:
+        job = self.job("publish-testpypi")
+        self.assertIn("github.event_name == 'workflow_dispatch'", job)
+        self.assertIn("repository-url: https://test.pypi.org/legacy/", job)
+
+    def test_sdist_checks_the_tag_against_cmake(self) -> None:
+        self.assertIn(
+            'scripts/release/validate_version.py --tag "${GITHUB_REF_NAME}" --cmake-file CMakeLists.txt',
+            self.job("sdist"),
+        )
+
+
 class ReleaseNotesTest(unittest.TestCase):
     notes = ROOT_DIR / "docs" / "releases" / "v0.5.0.md"
     docs = ROOT_DIR / "docs"

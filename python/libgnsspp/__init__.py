@@ -33,6 +33,10 @@ def _resolve_gnss_command() -> list[str]:
         if source_dispatcher.exists():
             return [sys.executable, str(source_dispatcher)]
 
+    bundled_dispatcher = package_path.parent / "bin" / "gnss"
+    if bundled_dispatcher.is_file():
+        return [sys.executable, str(bundled_dispatcher)]
+
     installed_dispatcher = shutil.which("gnss")
     if installed_dispatcher is not None:
         return [installed_dispatcher]

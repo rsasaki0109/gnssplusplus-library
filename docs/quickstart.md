@@ -35,6 +35,15 @@ If a documented standard input is not present, the command
 lists the missing paths and opens focused command help instead of recommending
 a processing command that is guaranteed to fail.
 
+## pip
+
+```bash
+pip install gnsspp
+gnss demo --output-dir output/self-contained-demo
+```
+
+See [Python package](python_package.md) for what the wheel contains.
+
 ## Docker
 
 For the no-build self-contained demo, use the published image and mount only
